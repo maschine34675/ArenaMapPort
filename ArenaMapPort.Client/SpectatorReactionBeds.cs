@@ -21,7 +21,9 @@ namespace ArenaMapPort.Client
     /// roar stops at once, the audio reset of EFT stops them and drops the clips (they are rebuilt at the next trigger), and the crowd's removal removes everything (this is a child of the crowd
     /// root). A package without roar beds is not an error (one Debug line); a damaged set is one Warning and the calls, the reactions and the murmur go on. Developer keys like
     /// <c>Spectators/CrowdBed</c> (honoured only with DeveloperMode, the defaults apply otherwise): <c>Spectators/ReactionBeds</c> and <c>ReactionBedVolume</c>, both live, none public.
-    /// Host verification: not yet (unit-tested only; the level, -32 dBFS RMS per bed, is a start value for the author's listening).
+    /// The default level of <c>ReactionBedVolume</c> is 2.0 since the author's listening (2026-11-07; it sits at the top of the key range 0..2, volume law unchanged: 0.625 at full gain). 0.5.0 shipped 1.0, so a once-only re-seed
+    /// (hidden key <c>Spectators/ReactionBedDefaultsRevision</c>, <see cref="ReactionBedDefaults"/>) moves exactly a saved 1.0 to 2.0 and leaves any other saved value alone.
+    /// Host verification: not yet (unit-tested only; the exported level is -32 dBFS RMS per bed at key 1 and the default key is 2.0, user 2026-11-07).
     /// </summary>
     internal sealed class SpectatorReactionBeds : MonoBehaviour
     {
@@ -92,8 +94,25 @@ namespace ArenaMapPort.Client
                 "Developer hearing comparison: a reaction of the spectators plays one of Arena's cheer or boo beds from the stands. Live; off stops the roar at once. " +
                 "Ignored outside DeveloperMode, where the roar beds are on.");
             _volume = s.Bind("Spectators", "ReactionBedVolume", SpectatorReactionBedModel.ReactionBedVolumeDefault, new ConfigDescription(
-                "Developer hearing comparison: level of the cheer and boo beds, 1 = the exported level (-32 dBFS RMS per bed, a start value). Live. Ignored outside DeveloperMode.",
+                "Developer hearing comparison: level of the cheer and boo beds, 2 = the level the author chose (the top of the range); the exported level is -32 dBFS RMS per bed, so 1 = that level. Live. Ignored outside DeveloperMode.",
                 new AcceptableValueRange<float>(0f, SpectatorCrowdBedModel.MaxVolume)));
+            MigrateDefaults(s);
+        }
+
+        // Once-only re-seed (revision 1, 2026-11-07): 0.5.0 shipped ReactionBedVolume 1.0, the default is 2.0 now. Exactly a saved 1.0 moves; the decision is ReactionBedDefaults' (unit-tested).
+        static void MigrateDefaults(ConfigFile s)
+        {
+            var revision = s.Bind("Spectators", "ReactionBedDefaultsRevision", 0, new ConfigDescription(
+                "Internal - once-only default migration for the reaction beds (revision 1: a saved volume of exactly 1 moves to 2). Leave it alone.",
+                null, System.ComponentModel.BrowsableAttribute.No));
+            if (revision.Value >= ReactionBedDefaults.Revision) return;
+            int moved = 0;
+            if (ReactionBedDefaults.VolumeMoves(revision.Value, _volume.Value))
+            {
+                _volume.Value = SpectatorReactionBedModel.ReactionBedVolumeDefault; moved = 1;
+            }
+            revision.Value = ReactionBedDefaults.Revision;
+            Plugin.Log.LogDebug($"{Tag} config re-seeded to reaction bed defaults revision {ReactionBedDefaults.Revision} ({moved} value(s) moved; volume={_volume.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)})");
         }
 
         /// <summary>Called by the crowd right after the murmur bed from the same positions; never throws.</summary>

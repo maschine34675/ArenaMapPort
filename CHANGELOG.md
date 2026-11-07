@@ -25,8 +25,7 @@ Full release note: [docs/releases/v0.5.0.md](docs/releases/v0.5.0.md).
 - **Crowd reactions for mode plugins.** The public class `ArenaMapPort.Client.SpectatorCrowd` has eight members now
   (`ContractVersion` still 1, the four older members unchanged): a plugin can claim the reactions and ask the spectators to
   answer Approve, Disapprove, TakeCover, Start or Finish with a strength, using 70 of Arena's own fan reaction clips (one to
-  three voices, spatial, the random calls pause for a moment). Nothing reacts in a plain raid and ArenaMode does not use the
-  contract yet; the developer setting `Spectators/ReactionDemo` (needs `General/DeveloperMode`) runs a test cycle. No player setting.
+  three voices, spatial, the random calls pause for a moment). ArenaMode 0.4.0 and later uses the contract and drives the reactions from its match events; nothing reacts in a plain raid without a mode; the developer setting `Spectators/ReactionDemo` (needs `General/DeveloperMode`) runs a test cycle. No player setting.
 - **Roar layer.** A reaction also plays one of Arena's three Cheer crowd beds (Approve, Start, Finish) or three Angry beds
   (Disapprove) from the stands, with a 0.3-second attack, a 1.5-to-5-second hold and a 2-second release. Four maps (those with a
   crowd), only when a reaction is asked for.
@@ -55,7 +54,7 @@ Full release note: [docs/releases/v0.5.0.md](docs/releases/v0.5.0.md).
   The cafe olive tree and the canyon rocks were not looked at in game.
 - The crowd reactions ran on the test host with the developer demo (2 November) and the author listened to the demo cycle with the roar layer on
   7 November ("sounds good"); that is not a review of each clip. The roar layer ran on Equator and Bowl only; the cut of one roar by the other
-  kind and the retrigger are covered by unit tests only. ArenaMode has not adopted the contract.
+  kind and the retrigger are covered by unit tests only. ArenaMode 0.4.0 and later has adopted the contract.
 - Gate and door sounds were checked in the log only on every map and have not been listened to. Bay5's gate sounds were never in
   range during a test; the exit lamps were checked by reading their state, not by eye.
 - Equator's puddle cache and the rain-driven puddles have not been checked in game, and the splash sound has not been listened to

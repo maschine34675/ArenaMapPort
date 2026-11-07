@@ -91,6 +91,7 @@
          EmissionCapRepairs.cs (renderer scan, Material reads and writes) and BloomTuning.cs stay out, EmissionCapSourcePinTests reads them as text. -->
     <Compile Include="..\ArenaMapPort.Client\EmissionCapModel.cs" Link="Client\EmissionCapModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\BloomDefaultsModel.cs" Link="Client\BloomDefaultsModel.cs" />
+    <Compile Include="..\ArenaMapPort.Client\EmissionDefaultsModel.cs" Link="Client\EmissionDefaultsModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\MapLightingDefaults.cs" Link="Client\MapLightingDefaults.cs" />
     <Compile Include="..\ArenaMapPort.Client\ArenaInstallationGate.cs" Link="Client\ArenaInstallationGate.cs" />
     <Compile Include="..\ArenaMapPort.Client\BundleKeyResolver.cs" Link="Client\BundleKeyResolver.cs" />

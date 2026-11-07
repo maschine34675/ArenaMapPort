@@ -101,7 +101,7 @@ namespace ArenaMapPort.Client
     internal static class SpectatorReactionBedModel
     {
         internal const bool ReactionBedsDefault = true;
-        internal const float ReactionBedVolumeDefault = 1f;
+        internal const float ReactionBedVolumeDefault = 2f; // the top of the key range 0..MaxVolume (2); 0.5.0 shipped 1f
         internal const float AmplitudeFloor = 0.35f, AmplitudeSpan = 0.65f;
         internal const float HoldMinSeconds = 1.5f, HoldMaxSeconds = 5f;
 
@@ -289,5 +289,17 @@ namespace ArenaMapPort.Client
                 }
             }
         }
+    }
+}
+
+namespace ArenaMapPort.Client
+{
+    /// <summary>The once-only re-seed of the reaction bed defaults (<c>Spectators/ReactionBedDefaultsRevision</c>). Revision 1 (2026-11-07): the volume default 1 (0.5.0) became 2; exactly a saved 1 moves, a value tuned away from it stays.</summary>
+    internal static class ReactionBedDefaults
+    {
+        internal const int Revision = 1;
+        internal const float OldVolumeDefault = 1f;
+
+        internal static bool VolumeMoves(int savedRevision, float value) => savedRevision < Revision && value == OldVolumeDefault;
     }
 }

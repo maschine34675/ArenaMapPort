@@ -80,7 +80,9 @@ public sealed class SpectatorReactionBedsSourcePinTests
         Assert.DoesNotContain("Plugin.Instance.Config", code);
         Assert.Contains("s.Bind(\"Spectators\", \"ReactionBeds\", SpectatorReactionBedModel.ReactionBedsDefault,", install);
         Assert.Contains("s.Bind(\"Spectators\", \"ReactionBedVolume\", SpectatorReactionBedModel.ReactionBedVolumeDefault, new ConfigDescription(", install);
-        Assert.Equal(2, Regex.Matches(code, @"\bs\.Bind\(").Count);
+        Assert.Contains("s.Bind(\"Spectators\", \"ReactionBedDefaultsRevision\", 0, new ConfigDescription(", code);
+        Assert.Contains("System.ComponentModel.BrowsableAttribute.No", code);
+        Assert.Equal(3, Regex.Matches(code, @"\bs\.Bind\(").Count);
         Assert.Contains("new AcceptableValueRange<float>(0f, SpectatorCrowdBedModel.MaxVolume)", install);
         Assert.Contains("static bool BedsOn => !DeveloperOptions.Enabled || _enabled == null || _enabled.Value;", code);
         Assert.Contains("DeveloperOptions.Enabled && _volume != null ? SpectatorCrowdBedModel.ClampVolume(_volume.Value) : SpectatorReactionBedModel.ReactionBedVolumeDefault;", code);

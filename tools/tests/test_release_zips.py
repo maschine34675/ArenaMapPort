@@ -770,7 +770,7 @@ class BuildTests(FakeRepoCase):
         self.assertIn("39 Equator props", readme)
         self.assertIn("the intermittent Equator static of 0.3.0 was fixed in 0.4.0 (a bundle block flagged as compressed but stored uncompressed; measured on the test host and confirmed by the author in play)", readme)
         self.assertIn("A faint steady hiss and short clicks seen in one recording are not explained by it", readme)
-        self.assertIn("sound only when a mode plugin such as ArenaMode asks for them through the SpectatorCrowd contract; ArenaMode has not adopted it yet, so a plain raid never plays them", readme)
+        self.assertIn("sound only when a mode plugin such as ArenaMode asks for them through the SpectatorCrowd contract; ArenaMode 0.4.0 and later uses it and drives them from its match events, so a plain raid without a mode never plays them", readme)
         self.assertIn("The author listened to the developer demo cycle (reaction voices with the roar beds) on 7 November 2026 and said it sounds good; that is not a clip-by-clip review of the 70 clips, and nothing was heard in a real match", readme)
         self.assertNotIn("fixed in this release", readme)
         self.assertNotIn("are new", readme)

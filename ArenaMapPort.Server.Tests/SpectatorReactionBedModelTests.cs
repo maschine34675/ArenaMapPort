@@ -95,10 +95,23 @@ public sealed class SpectatorReactionBedModelTests
     }
 
     [Fact]
-    public void TheDefaultsAreOnAndAtVolumeOne()
+    public void TheDefaultsAreOnAndAtVolumeTwoTheTopOfTheRange()
     {
         Assert.True(SpectatorReactionBedModel.ReactionBedsDefault);
-        Assert.Equal(1f, SpectatorReactionBedModel.ReactionBedVolumeDefault);
+        Assert.Equal(2f, SpectatorReactionBedModel.ReactionBedVolumeDefault);
+        Assert.Equal(SpectatorCrowdBedModel.MaxVolume, SpectatorReactionBedModel.ReactionBedVolumeDefault);
+        Assert.Equal(0.625f, SpectatorReactionBedModel.SourceVolume(2f, 1f), 5);
+    }
+
+    [Fact]
+    public void TheReSeedMovesExactlyTheOldDefaultOnce()
+    {
+        Assert.Equal(1, ReactionBedDefaults.Revision);
+        Assert.True(ReactionBedDefaults.VolumeMoves(0, 1f));
+        foreach (var v in new[] { 2f, 0.8f, 0f, 1.5f, float.NaN })
+            Assert.False(ReactionBedDefaults.VolumeMoves(0, v));
+        foreach (var v in new[] { 1f, 2f, 0.8f, 0f, float.NaN })
+            Assert.False(ReactionBedDefaults.VolumeMoves(1, v));
     }
 
     // ---- the envelope ----------------------------------------------------------------------------------------------------------------

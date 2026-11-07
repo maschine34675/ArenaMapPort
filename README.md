@@ -42,8 +42,7 @@ stands is the port's choice. The crowds can also answer match events: through th
 `SpectatorCrowd` contract a mode plugin asks them to approve, disapprove, take cover,
 start or finish, and one to three voices answer with original fan clips (70 in
 all) while the stands add one of Arena's louder cheering or angry crowd recordings.
-A plain raid sends no such event, so nothing reacts there, and no mode plugin uses the
-contract yet; the author listened to the developer demo on
+ArenaMode 0.4.0 and later uses the contract and drives the reactions from its match events; a plain raid without a mode sends no such event, so nothing reacts there. The author listened to the developer demo on
 7 November 2026 and found it good (he did not report on the angry recordings
 separately; the demo and the 70 clips ran on the four crowd maps on 2 November, the roar layer only on Equator and Bowl, not on Bay5 and Air Pit; Iceberg has no crowd). The idle and cheering animations run independently
 of match events.
@@ -241,8 +240,8 @@ without a winter or snow look.
 EFT's own sound bundle has no impact sounds for the Books and CardBoard
 prop types, so 39 Equator props (shoes, books, blue cups, a road cone, pizza boxes
 and office folders) and any props of those types on other maps stay silent when they
-hit something. Fika compatibility is not included in the verified scope, and no
-mode plugin sends the crowd a match event yet. The [0.5.0 release notes](docs/releases/v0.5.0.md)
+hit something. Fika compatibility is not included in the verified scope, and a
+plain raid without a mode sends the crowd no match event. The [0.5.0 release notes](docs/releases/v0.5.0.md)
 describe the bounded native checks and what has not been checked yet.
 
 ## Development

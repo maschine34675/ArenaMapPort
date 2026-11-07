@@ -38,8 +38,8 @@ Since 0.4.0 the original animated spectators fill the stands of Equator, Bay5, A
 murmur from each group of spectators. Since 0.5.0 the murmur is Arena's own neutral in-match crowd
 bed (0.4.0 used its postmatch recording). The crowds can also answer match events: a mode plugin
 asks through the `SpectatorCrowd` contract, and one to three original fan clips (70 in all) answer,
-and the stands add one of Arena's louder cheering or angry crowd recordings. A plain raid sends
-no event, so nothing reacts there, and no mode plugin uses the contract yet. The crowds use about
+and the stands add one of Arena's louder cheering or angry crowd recordings. ArenaMode 0.4.0 and later uses the contract and drives the reactions from its match events; a plain raid
+without a mode sends no event, so nothing reacts there. The crowds use about
 0.5 GB of video memory per raid on each crowd map and add about two seconds to raid loading (see
 Known limitations).
 
@@ -109,7 +109,7 @@ stays unchanged. Equator Day, Bay5, Air Pit, Bowl and Iceberg are unaffected.
 - The crowd murmur and the 4-to-8-second pauses between spectator calls date from 0.4.0; the author
   listened to them in play on 30 October 2026 and approved them. The crowd reactions and the cheering
   and angry recordings were heard by the author only in the developer demo (7 November 2026, found
-  good), on Equator and Bowl; no mode plugin sends match events yet.
+  good), on Equator and Bowl; a plain raid without a mode sends no match events.
 - Iceberg has had fewer raids on the test host than the older maps. Its ambient mix, its gate sounds
   and the lamp limits are first choices, the last build has not been through an Iceberg raid on the
   test host yet, and it has no spectators, no per-light flares and no ported grass.

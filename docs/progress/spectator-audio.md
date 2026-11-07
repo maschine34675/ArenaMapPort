@@ -1257,3 +1257,13 @@ The user listened to the roar layer deployed that afternoon (the build of the ho
 together with the Cheer and Angry beds) and said: "habe ich mir angehoert, klingt gut". It covers what was heard: the roar level of -32 dBFS RMS per bed, the 0.3 s attack and the 2 s release, and the keys at
 their defaults (`Spectators/ReactionBeds` on, `ReactionBedVolume` 1.0). It is a judgement of the demo cycle, not a clip-by-clip review of the 70 reaction voices, and it made no statement on the cut of the
 other kind or the retrigger. The level stands as accepted; the sections above that call these values start values are history. ArenaMode has not adopted the contract.
+
+### 2026-11-07 evening - roar bed default 2.0 (user)
+
+User, 2026-11-07 evening: "den lautstärkepegel der reaktions-betten anheben, hab den wert auf 2.0 und würde sagen das passt." The developer key `Spectators/ReactionBedVolume` was already 2.0 in his .cfg; 2.0 becomes the default for the next version (0.5.0 shipped 1.0). 2.0 is the top of the key range 0..`SpectatorCrowdBedModel.MaxVolume` (2).
+
+The law is unchanged: `SourceVolume = min(1, key x gain / ClipGain 3.2)`, so 2.0 gives 0.625 at full gain (1.0 gave 0.3125); the exported level stays -32 dBFS RMS per bed, and there is no headroom left on the key. The key description now says "2 = the level the author chose (the top of the range)".
+
+Re-seed (the repository's DefaultsRevision pattern): `SpectatorReactionBeds.Install()` binds the hidden int key `Spectators/ReactionBedDefaultsRevision` (default 0, `BrowsableAttribute.No`, "Internal ... Leave it alone."). `ReactionBedDefaults.VolumeMoves` (Unity-free, `SpectatorReactionBedModel.cs`, Revision 1, OldVolumeDefault 1.0) moves exactly a saved 1.0 to 2.0 when the saved revision is below 1; any other value (2.0, 0.8, 0, 1.5, NaN) stays; the revision is then written and one Debug line `[ReactionBeds] config re-seeded to reaction bed defaults revision 1 (N value(s) moved; volume=...)` says what moved. The Bind count of `SpectatorReactionBeds.cs` is three (pinned in `SpectatorReactionBedsSourcePinTests`).
+
+Tests: the `SpectatorReactionBed` tests 65 of 65, client Release build 0 warnings. **Not host-run yet** (the re-seed line and a raid with a cheer are the lead's check). Correction of the record above: "ArenaMode has not adopted the contract" is history of its date; ArenaMode 0.4.0 and later uses the reaction contract and drives the reactions from its match events (user, 2026-11-07), and `ReactionBedVolume` 1.0 in the listening note above is the 0.5.0 default.

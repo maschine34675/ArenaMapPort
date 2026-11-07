@@ -54,8 +54,8 @@
     30
   ],
   "keep_level_borders": true,
-  "emission_cap": 4.8,
-  "emission_floor": 1.9,
+  "emission_cap": 4.6,
+  "emission_floor": 1.8,
   "puddle_water_material_names": [
     "0877f2335044042e",
     "34f527e8925ffebb"

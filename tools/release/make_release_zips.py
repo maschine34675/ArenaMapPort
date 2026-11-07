@@ -776,7 +776,7 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "The spectator crowds of Equator, Bay5, Air Pit and Bowl play their calls and murmur in a plain raid;\n"
             "Iceberg has no crowd. The crowd reactions (70 original fan clips) and the roar beds that answer them\n"
             "sound only when a mode plugin such as ArenaMode asks for them through the SpectatorCrowd contract;\n"
-            "ArenaMode has not adopted it yet, so a plain raid never plays them. The author listened to the\n"
+            "ArenaMode 0.4.0 and later uses it and drives them from its match events, so a plain raid without a mode never plays them. The author listened to the\n"
             "developer demo cycle (reaction voices with the roar beds) on 7 November 2026 and said it sounds good;\n"
             "that is not a clip-by-clip review of the 70 clips, and nothing was heard in a real match. Iceberg's\n"
             "ambient mix uses provisional start values.\n"

@@ -68,7 +68,7 @@ dated state in one screen; read it before this index if you only have a minute.
   holder extractor and `tools/maps/<stem>.monitors.json`, the nine-sprite artwork package, the three faces, the public contract
   `ArenaMapPort.Client.ScoreMonitors` (append-only, bound by name from ArenaMode), the lift in front of the TV's opaque screen quad
   (`Monitors/ScreenLift`), the developer demo, the ArenaMode binder and Team Deathmatch mapping as code blocks. Host-verified on GPU-2
-  the same day in the developer demo on all four maps (negative control included); ArenaMode has not adopted it yet.
+  the same day in the developer demo on all four maps (negative control included); ArenaMode 0.4.0 and later has adopted it (user, 2026-11-07) and shows timer and scores on the monitors; a plain raid without a mode still claims nothing.
 - [gate-sounds.md](gate-sounds.md) — Arena's gate and door sounds (2026-10-25): the `EntitySoundPlayer` decode, 25 rows in
   `tools/maps/<stem>.gatesounds.json`, nine clips with a precomputed seam fit for the halved drive, Air Pit's two pitch-baked clips (no
   copy of a key-source file), `GateSounds` through `BetterAudio` at the ArenaGates level, silent in a plain raid. Logged on GPU-2 the same
