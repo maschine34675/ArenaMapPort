@@ -1,5 +1,18 @@
 # HANDOFF — dated working state
 
+## Autoservice (sixth map) started: surveys and plan - 2026-11-08
+
+**Request (user, 2026-11-08):** "dann wuerde ich gerne mit der naechsten map weitermachen: Autoservice" - a go without further constraints, as Iceberg's was. Branch `feature/autoservice` (from `main` = 52d0a4d). Plan [docs/PLAN-AUTOSERVICE.md](docs/PLAN-AUTOSERVICE.md), record [docs/progress/autoservice-release.md](docs/progress/autoservice-release.md). Four read-only surveys on Arena 0.6.2.0.48473 are done; nothing is built, deployed, committed or pushed, and Autoservice is registered in `ArenaMapRegistry.Catalog` only (not in `All`) until plan item 12.
+
+1. **Facts.** No level index moved since the 0.5.4 spike (62, 63, 65, 66, 69, 112, 135, 136); content delta: 372 layer-29 border cubes in DesignStuff and two props, all ids rehashed, so the spike package is not reusable. TeamFight is the only two-pocket mode: 20 markers (east x about -337, west x about -409), two `SPAWN_BOUND_Fighter` bounds, one capture point, four gates, four score-monitor faces, no resupply crates. Play area about 80.6 x 47.3 m.
+2. **Decisions (agent).** TeamFight alone; `UsesServerTime`; summer only, no winter; keep the border cubes (`keep_level_borders`, layers 9/11/13/18/29/30) with bake bounds from Arena's NavMeshSurface volume; sides by bound; four gates opened and holdable (door tool needs `clossed`, level-70 clips and an equator-shutter override, and both the MAP_SOURCES clip path and the DOT_SOURCES lamp path with a merge); crowdless (the 30 fans are player-body rigs); official description (the id is confirmed by the locale table: Name row "Chop Shop"; only the check against the port id_field remains); chop-shop art after looking; new season-loop ambient class; no emission cap, no native water, MultiFlare yes. Package `work/extract/autoservice-native-v1/v2`, the spike build archived as `work/build/autoservice-spike-20260915`.
+3. **Needs the user:** release number and form; a winter variant; a crowd (body-rig or port-only); a fixed night clock; ArenaMode hand-off.
+4. **Next:** Phase A items 1-3 (housekeeping and plan roles, package v1 with `PYTHONUTF8=1`, native contract), then the audio contract (item 4) and key-source rows (item 5: 62 resS + resource, 66 resS, 3 files, 464,942,688 B).
+5. **SPT-SEB (fork analysis of 2026-11-08, recorded in [spt-seb-compatibility.md](docs/progress/spt-seb-compatibility.md)):** nothing is built in; two
+   uses are noted (SEB's MIT bake checker as a second opinion for the Arena bakes, item 10 of the Autoservice plan and Iceberg's repaired bake; two audio
+   details). Open (user): install SEB on the own PC, one round each of Equator and Bowl with ArenaMode, then the BepInEx log decides whether README gets a
+   compatibility sentence or which of the four friction points (double shot reverb, ambient sends, rain levels, pool-source curves) needs work.
+
 ## After 0.5.0, second decision: roar beds exported 6 dB louder, the key back at 1.0 - 2026-11-07 evening (not listened to)
 
 **User decision (2026-11-07, evening):** "vielleicht sollten wir bei den jubel-betten dann einfach den export-pegel erhöhen und den regler dann wieder auf 1.0 lassen". This **supersedes the entry below on the roar-bed point only** (its item 2, default 2.0 at the -32 export, commit 02e4361, never released). The Iceberg 4.6/1.8 values and the adoption statements of that entry stand. Nothing is committed, deployed or pushed; no host run (user decision): the user listens in game at the next change.

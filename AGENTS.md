@@ -16,6 +16,7 @@ Pixeldrain; original animated crowds with calls and a murmur bed, gate sounds, s
 2026-10-30, but is **not released**. Its U1 bundles build from `work/extract/iceberg-native-v2` with `-FullMap` into `work/build/iceberg`.
 The U1 build and native sea water have host evidence (HANDOFF.md). Its DynamicMaps overview was added on 2026-10-31; it still has no spectator
 crowd or flares. The release number and form are the user's decision; nothing of it is tagged, uploaded or pushed.
+**Autoservice** (Arena's `Arena_AutoService`, key `arena_autoservice`) is the sixth map, in work on `feature/autoservice` since 2026-11-08 (plan [docs/PLAN-AUTOSERVICE.md](docs/PLAN-AUTOSERVICE.md), record [docs/progress/autoservice-release.md](docs/progress/autoservice-release.md)); it is registered in `ArenaMapRegistry.Catalog` only, not in `All`.
 Release 0.2.3 (branch `release/0.2.3`, published 2026-10-19) is 0.2.2 plus the Arena installation check; 0.2.2 was withdrawn
 the same day (GitHub release, tag and Pixeldrain files deleted, nobody had downloaded it), and so were 0.2.1 and 0.1.0
 (releases with their assets, tags, Pixeldrain files): 0.4.0 and 0.3.0 are downloadable (0.2.3 was deleted on 2026-11-07: GitHub release, tag and Pixeldrain files; user decision "loesche 0.2.3, der rest kann online bleiben"),

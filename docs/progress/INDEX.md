@@ -119,6 +119,14 @@ dated state in one screen; read it before this index if you only have a minute.
   gaps); the "Pending U1" list holds what waits for the Unity build, the first stage and the host raids. Plan: [../PLAN-ICEBERG.md](../PLAN-ICEBERG.md).
 - [iceberg-source-061.md](iceberg-source-061.md) — Iceberg's Arena 0.5.4 spike package against the 0.6.1 native package v1
   (2026-10-30): the reworked CheckPoint layout, the +9 index shift, spawn-marker churn.
+- [autoservice-release.md](autoservice-release.md) — Autoservice as the sixth map (branch `feature/autoservice`, started 2026-11-08):
+  the four surveys on Arena 0.6.2 (TeamFight alone with 20 markers in two pockets, one capture point, four gates, 372 new border
+  cubes, 30 body-rig fans so crowdless, new season-loop audio class, no emission cap, no water), the plan decisions and the open
+  questions. Plan: [../PLAN-AUTOSERVICE.md](../PLAN-AUTOSERVICE.md).
+- [spt-seb-compatibility.md](spt-seb-compatibility.md) — SPT-SEB (Sound Engine Backport, MIT, v1.0.3) read offline on 2026-11-08: its
+  `.audiobakedata` reader/checker as a second opinion for the Arena bakes, two audio details (resampler click, 10 Hz high-pass bursts), and the
+  four friction points of running SEB beside the port (shot reverb, ambient sends, rain levels, pool-source curves) that only the user's listening
+  test can settle; nothing installed or run.
 - [arena-install-check.md](arena-install-check.md) — the Arena installation requirement of release 0.2.3
   (user decision 2026-10-19, branch `release/0.2.3`): the maps are registered and served only with a verified
   Escape from Tarkov: Arena installation (launcher registry entry, executable, `ConsistencyInfo` manifest,
