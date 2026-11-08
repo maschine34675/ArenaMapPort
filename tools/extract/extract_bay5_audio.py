@@ -29,6 +29,15 @@ port cannot provide) is accepted only when the contract pins it in states.forced
 with that mixer's name. Its record keeps the authored fields (the source payload must round-trip),
 gains 'mixerGroupName' and the marker 'mixerPolicy': 'group', and the Unity importer routes it
 like its group (check_mixer_policy, apply_mixer_policy).
+Dropped components (PLAN-AUTOSERVICE item 4, 2026-11-08): a contract may pin states.dropped_players and
+states.dropped_support (id -> leaf name). The exporter reads and verifies such a record and does NOT export it;
+the audit lands in the index as ``dropped`` (only present when something was dropped, so the accepted packages
+of the other maps stay byte-identical). The rules are code, the ids are data: a dropped SeasonLoopAmbientSoundPlayer
+(parse_player decodes the class to its last byte) must carry exactly the one clip key 'Winter' (a loop that could
+sound outside winter is never droppable), is removed from its group's member list, and every SeasonLoop player of
+the scene must be pinned (an unpinned one fails closed); any other dropped player must be inactive in the hierarchy
+and a member of no group; dropped support components must be one of DROPPABLE_SUPPORT. The pin of a leaf name must
+match the source, so an Arena update that renumbers or renames a dropped record stops the export.
 """
 from __future__ import annotations
 import argparse, collections, hashlib, io, json, math, os, struct, sys, wave
@@ -43,6 +52,12 @@ if _HERE not in sys.path:  # standalone-importable regardless of caller sys.path
 from native_contract_loader import load_contracts  # noqa: E402
 
 PLAYERS = {'AmbientSoundPlayer', 'SeasonAmbientSoundPlayer', 'LoopAmbientSoundPlayer'}
+# EFT's SeasonLoopAmbientSoundPlayer (a looping player with one clip per season) is decoded but never exported: it is a
+# player the contract must pin in states.dropped_players (see the module docstring); it is not part of PLAYERS.
+SEASON_LOOP = 'SeasonLoopAmbientSoundPlayer'
+# Components a contract may drop from the support graph: the inactive spline chain of Autoservice's Sound scene
+# (AmbientPlayerSplineMappedEmitter + SplineEmitterPathMover + BezierSpline under an inactive GameObject).
+DROPPABLE_SUPPORT = {'BezierSpline', 'AmbientPlayerSplineMappedEmitter', 'SplineEmitterPathMover'}
 SUPPORT = {'AmbientSoundPlayerGroup', 'BezierSpline', 'AmbientSplineEmitterController', 'SoundAmbientZoneCalculator', 'AmbientPlayerSplineMappedEmitter'}
 
 class Reader:
@@ -108,6 +123,12 @@ def parse_player(obj, kind):
     for key in ('spread','spatialBlend','minDistance','maxDistance'): d[key]=r.take('f')
     d['rolloffCurve']=r.curve(); d['startPlayingDelay']=r.take('ff'); d['spreadCurve']=r.curve(); d['useCustomSpreadCurve']=r.boolean()
     if kind=='LoopAmbientSoundPlayer': d['loopClip']=r.ptr()
+    elif kind==SEASON_LOOP:
+        # PLAN-AUTOSERVICE item 4: no random time range; the layout after the common fields is the season -> clip
+        # dictionary (a key list and a pointer list, EFT's SerializableEnumDictionary), read to the last byte.
+        keys=[r.string() for _ in range(r.count())]; values=[r.ptr() for _ in range(r.count())]
+        if not keys or len(keys)!=len(values) or len(set(keys))!=len(keys): raise ValueError('season loop clips')
+        d['seasonSoundClips']=dict(zip(keys,values))
     else:
         d['randomTimeRange']=r.take('ff')
         if kind=='AmbientSoundPlayer': d['ambientBank']=r.ptr()
@@ -267,6 +288,9 @@ def export(source, package, map_key='arena_bay5'):
     env=UnityPy.load(str(source/source_scene),str(source/'globalgamemanagers.assets'))
     scene=env.files[str(source/source_scene)]
     players=[]; support=[]; banks={}; clips={}; counts=collections.Counter()
+    pinned=contract.get('states') or {}
+    drop_players=pinned.get('dropped_players') or {}; drop_support=pinned.get('dropped_support') or {}
+    dropped={'players':[],'support':[]}
     bank_schema_path=source/'StreamingAssets/Windows/assets/content/audio/prefabs/movement/concrete/pronesoundbank.bundle'
     schema_env=UnityPy.load(str(bank_schema_path))
     schema_obj=next(o for o in schema_env.objects if o.type.name=='MonoBehaviour' and script(o)=='SoundBank')
@@ -274,9 +298,20 @@ def export(source, package, map_key='arena_bay5'):
     for obj in list(scene.objects.values()):
         if obj.type.name!='MonoBehaviour': continue
         kind=script(obj); counts[kind]+=1
+        if identity(obj) in drop_support:
+            dropped['support'].append(drop_record(obj,kind,drop_support[identity(obj)],preserve_states,DROPPABLE_SUPPORT,'inactive_spline_chain')); continue
+        if kind==SEASON_LOOP and identity(obj) not in drop_players: raise ValueError(f'{identity(obj)}: {SEASON_LOOP} is not pinned in states.dropped_players')
         if kind in SUPPORT:
             d=parse_support(obj,kind); d.update(hierarchy(obj,preserve_states)); d.update(id=identity(obj),kind=kind,byteSize=obj.byte_size); support.append(d)
-        if kind not in PLAYERS: continue
+        if kind not in PLAYERS and kind!=SEASON_LOOP: continue
+        if identity(obj) in drop_players:
+            rec=drop_record(obj,kind,drop_players[identity(obj)],preserve_states,{SEASON_LOOP,'AmbientSoundPlayer'},'winter_only_loop' if kind==SEASON_LOOP else 'inactive_ungrouped')
+            if kind==SEASON_LOOP:
+                loop=parse_player(obj,kind)
+                if list(loop['seasonSoundClips'])!=['Winter']: raise ValueError(f'{identity(obj)}: a dropped season loop must carry the Winter clip only')
+                rec.update(seasonKeys=list(loop['seasonSoundClips']),volume=loop['volume'],maxDistance=loop['maxDistance'])
+            elif rec['activeInHierarchy']: raise ValueError(f'{identity(obj)}: a dropped player must be inactive in the hierarchy')
+            dropped['players'].append(rec); continue
         d=parse_player(obj,kind); d.update(hierarchy(obj,preserve_states)); d.update(id=identity(obj),kind=kind,byteSize=obj.byte_size,sourceAudio=source_audio(obj))
         if d['mixerGroup']['pathId']!=0:
             forced_mixer=deref(obj,d['mixerGroup']); d['mixerGroupName']=forced_mixer.read_typetree()['m_Name'] if forced_mixer else None
@@ -314,10 +349,17 @@ def export(source, package, map_key='arena_bay5'):
             target=deref(owner,d[key],'MonoBehaviour')
             if not target or script(target)!=expect: raise ValueError('support edge '+key)
             d[key]['resolved']=identity(target)
-        for ptr in d.get('soundPlayers',[]):
+        kept=[]
+        for index,ptr in enumerate(d.get('soundPlayers',[])):
             target=deref(owner,ptr,'MonoBehaviour')
+            if target and identity(target) in drop_players:  # a dropped member leaves the list; the audit keeps group, index and pointer
+                next(r for r in dropped['players'] if r['id']==identity(target)).setdefault('memberships',[]).append(
+                    {'group':d['path'].rsplit('/',1)[-1],'index':index,'pointer':{'fileId':ptr['fileId'],'pathId':ptr['pathId']}}); continue
             if not target or script(target) not in PLAYERS: raise ValueError('group edge')
-            ptr['resolved']=identity(target); grouped.append(identity(target))
+            ptr['resolved']=identity(target); grouped.append(identity(target)); kept.append(ptr)
+        if 'soundPlayers' in d: d['soundPlayers']=kept
+    for rec in dropped['players']:  # a season loop is a group member exactly once, every other dropped player belongs to no group
+        if len(rec.get('memberships',[]))!=(1 if rec['kind']==SEASON_LOOP else 0): raise ValueError(f"{rec['id']}: dropped player group membership changed")
     expected_players=expected_group_members(players,contract)
     if collections.Counter(grouped)!=collections.Counter(expected_players): raise ValueError('group coverage')
     result={'schemaVersion':schema,'mapKey':map_key,'sourceScene':source_scene,'componentCounts':dict(counts),'players':players,'support':support,'banks':banks,'clips':[], 'bankSchema':{'path':bank_schema_path.relative_to(source).as_posix(),'sha256':hashlib.sha256(bank_schema_path.read_bytes()).hexdigest()},'sourceSceneSha256':hashlib.sha256((source/source_scene).read_bytes()).hexdigest()}
@@ -330,10 +372,18 @@ def export(source, package, map_key='arena_bay5'):
         cd['decoded']=validate_wav(data,tree,'audio/'+filename)
         (output/filename).write_bytes(data)
         result['clips'].append(cd)
+    if dropped['players'] or dropped['support']: result['dropped']=dropped  # absent for every map that drops nothing
     validate_graph(result)
     payload=json.dumps(result,indent=2,allow_nan=False).encode('utf-8')
     tmp=output/'native-audio.json.tmp'; tmp.write_bytes(payload); tmp.replace(output/'native-audio.json')
     return {'file':'audio/native-audio.json','schema_version':schema,'players':len(players),'banks':len(banks),'clips':len(clips),'sha256':hashlib.sha256(payload).hexdigest()}
+
+def drop_record(obj, kind, leaf, preserve_states, allowed, reason):
+    """Audit record of a component the contract drops (see the module docstring); fails closed on a kind or leaf-name change."""
+    if kind not in allowed: raise ValueError(f'{identity(obj)}: {kind} is not droppable here')
+    h=hierarchy(obj,preserve_states); actual=h['path'].rsplit('/',1)[-1]
+    if actual!=leaf: raise ValueError(f'{identity(obj)}: dropped component is {actual!r}, the contract pins {leaf!r}')
+    return {'id':identity(obj),'kind':kind,'path':h['path'],'leaf':leaf,'activeInHierarchy':h['activeInHierarchy'],'reason':reason}
 
 def validate_wav(data, metadata, filename):
     if data[:4]!=b'RIFF': raise ValueError('expected decoded WAV')
@@ -354,6 +404,11 @@ def validate_graph(data):
     grouped=[p['resolved'] for s in support for p in s.get('soundPlayers',[])]
     zero={p['id']:p['path'].rsplit('/',1)[-1] for p in players if p.get('minDistance')==0}
     if zero!=((audio['states'] or {}).get('zero_min_distance_players') or {}): raise ValueError('audio zero-minDistance players changed')
+    dropped=data.get('dropped') or {}
+    for what,pin in (('players','dropped_players'),('support','dropped_support')):
+        listed={r['id']:r['leaf'] for r in dropped.get(what,[])}
+        if listed!=((audio['states'] or {}).get(pin) or {}): raise ValueError(f'audio {pin} changed')
+    if {r['id'] for r in dropped.get('players',[])+dropped.get('support',[])}&(set(player_ids)|{s.get('id') for s in support}): raise ValueError('a dropped component is also exported')
     if audio['states'] is not None: validate_audio_states(players,support,audio)
     if collections.Counter(grouped)!=collections.Counter(expected_group_members(players,audio)): raise ValueError('group coverage')
     if audio['states'] is not None and len(grouped)!=audio['states']['grouped_players']: raise ValueError('audio grouped player count changed')

@@ -168,8 +168,9 @@ class BallisticsTests(unittest.TestCase):
         # Bowl 2026-10-18: two Guardian_Tower fence colliders carry the preset Chainfence over the material MetalThin.
         # Only the reviewed pair passes, imported exactly as authored (material from the payload, preset by name).
         # Iceberg 2026-10-30: the eight cement-bag 'concrete' colliders carry the preset Gravel over the material Concrete.
+        # Autoservice 2026-11-08: the six 'rabble' colliders of the logan_wheel props (level62) carry the preset Pebbles over the material Rubber.
         self.assertEqual(B.REVIEWED_PRESET_MATERIAL_PAIRS,
-                         frozenset({("Chainfence", "MetalThin"), ("Gravel", "Concrete")}))
+                         frozenset({("Chainfence", "MetalThin"), ("Gravel", "Concrete"), ("Pebbles", "Rubber")}))
         file, scene, _, _, _ = fixture()
         file.objects[20].get_raw_data = lambda: raw(preset=1)  # preset MetalThin (id 101) over material WoodThin (102)
         with self.assertRaises(HardExtractError):

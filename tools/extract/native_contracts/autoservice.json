@@ -1,0 +1,108 @@
+{
+ "schema_version": 1,
+ "map_key": "arena_autoservice",
+ "notes": [
+  "Pins from the first native extraction of Autoservice on Arena 0.6.2.0.48473 (2026-11-08, package autoservice-native-v1, docs/progress/autoservice-source-062.md): BallisticCollider per scene {'62': 2897, '65': 18, '136': 8, '66': 194}, StaticDeferredDecal 304 (299 + 3 + 2 + 0), CullingLightObject 184 (172 in the Light scene + 12 in TeamFight_DesignStuff), VolumetricLight 78 (68 + 10), LightFlicker 0, NavMeshModifier 30 (10 in level62 + 20 in level136) + NavMeshModifierVolume 7 (6 in level62 + 1 in level66), SmallPhysicsObject 134 (SoundType 0 x14 Books, 4 x34 GlassBottle, 6 x6 MediumGeneric, 8 x2 Monitor, 9 x19 SmallBox, 10 x19 SmallPaper, 11 x40 SmallPlastic), rain cover 1 IndoorTrigger / 0 DryPlane / weather obstacle False. Every number equals the S1/S2 survey expectation of PLAN-AUTOSERVICE.",
+  "implicit_scene_identity stays false: generic packages always record source.map_key.",
+  "Six 'rabble' colliders of the logan_wheel props of Arena_AutoService (SBG_Arena_AutoService/OO/Props/.../logan_wheel (N)/balistic_col/rabble, level62, layer 12, one shared mesh) carry the preset Pebbles over the material Rubber; extract_ballistics imports the reviewed pair as authored (REVIEWED_PRESET_MATERIAL_PAIRS). No lamp-glass hit role and no other disagreement occurs.",
+  "The shader census of package v1 (distinct shader names over the package materials) is pinned in tools/tests/test_native_contracts.py (AutoserviceContractTests).",
+  "Audio (package v2, PLAN-AUTOSERVICE item 4, 2026-11-08): Sound scene level112 (plan role 'sound'), schema 2, 38 players (22 AmbientSoundPlayer, 16 SeasonAmbientSoundPlayer), 2 AmbientSoundPlayerGroup (CommonAmbientInGroup 18 on CommonAmbInEffects, CommonAmbientOutGroup 20 on CommonAmbOutEffects), 13 banks, 113 clips, all players grouped, no inactive, no loops. Reviewed states: 9 water_drops SeasonAmbientSoundPlayers with minDistance 0; 4 far_fight players that force CommonAmbOutBypass (the client routes them like their group); dropped_players = the three Winter-only SeasonLoopAmbientSoundPlayers (indoor_winds_winter, summer set only) plus the ungrouped inactive chain player 469; dropped_support = the SplineEmitterPathMover, the spline and the mapped emitter of that inactive chain. No loot, no scav, summer set only: a Winter session misses the three indoor wind loops."
+ ],
+ "scenes": {
+  "62": "Arena_AutoService",
+  "65": "Arena_AutoService_DesignStuff",
+  "136": "Arena_AutoService_TeamFight_DesignStuff",
+  "66": "Arena_AutoService_Light"
+ },
+ "ballistics": {
+  "62": 2897,
+  "65": 18,
+  "136": 8,
+  "66": 194
+ },
+ "require_unsliced": true,
+ "implicit_scene_identity": false,
+ "features": {
+  "static_decals": 304,
+  "light_culling": {
+   "culling_light_object_count": 184,
+   "volumetric_light_count": 78,
+   "light_flicker_count": 0
+  },
+  "raincover": {
+   "indoor_trigger_count": 1,
+   "dry_plane_count": 0,
+   "weather_obstacle": false
+  },
+  "navmesh_modifiers": {
+   "modifiers": 30,
+   "volumes": 7
+  },
+  "small_physics_objects": 134
+ },
+ "audio": {
+  "feature": "ambient_audio",
+  "schema": 2,
+  "scene": "level112",
+  "root": "ArenaMapPort_AutoServiceNativeAudio",
+  "players": {
+   "AmbientSoundPlayer": 22,
+   "SeasonAmbientSoundPlayer": 16
+  },
+  "support": {
+   "AmbientSoundPlayerGroup": 2
+  },
+  "banks": 13,
+  "clips": 113,
+  "group_coverage": "all_players",
+  "states": {
+   "grouped_players": 38,
+   "disabled_players": [],
+   "inactive_players": {},
+   "groups": {
+    "CommonAmbientInGroup": {
+     "mixer": "CommonAmbInEffects",
+     "players": 18
+    },
+    "CommonAmbientOutGroup": {
+     "mixer": "CommonAmbOutEffects",
+     "players": 20
+    }
+   },
+   "group_mixers": [
+    "CommonAmbInEffects",
+    "CommonAmbOutEffects"
+   ],
+   "loops": {},
+   "loop_players": [],
+   "forced_mixer_players": {
+    "level112:393": "CommonAmbOutBypass",
+    "level112:395": "CommonAmbOutBypass",
+    "level112:411": "CommonAmbOutBypass",
+    "level112:481": "CommonAmbOutBypass"
+   },
+   "zero_min_distance_players": {
+    "level112:389": "water_drops (2)",
+    "level112:399": "water_drops (1)",
+    "level112:443": "water_drops (4)",
+    "level112:454": "water_drops",
+    "level112:458": "water_drops (7)",
+    "level112:459": "water_drops (3)",
+    "level112:470": "water_drops (5)",
+    "level112:478": "water_drops (6)",
+    "level112:490": "water_drops (8)"
+   },
+   "dropped_players": {
+    "level112:415": "indoor_winds_winter",
+    "level112:486": "indoor_winds_winter (2)",
+    "level112:495": "indoor_winds_winter (1)",
+    "level112:469": "AmbientSoundPlayer"
+   },
+   "dropped_support": {
+    "level112:408": "LoopAmbientSoundPlayer_spline_emitter",
+    "level112:435": "spline",
+    "level112:468": "AmbientSoundPlayer"
+   }
+  }
+ }
+}

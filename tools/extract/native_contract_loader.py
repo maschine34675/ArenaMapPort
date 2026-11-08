@@ -52,6 +52,12 @@ Schema (version 1; every key is required unless marked optional, unknown keys ar
                                             forced_mixer_players{id: Arena mixer name} (optional: players
                                             that force an Arena mixer group the port cannot provide; the
                                             exporter routes them like their group, marker mixerPolicy),
+                                            dropped_players{id: leaf name}, dropped_support{id: leaf name}
+                                            (optional, default {}: components the exporter reads, verifies and
+                                            does NOT export, PLAN-AUTOSERVICE item 4: Autoservice's three Winter-only
+                                            SeasonLoopAmbientSoundPlayers and its inactive spline chain; ``players``
+                                            and ``support`` then count the EXPORTED components only, and no dropped
+                                            id may also carry another per-player pin),
                                             zero_min_distance_players{id: leaf name} (optional, default {}:
                                             the players that author minDistance 0, the reviewed rule of
                                             extract_bay5_audio.parse_player; every other map pins none, so a
@@ -296,8 +302,11 @@ def _groups(value, where: str) -> dict:
 
 
 def _parse_states(raw, where: str, audio: dict):
-    raw = _object(raw, where, _STATE_KEYS, optional=("forced_mixer_players", "zero_min_distance_players"))
+    raw = _object(raw, where, _STATE_KEYS, optional=("forced_mixer_players", "zero_min_distance_players",
+                                                     "dropped_players", "dropped_support"))
     states = {
+        "dropped_players": _leaf_map(raw.get("dropped_players", {}), where + ".dropped_players", "player"),
+        "dropped_support": _leaf_map(raw.get("dropped_support", {}), where + ".dropped_support", "support component"),
         "forced_mixer_players": _leaf_map(raw.get("forced_mixer_players", {}), where + ".forced_mixer_players", "player"),
         "zero_min_distance_players": _leaf_map(raw.get("zero_min_distance_players", {}), where + ".zero_min_distance_players", "player"),
         "grouped_players": _int(raw["grouped_players"], where + ".grouped_players"),
@@ -326,6 +335,11 @@ def _parse_states(raw, where: str, audio: dict):
               f"{states['grouped_players']} disagrees with {players} players under '{audio['group_coverage']}' coverage")
     if len(states["zero_min_distance_players"]) > players:
         _fail(where + ".zero_min_distance_players", f"{len(states['zero_min_distance_players'])} entries for {players} players")
+    pinned_elsewhere = (set(states["forced_mixer_players"]) | set(states["zero_min_distance_players"]) |
+                        set(states["inactive_players"]) | set(states["disabled_players"]) | set(states["loops"]))
+    clash = sorted((set(states["dropped_players"]) | set(states["dropped_support"])) & pinned_elsewhere)
+    if clash or set(states["dropped_players"]) & set(states["dropped_support"]):
+        _fail(where + ".dropped_players", f"a dropped component must not carry another pin: {clash}")
     members = sum(g["players"] for g in states["groups"].values())
     if members != states["grouped_players"]:
         _fail(where + ".groups", f"{members} group members disagree with grouped_players {states['grouped_players']}")

@@ -49,7 +49,8 @@
       "name": "Arena_AutoService_Scripts",
       "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_Scripts.unity",
       "index": 69,
-      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported.",
+      "role": "scripts"
     },
     {
       "name": "Arena_AutoService_Scripts_Winter",
@@ -61,19 +62,22 @@
       "name": "Arena_AutoService_AI",
       "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_AI.unity",
       "index": 63,
-      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
+      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh.",
+      "role": "ai"
     },
     {
       "name": "Arena_AutoService_Sound",
       "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_Sound.unity",
       "index": 112,
-      "reason": "Source Arena sound/audio runtime is outside the existing port contract."
+      "reason": "Source Arena sound/audio runtime is outside the existing port contract.",
+      "role": "sound"
     },
     {
       "name": "Arena_AutoService_Culling",
       "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_Culling.unity",
       "index": 135,
-      "reason": "Source PerfectCulling data is outside the existing port contract."
+      "reason": "Source PerfectCulling data is outside the existing port contract.",
+      "role": "culling"
     }
   ]
 }

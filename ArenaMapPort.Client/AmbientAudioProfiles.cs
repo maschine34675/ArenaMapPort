@@ -157,6 +157,13 @@ namespace ArenaMapPort.Client
     /// shoreline-style AmbientSplineEmitterWaterGroup (the bypass bus, 1). Like Bowl the groups list all 104 players. The kind counts (22 season,
     /// 30 loop: 20 neon lamps, 6 interior loops including the projector, 3 exterior loops and the water emitter's) are what the strict
     /// original-activation check of the driver accepts; the released maps keep 0.
+    /// Autoservice (PLAN-AUTOSERVICE item 4, 2026-11-08; contract native_contracts/autoservice.json audio block, level112): a STAGED profile,
+    /// see <see cref="Staged"/>. 38 exported players (22 random and 16 season; the nine water_drops are season players), none inactive, two groups in
+    /// source order: CommonAmbientInGroup (AmbientIn, 18, effects and reverb reroute) and CommonAmbientOutGroup (AmbientOut, 20). The source Sound scene
+    /// has 42 players; four never reach the graph (contract states.dropped_players): the three Winter-only SeasonLoopAmbientSoundPlayers
+    /// (indoor_winds_winter) and the ungrouped inactive player of the spline chain. So the strict driver check keeps rejecting every season-loop
+    /// player (it accepts the three exporter kinds only) and needs no count for the dropped class. The four far_fight players force Arena's
+    /// CommonAmbOutBypass in the source and are routed like their group here (states.forced_mixer_players, importer marker mixerPolicy "group").
     /// </summary>
     internal static class AmbientAudioProfiles
     {
@@ -227,8 +234,32 @@ namespace ArenaMapPort.Client
                 groupsListInactivePlayers: true, seasonKindPlayers: 22, loopKindPlayers: 30),
         };
 
+        // STAGED, not released (PLAN-AUTOSERVICE item 4): the Autoservice row is written with its exporter and contract pins, but the map is not in
+        // ArenaMapRegistry.All yet, so it stays out of Table and therefore out of All, TryGet and Get: the driver binds no config keys for it and
+        // the released-set tests keep their meaning. Item 12 (the lock-step promotion) moves the row into Table and empties this array.
+        // Mirrors tools/extract/native_contracts/autoservice.json "audio" (schema 2, level112; the v2 package fills the block): 22 random + 16 season
+        // players = 38 = group members 18 + 20 (coverage "all_players"; no player is inactive, so no member list holds inactive players),
+        // no source AudioSource has Loop set, no controllers, no shoreline (the spline chain is dropped).
+        static readonly AmbientAudioProfile[] StagedTable =
+        {
+            new AmbientAudioProfile("arena_autoservice", "AutoService", "ArenaMapPort_AutoServiceNativeAudio",
+                players: 38, activePlayers: 38, controllers: 0, hasShoreline: false, usesSeasons: true, originalActivation: true,
+                inactivePlayers: null, loopPlayers: null,
+                routes: new[]
+                {
+                    new AmbientGroupRoute("CommonAmbientInGroup", "AmbientIn/CommonAmbInEffects", "CommonAmbInEffects",
+                        AmbientBus.In, members: 18, effects: true, reverbReroute: true),
+                    new AmbientGroupRoute("CommonAmbientOutGroup", "AmbientOut/CommonAmbOutEffects", "CommonAmbOutEffects",
+                        AmbientBus.Out, members: 20),
+                },
+                seasonKindPlayers: 16, loopKindPlayers: 0),
+        };
+
         /// <summary>Every map with an imported ambient graph, in config binding order.</summary>
         internal static IReadOnlyList<AmbientAudioProfile> All => Table;
+
+        /// <summary>Profiles of maps that are not released yet (see the comment above the table); never consulted by the driver.</summary>
+        internal static IReadOnlyList<AmbientAudioProfile> Staged => StagedTable;
 
         internal static bool TryGet(string mapKey, out AmbientAudioProfile profile)
         {

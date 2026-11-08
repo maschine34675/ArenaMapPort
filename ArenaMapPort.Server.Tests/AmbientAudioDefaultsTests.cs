@@ -14,6 +14,7 @@ public class AmbientAudioDefaultsTests
     [InlineData("arena_airpit", 3f, .4f, 3f)]
     [InlineData("arena_bowl", 3f, .4f, 3f)] // provisional like AirPit's first mix (PLAN-BOWL item 9, 2026-10-18)
     [InlineData("arena_iceberg", 3f, 0f, 2f)] // provisional (PLAN-ICEBERG item 12): NOT Bowl's offset .4 / range 3, which would lift the 20 lamp loops (0.25, 3 m) to about 0.75 and 9 m
+    [InlineData("arena_autoservice", 3f, .2f, 3f)] // start value (PLAN-AUTOSERVICE item 4): Bowl's offset .4 would lift the nine 0.07 water_drops to about 0.50
     public void AcceptedMixIsTheDefault(string map, float gain, float offset, float range)
     {
         AmbientAudioDefaults.Values(map, out float defaultGain, out float defaultOffset, out float defaultRange);
@@ -75,6 +76,9 @@ public class AmbientAudioDefaultsTests
     [InlineData("arena_iceberg", 3f, 0f, 2f)] // Iceberg's previous default equals its default: nothing may move
     [InlineData("arena_iceberg", 0f, 0f, 1f)]
     [InlineData("arena_iceberg", -6f, .1f, 2f)]
+    [InlineData("arena_autoservice", 3f, .2f, 3f)] // Autoservice's previous default equals its default: nothing may move
+    [InlineData("arena_autoservice", 0f, 0f, 1f)]
+    [InlineData("arena_autoservice", -6f, .1f, 2f)]
     [InlineData("arena_equator", 2f, .4f, 2.5f)]
     [InlineData("arena_bay5", 5f, .4f, 4f)]
     [InlineData("arena_bay5", 4f, .4f, 3.5f)]
@@ -98,6 +102,8 @@ public class AmbientAudioDefaultsTests
     [InlineData("arena_bowl", -6f, .1f, 2f)]
     [InlineData("arena_iceberg", 0f, 0f, 1f)]
     [InlineData("arena_iceberg", -6f, .1f, 2f)]
+    [InlineData("arena_autoservice", 0f, 0f, 1f)]
+    [InlineData("arena_autoservice", -6f, .1f, 2f)]
     public void AirPitAndBowlKeysAreNewSoNoLegacyMigrationTouchesAMix(string map, float savedGain, float savedOffset, float savedRange)
     {
         // Equator and Bay5 migrate neutral defaults and rounded offsets from earlier releases. AirPit's and Bowl's keys
@@ -123,7 +129,8 @@ public class AmbientAudioDefaultsTests
         foreach (var map in ArenaMapPort.Shared.ArenaMapRegistry.Catalog)
         {
             bool released = ArenaMapPort.Shared.ArenaMapRegistry.All.Any(r => r.Key == map.Key);
-            if (released) { AmbientAudioDefaults.Values(map.Key, out _, out _, out _); continue; }
+            // A staged profile (Autoservice before its promotion) already carries its start row; the keys stay unbound until the profile is released.
+            if (released || ArenaMapPort.Client.AmbientAudioProfiles.Staged.Any(p => p.MapKey == map.Key)) { AmbientAudioDefaults.Values(map.Key, out _, out _, out _); continue; }
             Assert.Throws<ArgumentException>(() => AmbientAudioDefaults.Values(map.Key, out _, out _, out _));
             var config = new ConfigFile();
             var gain = config.Bind("Audio (" + map.Key + ")", "AmbientGainDb", 0f, "");

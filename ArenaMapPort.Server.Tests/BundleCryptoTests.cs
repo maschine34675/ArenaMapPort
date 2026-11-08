@@ -2345,6 +2345,8 @@ public sealed class CryptoRealDataTests
         ("arena_bowl", 8, 754_464_336),
         // Iceberg (PLAN-ICEBERG item 6, promoted 2026-10-30): four streams, no .resource file; its key store entry is created by the first stage (U1)
         ("arena_iceberg", 4, 560_470_032),
+        // Autoservice (PLAN-AUTOSERVICE item 5, 2026-11-08; not released, no package or key yet): measured on 0.6.2.0.48473
+        ("arena_autoservice", 3, 464_942_688),
     };
 
     static string RepoRoot()
@@ -2390,7 +2392,7 @@ public sealed class CryptoRealDataTests
                 total += length;
                 entries.Add(new KeyFileEntry(path, length));
             }
-            if (installed == "0.6.1.0.48206")
+            if (installed == "0.6.1.0.48206" || installed.StartsWith("0.6.2.", StringComparison.Ordinal))
                 Assert.Equal(bytes, total);
             byte[] kMap = Crypt.Random(32, key.Length);
             byte[][] digests = entries.Select(e => KeyResolver.FileDigest(files, e, sample, p, out _)).ToArray();

@@ -320,6 +320,9 @@ def check_audio_group_states(audio, data, grouped):
             'zero-minDistance audio players')
     if states is None:return
     require(sum(grouped.values())==states['grouped_players'],'audio grouped player count')
+    dropped=data.get('dropped') or {}  # the audited components the exporter left out (contract states.dropped_*)
+    for what,pin in (('players','dropped_players'),('support','dropped_support')):
+        compare({r['id']:r['leaf'] for r in dropped.get(what,[])},states.get(pin) or {},'dropped audio '+what)
     compare({p['id']:p['path'].split('/')[-1] for p in players if not p['activeInHierarchy']},
             states['inactive_players'],'original inactive audio players')
     compare(sorted(p['id'] for p in players if not p['enabled']),sorted(states['disabled_players']),'disabled audio players')
@@ -665,6 +668,30 @@ def check_wave(package,clip):
     return dimensions,pcm
 
 
+def with_dropped_members(item,dropped_records):
+    """A group record with the members the exporter dropped put back at their source index (the source payload lists them)."""
+    if item['kind']!='AmbientSoundPlayerGroup':return item
+    name=item['path'].split('/')[-1];members=list(item['soundPlayers'])
+    inserts=sorted(((m['index'],m['pointer']) for r in dropped_records.values() for m in r.get('memberships',[]) if m['group']==name),key=lambda pair:pair[0])
+    for index,pointer in inserts:
+        require(0<=index<=len(members),'dropped group member index');members.insert(index,pointer)
+    return {**item,'soundPlayers':members}
+
+
+def check_dropped_source(records,objects,audio):
+    """Every dropped component (contract states.dropped_*) is still in the source scene with its pinned kind, leaf name
+    and inactive/Winter-only state; extract_bay5_audio.drop_record and the rules of its module docstring decide, this repeats them."""
+    require(set(objects)==set(records),'dropped audio components differ from the source scene')
+    from extract_bay5_audio import parse_player,hierarchy,SEASON_LOOP
+    for key,record in records.items():
+        obj=objects[key];kind=script_identity(obj)[0]
+        require(kind==record['kind'],'dropped audio component kind '+key)
+        h=hierarchy(obj,True)
+        compare((h['path'],h['path'].rsplit('/',1)[-1],h['activeInHierarchy']),(record['path'],record['leaf'],record['activeInHierarchy']),'dropped audio component '+key)
+        if kind==SEASON_LOOP:require(list(parse_player(obj,kind)['seasonSoundClips'])==['Winter'],'dropped season loop must be Winter-only '+key)
+        else:require(not record['activeInHierarchy'],'dropped audio component must be inactive '+key)
+
+
 def validate_audio_source(package,manifest,data):
     import UnityPy
     root=Path(manifest['source']['arena_data_root'])
@@ -677,16 +704,19 @@ def validate_audio_source(package,manifest,data):
     require(file_digest(schema_path)==data['bankSchema']['sha256'],'SoundBank type schema source changed')
     env=UnityPy.load(str(root/source_scene),str(root/'globalgamemanagers.assets'))
     scene=next(f for f in env.files.values() if hasattr(f,'objects') and Path(f.name).name==source_scene)
-    components={};counts=Counter()
+    components={};counts=Counter();dropped=data.get('dropped') or {}
+    dropped_records={r['id']:r for r in dropped.get('players',[])+dropped.get('support',[])};dropped_objects={}
     for obj in list(scene.objects.values()):
         if obj.type.name!='MonoBehaviour':continue
         kind,namespace,_=script_identity(obj);counts[kind]+=1
+        if identity(obj) in dropped_records:dropped_objects[identity(obj)]=obj;continue  # audited below, never exported
         if kind in PLAYERS|SUPPORT:
             require(namespace==SCRIPT_NS[kind],'source ambient namespace changed');components[identity(obj)]=obj
     # Census labels are short class names; selected classes also require namespaces.
     compare(dict(counts),data['componentCounts'],'source audio complete component census')
     items=data['players']+data['support']
     require(set(components)=={r['id'] for r in items},'source audio component set differs')
+    check_dropped_source(dropped_records,dropped_objects,audio)
     reached_banks=set();reached_clips=set()
     # Same-named siblings get unique paths in the package (extract_bay5_audio.disambiguate_sibling_paths; Bowl's two
     # indoor_wind players); the source recheck applies the same rule before comparing names.
@@ -698,7 +728,7 @@ def validate_audio_source(package,manifest,data):
     source_paths=disambiguate_sibling_paths({k:'/'.join(t[0] for t in reversed(g['chain'])) for k,g in source_gos.items()},source_objects)
     for item in items:
         obj=components[item['id']]
-        require(obj.get_raw_data()==audio_wire(item,item['kind']),'source audio payload '+item['id'])
+        require(obj.get_raw_data()==audio_wire(with_dropped_members(item,dropped_records),item['kind']),'source audio payload '+item['id'])
         require(len(obj.get_raw_data())==item['byteSize'],'source audio byte size')
         go=source_gos[item['id']];chain=list(reversed(go['chain']))
         compare(source_paths[item['id']],item['path'],'source audio hierarchy names')

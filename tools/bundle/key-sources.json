@@ -47,6 +47,12 @@
       { "index": 260, "scene": "Arena_Sanatorium_Grass", "files": [] },
       { "index": 375, "scene": "Arena_Sanatorium_CheckPoint", "files": ["sharedassets375.assets.resS"] },
       { "index": 376, "scene": "Arena_Sanatorium_CheckPoint_DesignStuff", "files": ["sharedassets376.assets.resS"] }
+    ],
+    "arena_autoservice": [
+      { "index": 62, "scene": "Arena_AutoService", "files": ["sharedassets62.assets.resS", "sharedassets62.resource"] },
+      { "index": 65, "scene": "Arena_AutoService_DesignStuff", "files": [] },
+      { "index": 66, "scene": "Arena_AutoService_Light", "files": ["sharedassets66.assets.resS"] },
+      { "index": 136, "scene": "Arena_AutoService_TeamFight_DesignStuff", "files": [] }
     ]
   }
 }

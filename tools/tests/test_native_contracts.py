@@ -147,13 +147,13 @@ def partial_block() -> dict:
 class ContractFilesTests(unittest.TestCase):
     def test_repository_contracts_load_and_validator_uses_them(self):
         contracts = L.load_contracts()
-        self.assertEqual(set(contracts), {'arena_equator', 'arena_bay5', 'arena_airpit', 'arena_bowl', 'arena_iceberg'})
+        self.assertEqual(set(contracts), {'arena_equator', 'arena_bay5', 'arena_airpit', 'arena_bowl', 'arena_iceberg', 'arena_autoservice'})
         self.assertEqual(set(v.MAPS), set(contracts))
         for key, contract in contracts.items():
             self.assertEqual(contract['key'], key)
             self.assertEqual(v.MAPS[key], contract)
         files = sorted(p.stem for p in L.CONTRACT_DIR.glob('*.json'))
-        self.assertEqual(files, ['airpit', 'bay5', 'bowl', 'equator', 'iceberg'])
+        self.assertEqual(files, ['airpit', 'autoservice', 'bay5', 'bowl', 'equator', 'iceberg'])
 
     def test_load_contract_by_key_fails_for_unknown_map(self):
         self.assertEqual(L.load_contract('arena_airpit')['key'], 'arena_airpit')
@@ -200,7 +200,8 @@ class GoldenLegacyTests(unittest.TestCase):
         # Added with the item-13 review: the loop is pinned by leaf name too (the importer and the client look it
         # up as 'electricity'), the single indoor group by name, mixer and member count (25 players - 2 dogs).
         states = v.MAPS['arena_equator']['audio']['states']
-        self.assertEqual(set(states), set(LEGACY_EQUATOR_STATES) | {'groups', 'loops', 'forced_mixer_players', 'zero_min_distance_players'})
+        self.assertEqual(set(states), set(LEGACY_EQUATOR_STATES) | {'groups', 'loops', 'forced_mixer_players', 'zero_min_distance_players', 'dropped_players', 'dropped_support'})
+        self.assertEqual((states['dropped_players'], states['dropped_support']), ({}, {}))  # optional pins, normalised to {}: only Autoservice drops components
         self.assertEqual(states['zero_min_distance_players'], {})  # optional pin, normalised to {}: only Iceberg has zero-minDistance players
         self.assertEqual(states['forced_mixer_players'], {})  # optional pin, normalised to {} (Bowl pins metal_rigging)
         self.assertEqual(states['loops'], {'level56:965': 'electricity'})
@@ -273,7 +274,8 @@ class GoldenLegacyTests(unittest.TestCase):
                        'groups': {'CommonAmbientOutGroup': {'mixer': 'CommonAmbOutEffects', 'players': 4},
                                   'CommonAmbientInGroup': {'mixer': 'CommonAmbInEffects', 'players': 22}},
                        'group_mixers': ['CommonAmbOutEffects', 'CommonAmbInEffects'],
-                       'loops': {}, 'loop_players': [], 'forced_mixer_players': {}, 'zero_min_distance_players': {}}})
+                       'loops': {}, 'loop_players': [], 'forced_mixer_players': {}, 'zero_min_distance_players': {},
+                       'dropped_players': {}, 'dropped_support': {}}})
         # AirPit is the first map with both an Out and an In group: the Out group comes first in source order
         # (kept in the group_mixers mirror), but the pins themselves are keyed by group name.
         self.assertEqual(audio['states']['group_mixers'][0], 'CommonAmbOutEffects')
@@ -1363,6 +1365,82 @@ class AcceptedPackageTests(unittest.TestCase):
                          [('CommonAmbientOutGroup', 'CommonAmbOutEffects', 4), ('CommonAmbientInGroup', 'CommonAmbInEffects', 22)])
         self.assertEqual(sum(p['volume'] < p['deltaVolume'] for p in data['players']), 0)  # no quiet-source silencing
         self.assertEqual(v.extra_counts(package, manifest), self.EXPECTED_AIRPIT_EXTRA)
+
+
+class AutoserviceContractTests(unittest.TestCase):
+    """PLAN-AUTOSERVICE item 3: the pins of the first native extraction of Autoservice (Arena 0.6.2.0.48473, 2026-11-08)."""
+
+    def test_contract_pins_the_extraction_of_package_v1(self):
+        contract = v.MAPS['arena_autoservice']
+        self.assertEqual(contract['scenes'], {62: 'Arena_AutoService', 65: 'Arena_AutoService_DesignStuff',
+                                              136: 'Arena_AutoService_TeamFight_DesignStuff', 66: 'Arena_AutoService_Light'})
+        self.assertEqual(contract['ballistics'], {62: 2897, 65: 18, 136: 8, 66: 194})
+        self.assertEqual(sum(contract['ballistics'].values()), 3117)
+        self.assertEqual(contract['features'], {
+            'static_decals': 304,
+            'light_culling': {'culling_light_object_count': 184, 'volumetric_light_count': 78, 'light_flicker_count': 0},
+            'raincover': {'indoor_trigger_count': 1, 'dry_plane_count': 0, 'weather_obstacle': False},
+            'navmesh_modifiers': {'modifiers': 30, 'volumes': 7},
+            'small_physics_objects': 134})
+        audio = contract['audio']  # package v1 carried none; package v2 added the Sound scene census (item 4)
+        self.assertEqual((audio['feature'], audio['schema'], audio['scene'], audio['root'], audio['group_coverage']),
+                         ('ambient_audio', 2, 'level112', 'ArenaMapPort_AutoServiceNativeAudio', 'all_players'))
+        self.assertEqual(audio['players'], {'AmbientSoundPlayer': 22, 'SeasonAmbientSoundPlayer': 16})
+        self.assertEqual((audio['support'], audio['banks'], audio['clips']), ({'AmbientSoundPlayerGroup': 2}, 13, 113))
+        states = audio['states']
+        self.assertEqual((len(states['dropped_players']), len(states['dropped_support']), len(states['zero_min_distance_players']),
+                          len(states['forced_mixer_players']), states['grouped_players']), (4, 3, 9, 4, 38))
+        self.assertEqual(states['group_mixers'], ['CommonAmbInEffects', 'CommonAmbOutEffects'])
+        self.assertTrue(contract['require_unsliced'])
+        self.assertFalse(contract['implicit_scene_identity'])
+
+    def test_package_v2_manifest_carries_the_audio_export(self):
+        package = package_dir('autoservice-native-v2')
+        if package is None:
+            self.skipTest('work/extract/autoservice-native-v2 not present')
+        manifest = v.read_json(package / 'manifest.json')
+        self.assertEqual(v.map_contract(manifest)[0], 'arena_autoservice')
+        self.assertEqual(manifest['native_features']['required'], ['ballistics', 'ambient_audio'])
+        audio = manifest['native_audio']
+        self.assertEqual((audio['players'], audio['banks'], audio['clips'], audio['schema_version']), (38, 13, 113, 2))
+        self.assertEqual((len(manifest['meshes']), len(manifest['materials']), len(manifest['textures'])), (4270, 479, 950))
+
+    def test_package_v1_manifest_and_shader_census(self):
+        package = package_dir('autoservice-native-v1')
+        if package is None:
+            self.skipTest('work/extract/autoservice-native-v1 not present')
+        manifest = v.read_json(package / 'manifest.json')
+        self.assertEqual(v.map_contract(manifest)[0], 'arena_autoservice')
+        self.assertEqual((len(manifest['meshes']), len(manifest['materials']), len(manifest['textures']),
+                          len(manifest['warnings']), len(manifest['errors'])), (4270, 479, 950, 116, 0))
+        self.assertEqual(manifest['native_features']['required'], ['ballistics'])
+        self.assertNotIn('native_audio', manifest)
+        shaders = Counter(v.read_json(path)['shader'] for path in (package / 'materials').glob('*.json'))
+        # Distinct shader names over the package materials: the survey's scratch extract without native features counted 27 over
+        # 402 materials; the native decals add 77 materials of one more shader (Decal/DeferredDecalDiffuseNormalsDynamicEditor).
+        # The survey's earlier "33 over 409" was not reproducible.
+        self.assertEqual((len(shaders), sum(shaders.values())), (28, 479))
+        self.assertEqual(shaders['Decal/DeferredDecalDiffuseNormalsDynamicEditor'], 77)
+        self.assertEqual(shaders['p0/Reflective/Bumped Specular SMap Baked'], 1)
+
+    def test_plan_names_its_four_scene_roles(self):
+        # PLAN-AUTOSERVICE item 1: scripts 69, sound 112, ai 63, culling 135 (Iceberg's shape); the winter Scripts scene 243 has no role.
+        sys.path.insert(0, str(REPO / 'tools' / 'extract'))
+        import source_plan
+        plan = source_plan.load_plan(REPO / 'tools' / 'extract' / 'plans' / 'autoservice.json')
+        self.assertEqual({role: (source_plan.scene_for_role(plan, role)['index'], source_plan.scene_for_role(plan, role)['name'])
+                          for role in ('scripts', 'sound', 'ai', 'culling')},
+                         {'scripts': (69, 'Arena_AutoService_Scripts'), 'sound': (112, 'Arena_AutoService_Sound'),
+                          'ai': (63, 'Arena_AutoService_AI'), 'culling': (135, 'Arena_AutoService_Culling')})
+        self.assertEqual([r.get('role') for r in plan['excluded_scenes'] if r['index'] == 243], [None])
+        self.assertEqual({s['index']: s['name'] for s in plan['scenes']},
+                         {62: 'Arena_AutoService', 65: 'Arena_AutoService_DesignStuff',
+                          136: 'Arena_AutoService_TeamFight_DesignStuff', 66: 'Arena_AutoService_Light'})
+
+    def test_reviewed_wheel_rubble_pair(self):
+        sys.path.insert(0, str(REPO / 'tools' / 'extract'))
+        import extract_ballistics
+        self.assertIn(('Pebbles', 'Rubber'), extract_ballistics.REVIEWED_PRESET_MATERIAL_PAIRS)
 
 
 if __name__ == '__main__':

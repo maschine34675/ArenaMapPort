@@ -33,8 +33,10 @@ MATERIAL_NAMES = frozenset("None Asphalt Body Cardboard Chainfence Concrete Fabr
 # 'Guardian_Tower_Fance_BALLISTIC_MetalThin' colliders of Arena_Bowl (level41) carry the preset Chainfence over the
 # material MetalThin. Iceberg, 2026-10-30: the eight 'concrete' children of the cement bags
 # (SBG_Arena_Sanatorium_Main/OO/OUTDOOR/bag_cement_block .. (7)/concrete, level256) carry the preset Gravel over the
-# material Concrete. Any other pair still fails the extraction closed ("preset/material disagreement").
-REVIEWED_PRESET_MATERIAL_PAIRS = frozenset({("Chainfence", "MetalThin"), ("Gravel", "Concrete")})
+# material Concrete. Autoservice, 2026-11-08: the six 'rabble' children of the 'balistic_col' of the 'logan_wheel' props
+# (SBG_Arena_AutoService/OO/Props/.../logan_wheel (N)/balistic_col/rabble, level62, layer 12, one shared mesh) carry the preset
+# Pebbles over the material Rubber. Any other pair still fails the extraction closed ("preset/material disagreement").
+REVIEWED_PRESET_MATERIAL_PAIRS = frozenset({("Chainfence", "MetalThin"), ("Gravel", "Concrete"), ("Pebbles", "Rubber")})
 
 
 def reviewed_hit_role(hit, net, material):

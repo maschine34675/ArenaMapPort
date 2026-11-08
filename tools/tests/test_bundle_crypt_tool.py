@@ -977,7 +977,11 @@ class KeySourcesTests(unittest.TestCase):
 
     # files and listed bytes per map on Arena 0.6.1.0.48206 (2026-10-20)
     LISTED = {"arena_equator": (3, 218_007_984), "arena_bay5": (8, 358_204_848), "arena_airpit": (7, 603_532_272), "arena_bowl": (8, 754_464_336),
-              "arena_iceberg": (4, 560_470_032)}
+              "arena_iceberg": (4, 560_470_032),
+              # Autoservice (PLAN-AUTOSERVICE item 5, 2026-11-08): measured on 0.6.2.0.48473, the three streams are byte-size-identical on 0.6.1
+              "arena_autoservice": (3, 464_942_688)}
+    # maps with a row but not yet in the released set (their package or their promotion is pending); a map leaves this set when it joins RELEASE_MAP_KEYS
+    PENDING_MAPS = ("arena_autoservice",)
 
     @classmethod
     def setUpClass(cls):
@@ -1000,8 +1004,9 @@ class KeySourcesTests(unittest.TestCase):
         self.assertEqual(self.table["schema"], 2)
         self.assertEqual(list(self.table), ["schema", "arena_build", "note", "sample", "maps"])
         self.assertEqual(self.table["sample"], {"block_size": 65536, "blocks": 16})
-        # exactly the released maps (Iceberg's row landed before its promotion, PLAN-ICEBERG item 6; the scaffolding that allowed that is gone)
-        self.assertEqual(sorted(self.table["maps"]), sorted(RELEASE_MAP_KEYS))
+        # exactly the released maps plus the pending ones (a row lands before the promotion, as Iceberg's did in PLAN-ICEBERG item 6)
+        self.assertEqual(sorted(self.table["maps"]), sorted(list(RELEASE_MAP_KEYS) + list(self.PENDING_MAPS)))
+        self.assertFalse(set(self.PENDING_MAPS) & set(RELEASE_MAP_KEYS), "a promoted map leaves PENDING_MAPS")
         self.assertEqual(sorted(self.LISTED), sorted(self.table["maps"]))
         text = KEY_SOURCES.read_text(encoding="utf-8")
         self.assertNotRegex(text, r"[0-9a-f]{40,}")  # indices and names only, never a hash
@@ -1023,7 +1028,8 @@ class KeySourcesTests(unittest.TestCase):
         self.assertEqual(self.entries("arena_bay5"), bay5)
 
     def test_airpit_bowl_and_iceberg_match_their_extraction_plans(self):
-        for key, plan_name in (("arena_airpit", "airpit"), ("arena_bowl", "bowl"), ("arena_iceberg", "iceberg")):
+        for key, plan_name in (("arena_airpit", "airpit"), ("arena_bowl", "bowl"), ("arena_iceberg", "iceberg"),
+                              ("arena_autoservice", "autoservice")):
             plan = json.loads((REPO / "tools/extract/plans" / f"{plan_name}.json").read_text(encoding="utf-8"))
             planned = {e["index"]: e["name"] for e in plan["scenes"] + plan["anchor_scenes"]}
             with self.subTest(key=key):
@@ -1031,7 +1037,9 @@ class KeySourcesTests(unittest.TestCase):
 
     def test_the_accepted_manifests_agree_when_they_are_present(self):
         packages = {"arena_equator": "equator-native-v5", "arena_bay5": "bay5-native-v5", "arena_airpit": "airpit-native-v9", "arena_bowl": "bowl-native-v2",
-                    "arena_iceberg": "iceberg-native-v2"}
+                    "arena_iceberg": "iceberg-native-v2",
+                    # no accepted package yet (PLAN-AUTOSERVICE item 14 follows a validated U1); a missing manifest is skipped like every other map's
+                    "arena_autoservice": "autoservice-native-v1"}
         checked = 0
         for key, package in packages.items():
             path = REPO / "work/extract" / package / "manifest.json"
@@ -1040,7 +1048,10 @@ class KeySourcesTests(unittest.TestCase):
             manifest = json.loads(path.read_text(encoding="utf-8"))
             with self.subTest(key=key):
                 registry = manifest["source"].get("scene_registry")
-                if registry is not None:
+                if key in self.PENDING_MAPS:  # the package may carry more scenes than the key lists (script, sound, ai, culling roles): the key scenes must be in it
+                    self.assertEqual({i: n for i, n in self.entries(key).items()},
+                                     {e["index"]: e["name"] for e in registry if e["index"] in self.entries(key)})
+                elif registry is not None:
                     self.assertEqual({e["index"]: e["name"] for e in registry}, self.entries(key))
                 else:  # Equator and Bay5 name their scenes only
                     self.assertEqual(sorted(manifest["scenes"]), sorted(self.entries(key).values()))
@@ -1061,7 +1072,8 @@ class KeySourcesTests(unittest.TestCase):
                                if (data / name).is_file()]
                     self.assertEqual(entry["files"], present, "the table must name exactly the resource streams this Arena build has")
                     listed += sum((data / name).stat().st_size for name in present)
-            if installed == self.table["arena_build"]:
+            # the sizes are measured on 0.6.1 and re-checked on 0.6.2 (the resource streams are byte-size-identical across the hotfix)
+            if installed == self.table["arena_build"] or str(installed).startswith("0.6.2."):
                 with self.subTest(key=key):
                     self.assertEqual(listed, self.LISTED[key][1])
 

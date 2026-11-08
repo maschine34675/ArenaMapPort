@@ -122,7 +122,11 @@ dated state in one screen; read it before this index if you only have a minute.
 - [autoservice-release.md](autoservice-release.md) — Autoservice as the sixth map (branch `feature/autoservice`, started 2026-11-08):
   the four surveys on Arena 0.6.2 (TeamFight alone with 20 markers in two pockets, one capture point, four gates, 372 new border
   cubes, 30 body-rig fans so crowdless, new season-loop audio class, no emission cap, no water), the plan decisions and the open
-  questions. Plan: [../PLAN-AUTOSERVICE.md](../PLAN-AUTOSERVICE.md).
+  questions; Phase A done offline on 2026-11-08 (plan roles, packages v1 and v2 with the ambient-audio export, the native contract with its
+  audio block, the staged client profile, the key-source rows; gates green, nothing built or deployed). Plan: [../PLAN-AUTOSERVICE.md](../PLAN-AUTOSERVICE.md).
+- [autoservice-source-062.md](autoservice-source-062.md) — Autoservice's Arena 0.5.4 spike package against the 0.6.2 native package v1
+  (2026-11-08): no index shift, +387 objects (372 border cubes, two props), every id rehashed, the native blocks, the reviewed
+  Pebbles/Rubber pair and the 28-shader census.
 - [spt-seb-compatibility.md](spt-seb-compatibility.md) — SPT-SEB (Sound Engine Backport, MIT, v1.0.3) read offline on 2026-11-08: its
   `.audiobakedata` reader/checker as a second opinion for the Arena bakes, two audio details (resampler click, 10 Hz high-pass bursts), and the
   four friction points of running SEB beside the port (shot reverb, ambient sends, rain levels, pool-source curves) that only the user's listening

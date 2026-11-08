@@ -40,7 +40,13 @@ public sealed class AmbientAudioProfilesTests
 
     static int Total(JsonElement census) => census.EnumerateObject().Sum(p => p.Value.GetInt32());
 
-    public static IEnumerable<object[]> Keys => AmbientAudioProfiles.All.Select(p => new object[] { p.MapKey });
+    // The released profiles plus the staged ones (Autoservice until its lock-step promotion, PLAN-AUTOSERVICE item 12): the generic
+    // contract and consistency tests cover both, the released-set tests below see only AmbientAudioProfiles.All.
+    static IEnumerable<AmbientAudioProfile> Everything => AmbientAudioProfiles.All.Concat(AmbientAudioProfiles.Staged);
+
+    static AmbientAudioProfile Find(string key) => Everything.Single(p => p.MapKey == key);
+
+    public static IEnumerable<object[]> Keys => Everything.Select(p => new object[] { p.MapKey });
 
     [Fact]
     public void TheTableNamesExactlyTheReleasedMaps()
@@ -49,6 +55,21 @@ public sealed class AmbientAudioProfilesTests
             AmbientAudioProfiles.All.Select(p => p.MapKey).Order().ToArray());
         Assert.Equal(AmbientAudioProfiles.All.Count, AmbientAudioProfiles.All.Select(p => p.MapKey).Distinct().Count());
         Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg" }, AmbientAudioProfiles.All.Select(p => p.MapKey).ToArray());
+    }
+
+    [Fact]
+    public void StagedProfilesAreCatalogOnlyMapsOutsideTheReleasedTable()
+    {
+        // Autoservice's profile is written ahead of its promotion: it must not be reachable through the released table (the driver binds
+        // config keys for every entry of All and would find the map through TryGet), and item 12 empties Staged.
+        Assert.Equal(new[] { "arena_autoservice" }, AmbientAudioProfiles.Staged.Select(p => p.MapKey).ToArray());
+        foreach (var staged in AmbientAudioProfiles.Staged)
+        {
+            Assert.Contains(ArenaMapRegistry.Catalog, m => m.Key == staged.MapKey);
+            Assert.DoesNotContain(ArenaMapRegistry.All, m => m.Key == staged.MapKey);
+            Assert.DoesNotContain(AmbientAudioProfiles.All, p => p.MapKey == staged.MapKey);
+            Assert.False(AmbientAudioProfiles.TryGet(staged.MapKey, out _));
+        }
     }
 
     [Fact]
@@ -73,7 +94,7 @@ public sealed class AmbientAudioProfilesTests
     [MemberData(nameof(Keys))]
     public void ProfilesMirrorTheExtractionContract(string key)
     {
-        var profile = AmbientAudioProfiles.Get(key);
+        var profile = Find(key);
         var audio = ContractAudio(profile);
         var players = audio.GetProperty("players");
         var support = audio.GetProperty("support");
@@ -123,10 +144,14 @@ public sealed class AmbientAudioProfilesTests
     [MemberData(nameof(Keys))]
     public void EveryProfileIsInternallyConsistent(string key)
     {
-        var profile = AmbientAudioProfiles.Get(key);
+        var profile = Find(key);
+        bool released = AmbientAudioProfiles.All.Contains(profile);
         Assert.Equal(key, profile.MapKey);
-        Assert.True(AmbientAudioProfiles.TryGet(key, out var again));
-        Assert.Same(profile, again);
+        if (released)
+        {
+            Assert.True(AmbientAudioProfiles.TryGet(key, out var again));
+            Assert.Same(profile, again);
+        }
         Assert.StartsWith("ArenaMapPort_", profile.RootName);
         Assert.EndsWith("NativeAudio", profile.RootName);
         Assert.Equal(profile.Players - profile.ActivePlayers, profile.InactivePlayers.Count);
@@ -148,7 +173,7 @@ public sealed class AmbientAudioProfilesTests
         Assert.Equal(-1, profile.IndexOfGroup("NoSuchGroup"));
         Assert.Equal(-1, profile.IndexOfGroup(null));
         Assert.Equal(profile.Routes.Select(r => r.Bus).Distinct().ToArray(), profile.Buses.ToArray());
-        Assert.All(profile.Buses, bus => Assert.True(AmbientAudioProfiles.LeasesBus(key, bus)));
+        if (released) Assert.All(profile.Buses, bus => Assert.True(AmbientAudioProfiles.LeasesBus(key, bus)));
         // Everything inactive or looping needs the original-activation contract that pins it.
         if (!profile.OriginalActivation) { Assert.Empty(profile.InactivePlayers); Assert.Empty(profile.LoopPlayers); }
         // Each driver-level config entry the profile's map binds needs its accepted defaults row.
@@ -325,7 +350,7 @@ public sealed class AmbientAudioProfilesTests
         // The Editor assembly cannot reference the client; Bay5AudioImporter repeats the root name per map, the asset
         // folder and the group name to mixer pairing, and this is the guard that the repeats cannot drift from the table.
         var source = Text("UnityProject/Assets/ArenaMapPort/Editor/Import/Bay5AudioImporter.cs");
-        foreach (var profile in AmbientAudioProfiles.All)
+        foreach (var profile in Everything)
         {
             // The root name must be declared as a const AND be the one RootNameFor returns for this very map key; finding
             // the string alone would pass a swapped or copy-pasted case (a wrong root makes the driver silently find none).
@@ -339,10 +364,10 @@ public sealed class AmbientAudioProfilesTests
         Assert.True(block.Success, "GroupMixers table not found in the importer");
         var importer = Regex.Matches(block.Groups["body"].Value, @"\[""(?<group>\w+)""\]\s*=\s*""(?<mixer>\w+)""")
             .Select(m => (m.Groups["group"].Value, m.Groups["mixer"].Value)).Order().ToArray();
-        var client = AmbientAudioProfiles.All.SelectMany(p => p.Routes).Select(r => (r.GroupName, r.MixerName)).Distinct().Order().ToArray();
+        var client = Everything.SelectMany(p => p.Routes).Select(r => (r.GroupName, r.MixerName)).Distinct().Order().ToArray();
         Assert.Equal(client, importer);
         // A group name must pair with one mixer on every map that uses it.
-        var pairs = AmbientAudioProfiles.All.SelectMany(p => p.Routes).Select(r => (r.GroupName, r.MixerName)).Distinct().ToArray();
+        var pairs = Everything.SelectMany(p => p.Routes).Select(r => (r.GroupName, r.MixerName)).Distinct().ToArray();
         Assert.Equal(pairs.Length, pairs.Select(p => p.GroupName).Distinct().Count());
     }
 

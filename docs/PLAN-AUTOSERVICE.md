@@ -49,11 +49,11 @@ between Arena 0.5.4 and 0.6.2 (62, 63, 65, 66, 69, 112, 135, 136, 243 are identi
   split by the tool's rule) and LastHero is a single-bound free-for-all with resupply crates. Every mode shares scenes 62, 65 and
   63, so the choice changes only markers, bounds, capture point and gates. ShootOut and LastHero are not imported and get no plan
   record.
-- **Time and weather = `UsesServerTime`**, as Bay5, AirPit, Bowl and Iceberg: the imported scenes carry no Directional light,
+- **Time and weather = `UsesServerTime`** **(user, 2026-11-08: "serverzeit ok")**, as Bay5, AirPit, Bowl and Iceberg: the imported scenes carry no Directional light,
   sky, lightmap or reflection probe (189 + 12 realtime lights only); the sun, sky, fog and weather stack live in the excluded
   Scripts scene 69 (one Directional light of 0.5, fog colour (0.0053, 0.0080, 0.0155) = the sidecar's `fog_color`). A fixed
   night clock like Arena's look is a look choice for later **(user)**.
-- **Summer set only, no snow and no winter work.** Scenes 243-246 (Scripts_Winter, Light_Winter, Culling_Winter, Winter) are not
+- **Summer set only, no snow and no winter work** **(user, 2026-11-08: "sommer reicht")**. Scenes 243-246 (Scripts_Winter, Light_Winter, Culling_Winter, Winter) are not
   in the TeamFight preset and stay out. Scripts_Winter carries 602 `AirdropPoint` objects, 22 `DryPlane` and a Lighthouse
   leftover: nothing of it is imported (no loot, no airdrops). Which season Arena loads live was not determined (the main preset
   lists Scripts and Scripts_Winter); a winter variant is an addition **(user)**.
@@ -97,7 +97,7 @@ between Arena 0.5.4 and 0.6.2 (62, 63, 65, 66, 69, 112, 135, 136, 243 are identi
 - **Score monitors**: four `ArenaMonitorHolder`s in `DesignStuff`, all with a face on TeamFight: two timer (type 0, 3.127 x
   1.884 m, at (-345.82, 8.17, 489.18) and (-400.95, 8.14, 489.42)) and two alive-players (type 2, 2.244 x 1.352 m, at (-367.77,
   4.74, 509.60) and (-381.48, 4.85, 468.89)). ShootOut's score and playerboard TVs are not imported.
-- **No spectator crowd and no murmur or reaction beds (crowdless).** The 30 `ArenaFanEntity` of `SCAV_SPECTATORS` carry full EFT
+- **No spectator crowd and no murmur or reaction beds (crowdless)** **(user, 2026-11-08: "crowdless passt")**. The 30 `ArenaFanEntity` of `SCAV_SPECTATORS` carry full EFT
   player-body rigs (PlayerBones, LimbIK, SkinnedMeshRenderer, ...), an incompatible layout for the stands extractor (the crowdless call rests on that layout, not on position). They stand on
   the long tribune edges (y 4.4-4.6 at z 467 and z 511, x -398..-347) plus five on a y 1.9-2.0 ledge at x about -395 beside the
   west pocket (re-derived from `SCAV_SPECTATORS` in level 136: x -398.4..-346.7, y 1.92..4.58, z 467.0..511.0); `DesignStuff` holds none. Autoservice joins `validate_map_descriptors.CROWDLESS_MAP_KEYS`
@@ -166,9 +166,9 @@ between Arena 0.5.4 and 0.6.2 (62, 63, 65, 66, 69, 112, 135, 136, 243 are identi
 
 ### Needs the user
 
-Five decisions wait for the user and nothing blocks on them before item 18: (1) release number and form; (2) a winter variant
-(which season Arena loads live is open); (3) a crowd (body-rig or port-only; crowdless until then); (4) a fixed night clock like
-Arena's look; (5) the ArenaMode hand-off (item 19, the user's repository).
+Decided by the user on 2026-11-08 ("sommer reicht, crowdless passt, serverzeit ok, leg los mit phase A"): summer set only, crowdless, server
+time. Still the user's, nothing blocks on them before item 18: (1) release number and form; (2) the ArenaMode hand-off (item 19, the user's
+repository). A winter variant, a crowd or a fixed night clock would be later additions **(user)**.
 
 ## 1. Ordered work items
 
@@ -182,7 +182,7 @@ Catalog-only until item 12 (the registry promotion), which is why nothing deploy
    run); `tools/extract/plans/autoservice.json` gains the roles scripts 69, sound 112, ai 63, culling 135 and the reviewed
    ballistic and lamp roles the first extraction asks for; remove `autoservice` from `park-unreleased-dist.ps1` ($parked, `park-unreleased-dist.ps1:31`)
    only in item 12; `build_remaining.ps1` drops it from `$Maps` and `$allMaps` (lines 27, 35) and refuses it with a `throw` like
-   Bowl's and Iceberg's (line 39: its package would be the 0.5.4 spike and its output would overwrite `work/build/autoservice`).
+   Bowl's and Iceberg's (line 39: its package would be the 0.5.4 spike and its output would overwrite `work/build/autoservice`). (done 2026-11-08, see the record)
 2. **Package v1**: `python tools/extract/extract_map.py --plan tools/extract/plans/autoservice.json --native-features --output
    work/extract/autoservice-native-v1 [--target <SPT EscapeFromTarkov_Data>]`, then `python tools/extract/refresh_native_volumes.py
    <dir>`, then `validate_extract.py --package ... --extractor-timeout 1800`. Re-run the shader census on the package and pin the distinct-shader count (33 in the survey census). Expected from the scratch run: about 32,097 objects,
@@ -190,23 +190,23 @@ Catalog-only until item 12 (the registry promotion), which is why nothing deploy
    `PYTHONUTF8=1` (the 0.6.2 names carry real Cyrillic characters; the spike has mojibake of them, so hierarchy paths differ). A
    source note `docs/progress/autoservice-source-062.md` (the `iceberg-source-061.md` pattern) records the 0.5.4 to 0.6.2 delta:
    `DesignStuff` 124 -> 497 objects (372 cubes), main scene 25,678 -> 25,692 (two `metal_sheet_hanging_01_rusted` props), the
-   rest identical. (U/H: none; about 20-30 min.)
+   rest identical. (U/H: none; about 20-30 min.) (done 2026-11-08, see the record)
 3. **Native contract** `tools/extract/native_contracts/autoservice.json` (pins from the surveys): decals 304 (299 + 3 + 2),
    `CullingLightObject` 184 (172 + 12), `VolumetricLight` 78 (68 + 10), `LightFlicker` 0, `SmallPhysicsObject` 134 (14 Books, 6
    MediumGeneric, 2 Monitor, 40 SmallPlastic, 34 GlassBottle, 19 SmallBox, 19 SmallPaper), `NavMeshModifier` 10 (62) + 20 (136),
    volumes 6 + 1, rain cover 1 `IndoorTrigger` / 0 `DryPlane` / 0 `WeatherObstacle`, ballistic counts from the extraction,
-   `audio: null` for v1.
+   `audio: null` for v1. (done 2026-11-08, see the record)
 4. **Ambient audio and package v2**: the `SeasonLoopAmbientSoundPlayer` parser (3 players), the reviewed `water_drops`
    `minDistance` 0 pin (9), forced-mixer and inactive-player states, the dropped spline chain, `AUDIO_EXPORTERS["arena_autoservice"]`,
    the contract's audio block, `Bay5AudioImporter` (`RootNameFor` and `AssetFolderFor` throw for an unknown map: two case rows and
    a root-name constant), re-extract as `autoservice-native-v2`, validate. The client counterparts: `AmbientAudioProfiles` (an
    `AmbientAudioProfile` mirroring the contract, pinned by `AmbientAudioProfilesTests`) and `AmbientAudioDefaults` (three
-   switches: Values, PreviousValues, HasLegacyMix). Precedent: Iceberg item 5, Bowl `9c6bc17`, AirPit v6.
+   switches: Values, PreviousValues, HasLegacyMix). Precedent: Iceberg item 5, Bowl `9c6bc17`, AirPit v6. (done 2026-11-08, see the record)
 5. **Stage-2 key-source rows**: `tools/bundle/key-sources.json` gets `arena_autoservice`: 62 `[sharedassets62.assets.resS,
    sharedassets62.resource]`, 65 `[]`, 66 `[sharedassets66.assets.resS]`, 136 `[]` = 3 files, 464,942,688 B (458,749,216 +
    2,036,672 + 4,156,800), unchanged in size from 0.5.4; with `test_bundle_crypt_tool.py` (`KeySourcesTests`: the table keys, the
    LISTED counts, the accepted-package map) and `BundleCryptoTests.cs`. The first stage (key creation) runs only after a U1 bundle
-   passed every validator.
+   passed every validator. (done 2026-11-08, see the record)
 
 ### Phase B - A playable raid
 

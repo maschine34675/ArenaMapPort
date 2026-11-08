@@ -15,7 +15,14 @@ namespace ArenaMapPort.Client
     /// Bowl's offset 0.4 and range 3, because the volume is <c>volume * gain + offset</c> and Iceberg's 20 neon-lamp loops are authored
     /// at 0.25 with a 3 m reach (17 of them; two reach 5 m, one 7 m): Bowl's mix would lift them to about 0.75 and 9 m, a hum in every interior, and would
     /// flatten the Common-in players (median 0.10) to about 0.54. With offset 0 the authored balance between the groups stays; range 2 still
-    /// carries the far exterior sources (10 to 100 m) and 17 of the 20 lamps reach 6 m (the other three reach 10, 10 and 14 m). Its keys are new, so no migration step touches them.</summary>
+    /// carries the far exterior sources (10 to 100 m) and 17 of the 20 lamps reach 6 m (the other three reach 10, 10 and 14 m). Its keys are new, so no migration step touches them.
+    /// Autoservice (PLAN-AUTOSERVICE item 4, 2026-11-08) is STAGED (no released profile yet, see <see cref="AmbientAudioProfiles.Staged"/>) and starts with
+    /// gain 3 dB, offset 0.2 and range 3, a start value until a listening pass: the plan's first guess was Bowl's row (3 dB, 0.4, 3), but nine of the
+    /// 18 interior players are the <c>water_drops</c> season players authored at 0.07 (the other interior volumes are 0.12 x4, 0.15 x2, 0.2 x3; the exterior
+    /// median is 0.30): the volume is <c>volume * gain + offset</c>, so offset 0.4 lifts the drops to about 0.50 (7x its authored level) against 0.68 for the 0.2 players
+    /// and flattens the interior balance, while offset 0.2 gives about 0.30 against 0.37 to 0.48 (computed from the authored volumes, not heard).
+    /// Offset 0 (Iceberg's row) would keep the authored 1:3 balance, with the 0.07 drops at about 0.10. Range 3 is the plan's value and untried: it carries
+    /// the drops (20 m) to 60 m through an 80 m map, which may be too much for a quiet interior sound. Its keys are new, so no migration step touches them.</summary>
     internal static class AmbientAudioDefaults
     {
         internal static void Values(string mapKey, out float gainDb, out float offset, out float range)
@@ -27,6 +34,7 @@ namespace ArenaMapPort.Client
                 case "arena_airpit": gainDb = 3f; offset = .4f; range = 3f; return;
                 case "arena_bowl": gainDb = 3f; offset = .4f; range = 3f; return; // provisional, PLAN-BOWL item 9
                 case "arena_iceberg": gainDb = 3f; offset = 0f; range = 2f; return; // provisional, PLAN-ICEBERG item 12 (see the class comment)
+                case "arena_autoservice": gainDb = 3f; offset = .2f; range = 3f; return; // start value, PLAN-AUTOSERVICE item 4 (see the class comment)
                 default: throw new ArgumentException("No accepted ambience mix for " + mapKey, nameof(mapKey));
             }
         }
@@ -43,6 +51,7 @@ namespace ArenaMapPort.Client
                 // Bowl has no earlier default: the same as Values, so a saved mix at the provisional default "moves" to itself.
                 case "arena_bowl": gainDb = 3f; offset = .4f; range = 3f; return;
                 case "arena_iceberg": gainDb = 3f; offset = 0f; range = 2f; return; // likewise: no earlier default
+                case "arena_autoservice": gainDb = 3f; offset = .2f; range = 3f; return; // likewise: no earlier default
                 default: throw new ArgumentException("No ambience mix history for " + mapKey, nameof(mapKey));
             }
         }
@@ -58,7 +67,8 @@ namespace ArenaMapPort.Client
                 case "arena_bay5": return true;
                 case "arena_airpit":
                 case "arena_bowl":
-                case "arena_iceberg": return false; // new keys: first appear with the provisional mix (PLAN-BOWL item 9, PLAN-ICEBERG item 12)
+                case "arena_iceberg":
+                case "arena_autoservice": return false; // new keys: first appear with the provisional mix (PLAN-BOWL item 9, PLAN-ICEBERG item 12, PLAN-AUTOSERVICE item 4)
                 default: throw new ArgumentException("No ambience mix history for " + mapKey, nameof(mapKey));
             }
         }
