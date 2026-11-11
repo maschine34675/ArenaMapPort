@@ -90,6 +90,12 @@ ARENA_SOURCES = {
     # The mask excludes layer 29: the 365 LevelBorder cubes are in the port bake only through navmesh_bake_layers.
     "iceberg": ArenaSource("arena_iceberg", "sharedassets377.assets", 2, AIRPIT_ARENA_LAYER_MASK,
                            377, "Arena_Sanatorium_CheckPoint_AI", "work/extract/iceberg-native-v2"),
+    # Autoservice (measured 2026-11-11, Arena 0.6.2.0.48473; docs/PLAN-AUTOSERVICE.md item 8): level63 Arena_AutoService_AI,
+    # NavMeshSurface layers 9 / 11 / 13 / 18 / 30 (= AirPit's mask), a 101.8 x 122.0 x 81.7 m volume at (-370.3, 2.0, 486.8),
+    # NavMeshData placement = identity, agent radius 0.3 / height 1.7, 695 polygons, 19 of 30 tiles. The mask excludes layer 29:
+    # the 372 LevelBorder cubes are in the port bake only through navmesh_bake_layers.
+    "autoservice": ArenaSource("arena_autoservice", "sharedassets63.assets", 2, AIRPIT_ARENA_LAYER_MASK,
+                               63, "Arena_AutoService_AI", "work/extract/autoservice-native-v2"),
 }
 
 

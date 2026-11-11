@@ -20,5 +20,40 @@
     0.005309707950800657,
     0.00802699290215969,
     0.015462025068700314
+  ],
+  "uses_server_time": true,
+  "opened_barriers": [
+    "DOORS/big_gate_metal",
+    "DOORS/equator_roller_shutters_01",
+    "DOORS/roller_shutters_techlight_01",
+    "DOORS/roller_shutters_techlight_01 (1)"
+  ],
+  "start_gates": [
+    "DOORS/big_gate_metal",
+    "DOORS/equator_roller_shutters_01",
+    "DOORS/roller_shutters_techlight_01",
+    "DOORS/roller_shutters_techlight_01 (1)"
+  ],
+  "held_gates": [],
+  "navmesh_bake_exclusions": [],
+  "bake_bounds": [
+    -415,
+    -331,
+    -5,
+    2,
+    464,
+    515
+  ],
+  "navmesh_bake_layers": [
+    9,
+    11,
+    13,
+    18,
+    29,
+    30
+  ],
+  "keep_level_borders": true,
+  "puddle_water_material_names": [
+    "0877f2335044042e"
   ]
 }

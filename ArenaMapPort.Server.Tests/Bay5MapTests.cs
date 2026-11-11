@@ -90,11 +90,15 @@ public sealed class Bay5MapTests
     [Fact]
     public void ParkedMapsListNoPuddleDataAndTheSurfacesAreMembersOfTheNativeEnum()
     {
-        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ArenaMapRegistry.All.Contains(m)))
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ArenaMapRegistry.All.Contains(m) && !ReferenceEquals(m, ArenaMapRegistry.AutoService)))
         {
             Assert.Empty(map.PuddleWaterMaterialNames);
             Assert.Empty(map.PuddleExtraSurfaces);
         }
+        // Autoservice (PLAN-AUTOSERVICE item 8, 2026-11-11) is the one parked map with puddle data: the rain-driven "puddle" decal (42 quads, Concrete
+        // 74 percent under them); the wet mold atlas sits on four inactive renderers and is not listed. Mirrors tools/maps/autoservice.json.
+        Assert.Equal(new[] { "0877f2335044042e" }, ArenaMapRegistry.AutoService.PuddleWaterMaterialNames);
+        Assert.Empty(ArenaMapRegistry.AutoService.PuddleExtraSurfaces);
         // The extra surfaces are BaseBallistic.ESurfaceSound names (EFT 0.16.9.5); Concrete and Asphalt are built in, Puddle is the result.
         var native = new[] { "Concrete", "Metal", "Wood", "Soil", "Grass", "Asphalt", "Glass", "Gravel", "MetalThin", "Puddle", "Slate",
             "Tile", "WoodThick", "Swamp", "Garbage", "GarbageMetal", "Plastic", "WholeGlass", "WoodThin", "Snow" };
