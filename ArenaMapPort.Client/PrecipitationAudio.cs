@@ -38,8 +38,8 @@ namespace ArenaMapPort.Client
         internal static void Install()
         {
             if (_driver != null) return;
-            // Same maps as NativeSpatialAudio (Bowl: PLAN-BOWL item 8, 2026-10-18; Iceberg: PLAN-ICEBERG item 12, 2026-10-30).
-            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg })
+            // Same maps as NativeSpatialAudio (Bowl: PLAN-BOWL item 8, 2026-10-18; Iceberg: PLAN-ICEBERG item 12, 2026-10-30; AutoService: PLAN-AUTOSERVICE item 12, 2026-11-11).
+            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg, ArenaMapRegistry.AutoService })
                 Volumes[map.Key] = Plugin.Instance.Settings.Bind("Audio (" + map.Key + ")", "RainVolume", 1f,
                     new ConfigDescription("Volume of native rain/snow ambience only. 1 = native full level, 0 = silent. " +
                         "Follows actual weather, season and acoustic room; live. Existing scenery ambience is unchanged.",

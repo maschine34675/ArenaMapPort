@@ -62,7 +62,9 @@ class PackageMeasurementTests(unittest.TestCase):
         self.assertEqual(round(min(ys) - SPAWN_FLOOR_RULE, 1), -8.2)
         # Bay5's spawn hall floor is also y -3.8 and carries the same value (WeatherRigDefaultsTests pins -8.2 for it).
         text = (CLIENT / "MapLightingDefaults.cs").read_text(encoding="utf-8")
-        self.assertIn("bay5 ? -8.2f", text)
+        # (the promotion, PLAN-AUTOSERVICE item 12, gave Autoservice its own row in the same expression; WeatherRigDefaultsTests pins the values)
+        self.assertIn("bay5 || autoService ? -8.2f", text)
+        self.assertIn("bool autoService = mapKey == ArenaMapRegistry.AutoService.Key;", text)
 
     def test_no_emission_cap_is_needed(self):
         import test_iceberg_emission_cap as emission
@@ -83,10 +85,19 @@ class PackageMeasurementTests(unittest.TestCase):
                                  "chemlight_d", "projector_emission", "stones_pack_rebake_D"]))
         self.assertAlmostEqual(max(r[0] for r in standard), 2.738, places=3)
 
-    def test_sidecar_and_descriptor_carry_no_cap_and_no_stand_in_list_yet(self):
+    def test_sidecar_and_descriptor_carry_no_cap_and_the_four_name_stand_in_list(self):
+        # Item 12 (the promotion, 2026-11-11) flipped the pending pin: the list the light hand-off decided is in the sidecar AND the descriptor
+        # (validate_map_descriptors mirrors them; the C# side is pinned by ShaderStandinPolicyTests), the cap and floor stay absent.
         sidecar = json.loads((MAPS / "autoservice.json").read_text(encoding="utf-8"))
-        for key in ("emission_cap", "emission_floor", "shader_fallback_names"):
+        for key in ("emission_cap", "emission_floor"):
             self.assertNotIn(key, sidecar)
+        self.assertEqual(sidecar["shader_fallback_names"], list(SCENE_ONLY))
+        descriptor = (REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs").read_text(encoding="utf-8")
+        block = descriptor[descriptor.index("public static readonly ArenaMapDescriptor AutoService"):descriptor.index("public static readonly ArenaMapDescriptor Bowl")]
+        for name in SCENE_ONLY:
+            self.assertIn(f'"{name}"', block)
+        self.assertNotIn("EmissionCap:", block)
+        self.assertNotIn("EmissionFloor:", block)
 
     def test_package_shader_census_is_28_names_with_one_baked_material(self):
         names = Counter(json.loads(Path(p).read_text(encoding="utf-8"))["shader"] for p in glob.glob(str(PACKAGE / "materials" / "*.json")))

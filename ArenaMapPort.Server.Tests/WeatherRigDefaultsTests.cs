@@ -92,10 +92,26 @@ public sealed class WeatherRigDefaultsTests
     }
 
     [Fact]
+    public void AutoServiceJoinsTheReserveRigWithAZeroLevelDerivedFromItsSpawnFloors()
+    {
+        var autoService = Row.Of(ArenaMapRegistry.AutoService.Key);
+        // PLAN-AUTOSERVICE item 11/12 (2026-11-11): donor rig Reserve_Base_Scripts and the neutral tuning of AirPit, Bowl and Iceberg. Its 20 spawn
+        // markers (package v2, both pockets) stand at y -3.84..-3.72 (modal floor -3.80): the lowest marker floor minus 4.4 m is -8.24, rounded
+        // -8.2, the same floor and value as Bay5's, a START value to be tuned on the first host raid (ZeroLevelOverride).
+        Assert.Equal("Reserve_Base_Scripts", autoService.Donor);
+        Assert.True(autoService.UseDonorCameraPrefab);
+        Assert.True(autoService.ReserveTextureBudget);
+        Assert.Equal(-8.2f, autoService.ZeroLevel);
+        Assert.Equal(Row.Of(ArenaMapRegistry.Bowl.Key) with { ZeroLevel = -8.2f }, autoService);
+        Assert.True(autoService.ZeroLevel < -3.84f - 4f);                // the dome sits well below the lowest spawn floor
+        Assert.False(MapLightingDefaults.BindsAuthoredSunKeys(ArenaMapRegistry.AutoService));
+    }
+
+    [Fact]
     public void EveryOtherCatalogMapKeepsDonorOffAndNeutralValues()
     {
         var parked = ArenaMapRegistry.Catalog.Except(ArenaMapRegistry.All).ToArray();
-        Assert.Equal(9, parked.Length);
+        Assert.Equal(8, parked.Length);
         foreach (var map in parked) Assert.Equal(Neutral, Row.Of(map.Key));
         Assert.Equal(Neutral, Row.Of("bigmap"));
         Assert.Equal(Neutral, Row.Of(null));

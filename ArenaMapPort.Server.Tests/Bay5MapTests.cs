@@ -72,6 +72,7 @@ public sealed class Bay5MapTests
     [InlineData("airpit", "1b8546c701e1d1dc,0877f2335044042e", "")]
     [InlineData("bowl", "0877f2335044042e", "Soil")] // the whole field is one Bowl_floor_BALLISTIC_soil collider
     [InlineData("iceberg", "0877f2335044042e,34f527e8925ffebb", "")] // the floor under the wet quads is Concrete (58 percent of the samples): no extra surface
+    [InlineData("autoservice", "0877f2335044042e", "")] // PLAN-AUTOSERVICE item 8/12: the rain-driven puddle decal only, Concrete is 74 percent under its 42 quads
     public void PuddleDataMatchesTheSidecarAndTheExpectedLists(string stem, string materials, string surfaces)
     {
         var expectedMaterials = materials.Split(',', StringSplitOptions.RemoveEmptyEntries);
@@ -90,13 +91,14 @@ public sealed class Bay5MapTests
     [Fact]
     public void ParkedMapsListNoPuddleDataAndTheSurfacesAreMembersOfTheNativeEnum()
     {
-        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ArenaMapRegistry.All.Contains(m) && !ReferenceEquals(m, ArenaMapRegistry.AutoService)))
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ArenaMapRegistry.All.Contains(m)))
         {
             Assert.Empty(map.PuddleWaterMaterialNames);
             Assert.Empty(map.PuddleExtraSurfaces);
         }
-        // Autoservice (PLAN-AUTOSERVICE item 8, 2026-11-11) is the one parked map with puddle data: the rain-driven "puddle" decal (42 quads, Concrete
-        // 74 percent under them); the wet mold atlas sits on four inactive renderers and is not listed. Mirrors tools/maps/autoservice.json.
+        // Autoservice (PLAN-AUTOSERVICE item 8, 2026-11-11; in the released set since item 12, so the loop over All below covers it too): the rain-driven
+        // "puddle" decal (42 quads, Concrete 74 percent under them); the wet mold atlas sits on four inactive renderers and is not listed. Mirrors
+        // tools/maps/autoservice.json.
         Assert.Equal(new[] { "0877f2335044042e" }, ArenaMapRegistry.AutoService.PuddleWaterMaterialNames);
         Assert.Empty(ArenaMapRegistry.AutoService.PuddleExtraSurfaces);
         // The extra surfaces are BaseBallistic.ESurfaceSound names (EFT 0.16.9.5); Concrete and Asphalt are built in, Puddle is the result.

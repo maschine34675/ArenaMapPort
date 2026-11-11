@@ -19,7 +19,7 @@ namespace ArenaMapPort.Client
     /// Equator's later changes live in the DefaultsRevision migrations of WeatherRig. A map that was never
     /// released with saved keys, like AirPit (grep of both test installs, 2026-10-12: no "arena_airpit"
     /// section), Bowl (PLAN-BOWL item 9, 2026-10-18: no "arena_bowl" section exists) and Iceberg (PLAN-ICEBERG item 12, 2026-10-30:
-    /// none either), needs no migration for its first set of defaults.
+    /// none either) and Autoservice (PLAN-AUTOSERVICE item 12, 2026-11-11: none either), needs no migration for its first set of defaults.
     ///
     /// Host evidence: Equator (docs/progress/donor-settings-camera-weather.md section 20), Bay5 (sections
     /// 12-19), AirPit rows are first-guess values until the AirPit host raid (docs/progress/airpit-release.md,
@@ -65,7 +65,8 @@ namespace ArenaMapPort.Client
             bool airPit = mapKey == ArenaMapRegistry.AirPit.Key;
             bool bowl = mapKey == ArenaMapRegistry.Bowl.Key; // PLAN-BOWL item 9, 2026-10-18
             bool iceberg = mapKey == ArenaMapRegistry.Iceberg.Key; // PLAN-ICEBERG item 12, 2026-10-30
-            bool rig = bay5 || equator || airPit || bowl || iceberg;
+            bool autoService = mapKey == ArenaMapRegistry.AutoService.Key; // PLAN-AUTOSERVICE item 12, 2026-11-11
+            bool rig = bay5 || equator || airPit || bowl || iceberg || autoService;
             return new RigValues
             {
                 Donor = rig ? ReserveDonor : OffDonor,
@@ -74,9 +75,11 @@ namespace ArenaMapPort.Client
                 // at y 0.047 (docs/PLAN-BOWL.md, 2026-10-18), -4.4 again. Iceberg's 70 spawn markers stand at y 0.73..4.99 (modal
                 // 3.2; the Bear pocket 0.73..1.89, the Usec pocket 3.25, Arena's walkable ground -1.8..6.15): the lowest marker floor 0.73
                 // minus 4.4 gives -3.7 (PLAN-ICEBERG item 12; -6.2 from the lowest walkable ground, -1.2 from the modal floor are the
-                // alternatives the first host raid can compare through ZeroLevelOverride). A rule of thumb, to be
+                // alternatives the first host raid can compare through ZeroLevelOverride). Autoservice's 20 spawn markers stand at y -3.84..-3.72
+                // (modal -3.80, both pockets): the lowest marker floor minus 4.4 is -8.24, rounded -8.2, the same floor and value as Bay5's
+                // (PLAN-AUTOSERVICE item 11/12, a start value for the first host raid). A rule of thumb, to be
                 // measured on the host (the dome must sit well above the ground, see ZeroLevelOverride).
-                ZeroLevel = bay5 ? -8.2f : iceberg ? -3.7f : (equator || airPit || bowl) ? -4.4f : 0f,
+                ZeroLevel = bay5 || autoService ? -8.2f : iceberg ? -3.7f : (equator || airPit || bowl) ? -4.4f : 0f,
                 HeightFalloff = rig ? 0.025f : 0.029f,
                 ReserveTextureBudget = rig,
                 UseDonorCameraPrefab = rig,

@@ -662,7 +662,7 @@ function Invoke-LegacySpectatorTextureRemoval {
         $textures[$row.file] = $row
         $replacements += 'spectators/shared/' + $row.file
     }
-    # the crowd maps (extract_spectator.MAP_SCENES); Iceberg is crowdless (validate_map_descriptors.CROWDLESS_MAP_KEYS) and has no legacy texture copies
+    # the crowd maps (extract_spectator.MAP_SCENES); Iceberg and Autoservice are crowdless (validate_map_descriptors.CROWDLESS_MAP_KEYS) and have no legacy texture copies
     $maps = @('arena_airpit', 'arena_equator', 'arena_bay5', 'arena_bowl')
     foreach ($map in $maps) { $replacements += "spectators/$map/spectator.json.gz" }
     foreach ($relative in $replacements) {

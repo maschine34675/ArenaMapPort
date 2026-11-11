@@ -164,7 +164,7 @@ public sealed class GateSoundWiringTests
         Assert.Contains("Condition=\"'$(Configuration)'=='Release'\"", target);
         Assert.DoesNotContain("ArenaMapPortDllOnly", target);          // staged with the DLL in every Release build, like the acoustics
         Assert.Contains("run tools/extract/extract_gate_sounds.py clips", target);
-        foreach (var key in new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg" })
+        foreach (var key in new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice" })
         {
             Assert.Contains($"$(ArenaMapPortGateSoundsDir)\\{key}\\gate-sounds.json;$(ArenaMapPortGateSoundsDir)\\{key}\\*.wav\"><MapKey>{key}</MapKey>", target);
         }

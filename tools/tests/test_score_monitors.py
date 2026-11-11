@@ -25,8 +25,8 @@ import extract_door_poses as DOORS  # noqa: E402
 import extract_score_monitors as E  # noqa: E402
 import validate_map_descriptors as VD  # noqa: E402
 
-STEMS = ("equator", "bay5", "airpit", "bowl", "iceberg")      # the released maps (Iceberg joined with PLAN-ICEBERG item 12, 2026-10-30)
-KEYS = {"equator": "arena_equator", "bay5": "arena_bay5", "airpit": "arena_airpit", "bowl": "arena_bowl", "iceberg": "arena_iceberg"}
+STEMS = ("equator", "bay5", "airpit", "bowl", "iceberg", "autoservice")      # the released maps (Iceberg joined with PLAN-ICEBERG item 12, 2026-10-30, Autoservice with PLAN-AUTOSERVICE item 12, 2026-11-11)
+KEYS = {"equator": "arena_equator", "bay5": "arena_bay5", "airpit": "arena_airpit", "bowl": "arena_bowl", "iceberg": "arena_iceberg", "autoservice": "arena_autoservice"}
 DESCRIPTOR = REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs"
 ARENA_DATA = DOORS.DEFAULT_DATA
 HAVE_ARENA = (ARENA_DATA / "level53").is_file() and (ARENA_DATA / "sharedassets53.assets").is_file()
@@ -422,7 +422,7 @@ class PackageCheckTests(unittest.TestCase):
 # ---------------------------------------------------------------------------------------------------------------
 
 class SidecarTests(unittest.TestCase):
-    EXPECTED = {"equator": (11, 11), "bay5": (8, 8), "airpit": (8, 6), "bowl": (16, 6), "iceberg": (6, 6)}      # rows, active rows
+    EXPECTED = {"equator": (11, 11), "bay5": (8, 8), "airpit": (8, 6), "bowl": (16, 6), "iceberg": (6, 6), "autoservice": (4, 4)}      # rows, active rows
 
     def test_header_scenes_and_levels(self):
         key_sources = json.loads((REPO / "tools" / "bundle" / "key-sources.json").read_text(encoding="utf-8"))["maps"]
@@ -465,7 +465,7 @@ class SidecarTests(unittest.TestCase):
             monitors = sidecar_doc(stem)["monitors"]
             self.assertEqual((len(monitors), sum(1 for r in monitors if r["active_in_scene"])), (rows, live), stem)
             total, active = total + rows, active + live
-        self.assertEqual((total, active), (49, 37))
+        self.assertEqual((total, active), (53, 41))
         faces = {stem: sorted((f, sum(1 for r in sidecar_doc(stem)["monitors"] if r["active_in_scene"] and r["face"] == f))
                               for f in ("timer", "score", "alive", "none")) for stem in STEMS}
         self.assertEqual(faces["equator"], [("alive", 2), ("none", 2), ("score", 5), ("timer", 2)])
@@ -475,6 +475,8 @@ class SidecarTests(unittest.TestCase):
         # Iceberg: the four word-0 holders get the timer face (the prop names SCORE, SIDE and ALIVE are copies of the timer TV and do not
         # follow the words); the two word-13 holders are dark
         self.assertEqual(faces["iceberg"], [("alive", 0), ("none", 2), ("score", 0), ("timer", 4)])
+        # Autoservice: two timers (word 0) and two alive boards (word 2), all four active
+        self.assertEqual(faces["autoservice"], [("alive", 2), ("none", 0), ("score", 0), ("timer", 2)])
 
     def test_the_type_multiset_per_map(self):
         def words(stem):
@@ -487,12 +489,13 @@ class SidecarTests(unittest.TestCase):
         self.assertEqual(words("airpit"), {0: 2, 1: 4, 2: 2})
         self.assertEqual(words("bowl"), {0: 4, 1: 6, 2: 4, 10: 2})
         self.assertEqual(words("iceberg"), {0: 4, 13: 2})
+        self.assertEqual(words("autoservice"), {0: 2, 2: 2})
 
     def test_inactive_rows_are_airpits_team_box_screens_and_bowls_base_set(self):
         inactive = {stem: [r for r in sidecar_doc(stem)["monitors"] if not r["active_in_scene"]] for stem in STEMS}
         self.assertEqual([r["path"] for r in inactive["airpit"]], ["TV/Arena_Home_theater (9)", "TV/Arena_Home_theater (11)"])
         self.assertEqual({r["scene"] for r in inactive["bowl"]}, {"Arena_Bowl_DesignStuff"})
-        self.assertEqual((len(inactive["equator"]), len(inactive["bay5"]), len(inactive["iceberg"])), (0, 0, 0))
+        self.assertEqual((len(inactive["equator"]), len(inactive["bay5"]), len(inactive["iceberg"]), len(inactive["autoservice"])), (0, 0, 0, 0))
 
     def test_rows_are_in_load_order_and_unique(self):
         for stem in STEMS:
@@ -523,17 +526,17 @@ class SidecarTests(unittest.TestCase):
     def test_the_registry_and_the_sidecars_agree_and_only_the_released_maps_have_rows(self):
         entries = registry()
         for stem in STEMS:
-            name = {"equator": "Equator", "bay5": "Bay5", "airpit": "AirPit", "bowl": "Bowl", "iceberg": "Iceberg"}[stem]
+            name = {"equator": "Equator", "bay5": "Bay5", "airpit": "AirPit", "bowl": "Bowl", "iceberg": "Iceberg", "autoservice": "AutoService"}[stem]
             self.assertEqual(VD.score_monitor_errors(map_json(stem), sidecar_path(stem), entries[name].get("ScoreMonitors")), [], stem)
         for name, entry in entries.items():
-            if name not in ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg"):
+            if name not in ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService"):
                 self.assertIsNone(entry.get("ScoreMonitors"), name)
-        # exactly the released maps have a sidecar, plus the one staged ahead of its promotion (Autoservice, VD.PENDING_MIRROR_KEYS; the
-        # scaffolding that let Iceberg's sidecar exist ahead of its promotion went at item 12 and Autoservice's goes the same way)
+        # exactly the released maps have a sidecar (the scaffolding that let a sidecar exist ahead of its promotion, VD.PENDING_MIRROR_KEYS, is
+        # empty since Autoservice's item 12, as it was after Iceberg's)
         staged = [key.removeprefix("arena_") for key in VD.PENDING_MIRROR_KEYS]
-        self.assertEqual(staged, ["autoservice"])
+        self.assertEqual(staged, [])
         self.assertEqual(sorted(p.name.removesuffix(".monitors.json") for p in (REPO / "tools" / "maps").glob("*.monitors.json")), sorted(STEMS + tuple(staged)))
-        self.assertIsNone(entries["AutoService"].get("ScoreMonitors"))
+        self.assertEqual(len(entries["AutoService"]["ScoreMonitors"]), 4)
         self.assertEqual(sorted(KEYS.values()), sorted(VD.RELEASE_MAP_KEYS))
 
     def test_the_validator_run_passes(self):
@@ -708,9 +711,10 @@ class RealArenaTests(unittest.TestCase):
                 counted += sum(1 for obj in scene.files[scene.level_name].values() if obj.type.name == "MonoBehaviour" and scene.mono_class(obj) == E.HOLDER_CLASS)
             self.assertEqual(counted, len(doc["monitors"]), key)
 
-    def test_every_holder_of_the_five_maps_is_forty_bytes_with_the_shared_mount(self):
-        # read_holders already fails closed on both; this pins the totals: 49 holders in the imported scenes
-        self.assertEqual(sum(len(doc["monitors"]) for doc, _ in self.fresh.values()), 49)
+    def test_every_holder_of_the_six_maps_is_forty_bytes_with_the_shared_mount(self):
+        # read_holders already fails closed on both; this pins the totals: 53 holders in the imported scenes (49 of the five older maps and
+        # Autoservice's 4)
+        self.assertEqual(sum(len(doc["monitors"]) for doc, _ in self.fresh.values()), 53)
 
     def test_an_unclassified_type_word_would_stop_the_extraction(self):
         trimmed = {w: v for w, v in E.TYPE_WORDS.items() if w != 10}
@@ -996,24 +1000,29 @@ class AutoserviceMonitorSidecarTests(unittest.TestCase):
         self.assertEqual(E.map_scenes(AUTOSERVICE), [("Arena_AutoService", 62), ("Arena_AutoService_DesignStuff", 65),
                                                      ("Arena_AutoService_TeamFight_DesignStuff", 136), ("Arena_AutoService_Light", 66)])
 
-    def test_the_registry_literals_parse_back_and_the_validator_accepts_the_sidecar_as_a_pending_map(self):
+    def test_the_registry_literals_parse_back_and_the_validator_mirrors_the_sidecar_since_the_promotion(self):
         literals = E.render_csharp(self.rows).split("\n")
         self.assertEqual(len(literals), 4)
         registry_rows = [VD.parse_cs_value(line.strip().rstrip(",")) for line in literals]
         self.assertEqual(registry_rows, [{k: r[k] for k in VD.SCORE_MONITOR_MIRRORED} for r in self.rows])
-        self.assertIn(AUTOSERVICE, VD.PENDING_MIRROR_KEYS)
-        self.assertEqual(VD.score_monitor_errors(map_json("autoservice"), sidecar_path("autoservice"), None), [])             # as committed: no rows yet
-        self.assertEqual(VD.score_monitor_errors(map_json("autoservice"), sidecar_path("autoservice"), registry_rows), [])   # at the promotion
+        self.assertNotIn(AUTOSERVICE, VD.PENDING_MIRROR_KEYS)
+        self.assertIn(AUTOSERVICE, VD.RELEASE_MAP_KEYS)
+        self.assertEqual(VD.score_monitor_errors(map_json("autoservice"), sidecar_path("autoservice"), registry_rows), [])   # the rows the registry carries
+        registered = registry()["AutoService"]["ScoreMonitors"]
+        self.assertEqual(VD.score_monitor_errors(map_json("autoservice"), sidecar_path("autoservice"), registered), [])
+        self.assertEqual([{k: r[k] for k in VD.SCORE_MONITOR_MIRRORED} for r in registered], registry_rows)
         changed = copy.deepcopy(registry_rows)
         changed[1]["arena_type"] = 2
         self.assertTrue(any("differs from the registry in arena_type" in e
                             for e in VD.score_monitor_errors(map_json("autoservice"), sidecar_path("autoservice"), changed)))
         self.assertTrue(any("registry's ScoreMonitors" in e
                             for e in VD.score_monitor_errors(map_json("autoservice"), sidecar_path("autoservice"), registry_rows[:3])))
-        # the waiver is for the pending key only, and only while the registry has no rows: any other map is compared with its registry
-        with patch.object(VD, "PENDING_MIRROR_KEYS", ()):
-            self.assertTrue(any("registry's ScoreMonitors" in e
-                                for e in VD.score_monitor_errors(map_json("autoservice"), sidecar_path("autoservice"), None)))
+        # a released map is compared with its registry: no rows there is a mismatch now; the waiver is for a pending key only, and only while the
+        # registry has no rows (the mechanism stays for the next map)
+        self.assertTrue(any("registry's ScoreMonitors" in e
+                            for e in VD.score_monitor_errors(map_json("autoservice"), sidecar_path("autoservice"), None)))
+        with patch.object(VD, "PENDING_MIRROR_KEYS", (AUTOSERVICE,)):
+            self.assertEqual(VD.score_monitor_errors(map_json("autoservice"), sidecar_path("autoservice"), None), [])
 
     def test_the_client_draws_a_face_on_all_four(self):
         # ScoreMonitorLayout.FaceOf (ArenaMapPort.Client) knows 0, 1, 6 and 2 and gives every other word none

@@ -324,7 +324,7 @@ public sealed class ServerStatusParserTests : IDisposable
         ServerStatusView view = RoundTrip();
         Assert.True(view.GateNotRun);
         Assert.Equal(ArenaStatusContract.GateNotRun, view.GateState);
-        Assert.Equal(5, view.Maps.Count);
+        Assert.Equal(6, view.Maps.Count);
         Assert.All(view.Maps, map => Assert.Equal(ArenaStatusContract.MapNotRegistered, map.State));
         Assert.Equal(ArenaMapRegistry.All.Select(map => map.Key), view.Maps.Select(map => map.Key));
     }

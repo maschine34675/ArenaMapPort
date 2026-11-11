@@ -25,7 +25,7 @@ public sealed class ShaderStandinPolicyTests
     }
 
     [Fact]
-    public void TheAllowListsMirrorTheSidecarsAndOnlyBay5AndAirPitHaveOne()
+    public void TheAllowListsMirrorTheSidecarsAndOnlyBay5AirPitBowlAndAutoServiceHaveOne()
     {
         foreach (var map in ArenaMapRegistry.Catalog)
         {
@@ -33,12 +33,13 @@ public sealed class ShaderStandinPolicyTests
             var hasKey = doc.RootElement.TryGetProperty("shader_fallback_names", out var names);
             var expected = hasKey ? names.EnumerateArray().Select(e => e.GetString()).ToArray() : new string[0];
             Assert.Equal(expected, map.ShaderFallbackNames);
-            Assert.Equal(map == ArenaMapRegistry.Bay5 || map == ArenaMapRegistry.AirPit || map == ArenaMapRegistry.Bowl,
+            Assert.Equal(map == ArenaMapRegistry.Bay5 || map == ArenaMapRegistry.AirPit || map == ArenaMapRegistry.Bowl || map == ArenaMapRegistry.AutoService,
                 map.ShaderFallbackNames.Length > 0);
         }
         Assert.Equal(ShippedRows.Select(r => r.Original).Order(), ArenaMapRegistry.Bay5.ShaderFallbackNames.Order());
         Assert.Equal(AirPitNames.Order(), ArenaMapRegistry.AirPit.ShaderFallbackNames.Order());
         Assert.Equal(BowlNames, ArenaMapRegistry.Bowl.ShaderFallbackNames);
+        Assert.Equal(AutoServiceNames, ArenaMapRegistry.AutoService.ShaderFallbackNames);
         // Every listed name has a substitute row for its map, and the policy reads the same list.
         foreach (var map in ArenaMapRegistry.Catalog)
         {
@@ -102,9 +103,16 @@ public sealed class ShaderStandinPolicyTests
     // Bowl (PLAN-BOWL item 10): the tarp tunnel's two-sided reflective shader, substituted by the Cull Off cutout.
     static readonly string[] BowlNames = { "p0/Reflective/Bumped Specular_TwoSided" };
 
+    // AutoService (PLAN-AUTOSERVICE item 12): the fog sheet, both cloth shaders and the Baked reflective shader, its own switch.
+    static readonly string[] AutoServiceNames =
+    {
+        "Custom/Billboard_FogSheet_Simple", "Cloth/ClothShader", "Cloth/ClothShader_backface", "p0/Reflective/Bumped Specular SMap Baked",
+    };
+
     static IEnumerable<string> OtherMapKeys() =>
         ArenaMapRegistry.Catalog.Select(m => m.Key)
-            .Where(k => k != ArenaMapRegistry.Bay5.Key && k != ArenaMapRegistry.AirPit.Key && k != ArenaMapRegistry.Bowl.Key);
+            .Where(k => k != ArenaMapRegistry.Bay5.Key && k != ArenaMapRegistry.AirPit.Key && k != ArenaMapRegistry.Bowl.Key &&
+                        k != ArenaMapRegistry.AutoService.Key);
 
     [Fact]
     public void OnlyBay5AndAirPitConsultTheFallbackTable()
@@ -112,6 +120,7 @@ public sealed class ShaderStandinPolicyTests
         Assert.True(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.Bay5.Key));
         Assert.True(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.AirPit.Key));
         Assert.True(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.Bowl.Key));
+        Assert.True(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.AutoService.Key));
         Assert.False(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.Equator.Key));
         foreach (var key in OtherMapKeys())
             Assert.False(ShaderStandinPolicy.UsesFallbackTable(key), key);
@@ -160,6 +169,59 @@ public sealed class ShaderStandinPolicyTests
     }
 
     [Fact]
+    public void AutoServiceFollowsOnlyItsOwnSwitchAndItsFourNamesGetTheirRows()
+    {
+        var map = ArenaMapRegistry.AutoService.Key;
+        Assert.True(ShaderStandinPolicy.AutoServiceStandinsDefault);
+        Assert.True(ShaderStandinPolicy.FallbacksActive(map, bay5LegacySwitch: false, airPitSwitch: false, bowlSwitch: false, autoServiceSwitch: true));
+        Assert.True(ShaderStandinPolicy.FallbacksActive(map, true, true, true, true));
+        Assert.False(ShaderStandinPolicy.FallbacksActive(map, true, true, true, false));
+        Assert.False(ShaderStandinPolicy.FallbacksActive(map, true, true, true));   // the switch defaults to off in the policy: a caller must pass it
+        Assert.False(ShaderStandinPolicy.FallbacksActive(map, false, false, false, false));
+        Assert.Equal(AutoServiceNames, ShaderStandinPolicy.AllowedNames(map));
+        // Fog sheet, single-sided cloth and the Baked reflective keep the shipped rows.
+        Assert.True(ShaderStandinPolicy.TryGetFallback(map, "Custom/Billboard_FogSheet_Simple", out var fog));
+        Assert.Equal("Unlit/Transparent Colored", fog);
+        Assert.True(ShaderStandinPolicy.TryGetFallback(map, "Cloth/ClothShader", out var cloth));
+        Assert.Equal("p0/Cutout/Bumped Diffuse", cloth);
+        Assert.True(ShaderStandinPolicy.TryGetFallback(map, "p0/Reflective/Bumped Specular SMap Baked", out var baked));
+        Assert.Equal("p0/Reflective/Bumped Specular SMap", baked);
+        // The backface cloth draws from both sides, as on AirPit; the shipped table row (Cull Back) stays Bay5's.
+        Assert.True(ShaderStandinPolicy.TryGetFallback(map, "Cloth/ClothShader_backface", out var backface));
+        Assert.Equal(ShaderStandinPolicy.TwoSidedClothShader, backface);
+        Assert.Equal("p0/Cutout/Bumped Diffuse", ShaderStandinPolicy.FallbackTable["Cloth/ClothShader_backface"]);
+        // Nothing outside its list: the rock shader and Bowl's tarp shader are not allowed on it.
+        Assert.False(ShaderStandinPolicy.TryGetFallback(map, ShaderStandinPolicy.RockShader, out _));
+        Assert.False(ShaderStandinPolicy.TryGetFallback(map, ShaderStandinPolicy.TwoSidedReflectiveShader, out _));
+        // Its rows are its own: the other maps' backface result is unchanged.
+        Assert.Equal("p0/Cutout/Bumped Diffuse", Target(ArenaMapRegistry.Bay5.Key, "Cloth/ClothShader_backface"));
+        Assert.Equal(ShaderStandinPolicy.TwoSidedClothShader, Target(ArenaMapRegistry.AirPit.Key, "Cloth/ClothShader_backface"));
+    }
+
+    static string Target(string key, string name) => ShaderStandinPolicy.TryGetFallback(key, name, out var t) ? t : null;
+
+    [Fact]
+    public void AutoServiceTakesTheClothFixButNotTheRockFix()
+    {
+        var map = ArenaMapRegistry.AutoService.Key;
+        Assert.True(ShaderStandinPolicy.UsesExtendedStandins(map));
+        foreach (var name in new[] { "Cloth/ClothShader", "Cloth/ClothShader_backface" })
+        {
+            var fix = ShaderStandinPolicy.FixFor(map, name);
+            Assert.Equal("_BumpMap", Assert.Single(fix.Textures).To);
+            Assert.Equal("_Cutoff", Assert.Single(fix.Floats).Name);
+            Assert.Equal(0f, fix.Floats[0].Value);
+        }
+        Assert.Empty(ShaderStandinPolicy.FixFor(map, "Custom/Billboard_FogSheet_Simple").Textures);
+        Assert.Empty(ShaderStandinPolicy.FixFor(map, "p0/Reflective/Bumped Specular SMap Baked").Floats);
+        // Fog sheets are never hidden outside AirPit.
+        Assert.False(ShaderStandinPolicy.HidesFogSheets(map, FogSheetMode.Hidden));
+        // Like Bowl's, its magenta result with the switch off is a real degradation (Error line), not AirPit's deliberate A/B gap.
+        foreach (var name in AutoServiceNames)
+            Assert.False(ShaderStandinPolicy.IsKnownGap(map, name, airPitSwitchOn: false), name);
+    }
+
+    [Fact]
     public void NoOtherMapIsEverActiveWhateverTheSwitches()
     {
         var keys = OtherMapKeys().Append(ArenaMapRegistry.Equator.Key).Append("").Append(null);
@@ -167,7 +229,8 @@ public sealed class ShaderStandinPolicyTests
             foreach (var legacy in new[] { false, true })
                 foreach (var airPit in new[] { false, true })
                     foreach (var bowl in new[] { false, true })
-                        Assert.False(ShaderStandinPolicy.FallbacksActive(key, legacy, airPit, bowl), $"{key} {legacy} {airPit} {bowl}");
+                        foreach (var autoService in new[] { false, true })
+                            Assert.False(ShaderStandinPolicy.FallbacksActive(key, legacy, airPit, bowl, autoService), $"{key} {legacy} {airPit} {bowl} {autoService}");
     }
 
     [Fact]
@@ -248,9 +311,10 @@ public sealed class ShaderStandinPolicyTests
     }
 
     [Fact]
-    public void TheExtendedHandlingIsAirPitOnly()
+    public void TheExtendedHandlingIsAirPitAndAutoServiceOnly()
     {
         Assert.True(ShaderStandinPolicy.UsesExtendedStandins(ArenaMapRegistry.AirPit.Key));
+        Assert.True(ShaderStandinPolicy.UsesExtendedStandins(ArenaMapRegistry.AutoService.Key));
         Assert.False(ShaderStandinPolicy.UsesExtendedStandins(ArenaMapRegistry.Bay5.Key));
         Assert.False(ShaderStandinPolicy.UsesExtendedStandins(ArenaMapRegistry.Equator.Key));
         foreach (var key in OtherMapKeys())

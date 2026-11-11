@@ -20,6 +20,12 @@ AIRPIT_NAMES = [
     "Cloth/ClothShader_backface",
     "ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)",
 ]
+AUTOSERVICE_NAMES = [
+    "Custom/Billboard_FogSheet_Simple",
+    "Cloth/ClothShader",
+    "Cloth/ClothShader_backface",
+    "p0/Reflective/Bumped Specular SMap Baked",
+]
 BAY5_NAMES = [
     "Custom/WorldTriplanarFresnelPro",
     "ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)",
@@ -40,8 +46,10 @@ class ShaderFallbackNamesSidecarTests(unittest.TestCase):
         self.assertEqual(sidecar("bay5")["shader_fallback_names"], BAY5_NAMES)
         # Bowl (PLAN-BOWL item 10, 2026-10-18): the tarp tunnel's two-sided reflective shader, the one of its 23 EFT lacks.
         self.assertEqual(sidecar("bowl")["shader_fallback_names"], ["p0/Reflective/Bumped Specular_TwoSided"])
+        # Autoservice (PLAN-AUTOSERVICE item 11/12, 2026-11-11): the four of its 28 shaders that live only in scene shared assets.
+        self.assertEqual(sidecar("autoservice")["shader_fallback_names"], AUTOSERVICE_NAMES)
         for path in sorted((REPO / "tools" / "maps").glob("*.json")):
-            if "." in path.stem or path.stem in ("airpit", "bay5", "bowl", "iceberg"):      # Iceberg: test_iceberg_bake_inputs.py pins that it has no row
+            if "." in path.stem or path.stem in ("airpit", "bay5", "bowl", "iceberg", "autoservice"):      # Iceberg: test_iceberg_bake_inputs.py pins that it has no row
                 continue
             self.assertNotIn("shader_fallback_names", json.loads(path.read_text(encoding="utf-8")), path.name)
 
@@ -50,6 +58,7 @@ class ShaderFallbackNamesSidecarTests(unittest.TestCase):
         self.assertEqual(VD.shader_fallback_errors(sidecar("airpit")), [])
         self.assertEqual(VD.shader_fallback_errors(sidecar("bay5")), [])
         self.assertEqual(VD.shader_fallback_errors(sidecar("equator")), [])
+        self.assertEqual(VD.shader_fallback_errors(sidecar("autoservice")), [])
         self.assertEqual(VD.shader_fallback_errors({}), [])
 
 

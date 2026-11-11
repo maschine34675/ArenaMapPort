@@ -6,8 +6,8 @@ using Xunit;
 namespace ArenaMapPort.Server.Tests;
 
 /// <summary>
-/// PLAN-AUTOSERVICE item 4 (ambient audio, package v2). The client profile row is STAGED in <see cref="AmbientAudioProfiles.Staged"/> until the
-/// lock-step promotion (item 12); the generic table tests (<c>AmbientAudioProfilesTests</c>) cover it with the released maps. What is specific to
+/// PLAN-AUTOSERVICE item 4 (ambient audio, package v2). The client profile row was STAGED in <c>AmbientAudioProfiles.Staged</c> until the
+/// lock-step promotion (item 12, 2026-11-11) moved it into <see cref="AmbientAudioProfiles.All"/>; the generic table tests (<c>AmbientAudioProfilesTests</c>) cover it with the released maps. What is specific to
 /// Autoservice is pinned here against the contract the validators check on the package and the bundle (<c>tools/extract/native_contracts/autoservice.json</c>,
 /// key <c>audio</c>, filled by the v2 package): the 38 exported players, the nine water_drops with minDistance 0, the four far_fight players that force
 /// Arena's CommonAmbOutBypass, and the dropped components (three Winter-only season loops and the inactive spline chain). Until the package-v2 stage
@@ -38,7 +38,7 @@ public sealed class AutoServiceAmbientAudioTests
         return audio.Clone();
     }
 
-    static AmbientAudioProfile Profile() => AmbientAudioProfiles.Staged.Single(p => p.MapKey == Key);
+    static AmbientAudioProfile Profile() => AmbientAudioProfiles.Get(Key);
 
     static (string Name, string Value)[] Pins(JsonElement states, string name) =>
         states.GetProperty(name).EnumerateObject().Select(p => (p.Name, p.Value.GetString())).Order().ToArray();
@@ -111,7 +111,7 @@ public sealed class AutoServiceAmbientAudioTests
     }
 
     [Fact]
-    public void TheStagedProfileMirrorsTheContract()
+    public void TheProfileMirrorsTheContract()
     {
         var audio = ContractAudio();
         var states = audio.GetProperty("states");

@@ -41,11 +41,11 @@ namespace ArenaMapPort.Client
 
         internal static void Install()
         {
-            // Same maps as NativeSpatialAudio: Tick indexes Enabled with the acoustic state's MapKey (Bowl: PLAN-BOWL item 8; Iceberg: PLAN-ICEBERG item 12).
-            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg })
+            // Same maps as NativeSpatialAudio: Tick indexes Enabled with the acoustic state's MapKey (Bowl: PLAN-BOWL item 8; Iceberg: PLAN-ICEBERG item 12; AutoService: PLAN-AUTOSERVICE item 12).
+            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg, ArenaMapRegistry.AutoService })
                 Enabled[map.Key] = Plugin.Instance.Settings.Bind("Audio (" + map.Key + ")", "NativeRoomReverb", true,
                     "Restore original room-dependent ambient reverb, delay and effect sends. Requires NativeSpatialAudio. " +
-                    "Live. Equator, AirPit, Bowl and Iceberg interior ambience use a compatible effect bus because EFT mutes its original return. Gameplay reverb is unchanged.");
+                    "Live. Equator, AirPit, Bowl, Iceberg and AutoService interior ambience use a compatible effect bus because EFT mutes its original return. Gameplay reverb is unchanged.");
             AudioSettings.OnAudioConfigurationChanged += deviceChanged => _refresh = true;
         }
 

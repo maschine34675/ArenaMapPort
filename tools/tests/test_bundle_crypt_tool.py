@@ -981,7 +981,10 @@ class KeySourcesTests(unittest.TestCase):
               # Autoservice (PLAN-AUTOSERVICE item 5, 2026-11-08): measured on 0.6.2.0.48473, the three streams are byte-size-identical on 0.6.1
               "arena_autoservice": (3, 464_942_688)}
     # maps with a row but not yet in the released set (their package or their promotion is pending); a map leaves this set when it joins RELEASE_MAP_KEYS
-    PENDING_MAPS = ("arena_autoservice",)
+    # (Autoservice left it at its promotion, PLAN-AUTOSERVICE item 12, 2026-11-11; the set is empty and stays as the place for the next map's row)
+    PENDING_MAPS: tuple = ()
+    # maps whose accepted package carries more scenes than the key lists (the script, sound, ai and culling roles of the plan): the key scenes must be in it
+    ROLE_SCENE_MAPS = ("arena_autoservice",)
 
     @classmethod
     def setUpClass(cls):
@@ -1038,8 +1041,8 @@ class KeySourcesTests(unittest.TestCase):
     def test_the_accepted_manifests_agree_when_they_are_present(self):
         packages = {"arena_equator": "equator-native-v5", "arena_bay5": "bay5-native-v5", "arena_airpit": "airpit-native-v9", "arena_bowl": "bowl-native-v2",
                     "arena_iceberg": "iceberg-native-v2",
-                    # no accepted package yet (PLAN-AUTOSERVICE item 14 follows a validated U1); a missing manifest is skipped like every other map's
-                    "arena_autoservice": "autoservice-native-v1"}
+                    # the accepted package of Phase A (v2 adds the ambient-audio export); a missing manifest is skipped like every other map's
+                    "arena_autoservice": "autoservice-native-v2"}
         checked = 0
         for key, package in packages.items():
             path = REPO / "work/extract" / package / "manifest.json"
@@ -1048,7 +1051,7 @@ class KeySourcesTests(unittest.TestCase):
             manifest = json.loads(path.read_text(encoding="utf-8"))
             with self.subTest(key=key):
                 registry = manifest["source"].get("scene_registry")
-                if key in self.PENDING_MAPS:  # the package may carry more scenes than the key lists (script, sound, ai, culling roles): the key scenes must be in it
+                if key in self.ROLE_SCENE_MAPS:  # the package carries more scenes than the key lists (script, sound, ai, culling roles): the key scenes must be in it
                     self.assertEqual({i: n for i, n in self.entries(key).items()},
                                      {e["index"]: e["name"] for e in registry if e["index"] in self.entries(key)})
                 elif registry is not None:

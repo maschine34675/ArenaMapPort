@@ -52,7 +52,10 @@ namespace ArenaMapPort.Client
                 // Iceberg has no spectator crowd (PLAN-ICEBERG: its scenes hold no crowd objects, only 12 FansAmbient sound entries): no
                 // package is staged, nothing is created, and with no crowd there is no murmur bed either. validate_map_descriptors.
                 // CROWDLESS_MAP_KEYS is the one list the packer and the validators read; test_crowdless_maps pins it against this switch.
+                // Autoservice is crowdless too (user decision "crowdless passt", 2026-11-08, PLAN-AUTOSERVICE item 12): its 30 spectator rigs sit on layer 8
+                // and are not exported, so no package exists.
                 case "arena_iceberg": return null;
+                case "arena_autoservice": return null;
                 default: return null;
             }
         }

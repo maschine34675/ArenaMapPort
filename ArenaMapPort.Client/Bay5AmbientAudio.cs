@@ -13,7 +13,7 @@ using UnityEngine.SceneManagement;
 
 namespace ArenaMapPort.Client
 {
-    /// <summary>Starts the imported stock ambient players of Equator, Bay5, AirPit, Bowl and Iceberg once real raid audio services exist.
+    /// <summary>Starts the imported stock ambient players of Equator, Bay5, AirPit, Bowl, Iceberg and AutoService once real raid audio services exist.
     /// Arena's ambient singleton/room system is deliberately not recreated. Stock players retain
     /// their original clip selection, gain, pitch and timing; Bay5's stock shoreline calculator
     /// ticks from this owned driver. What differs per map (root name, graph census, group to mixer/bus
@@ -392,7 +392,7 @@ namespace ArenaMapPort.Client
                 // EFT permanently mutes the original Returns/Reverb group. This original alternative
                 // ambient bus reaches TarkovReverb. Its dry path is equivalent while the owned parent
                 // gain is neutral (no skipped filters/effects); preserve external non-neutral gains.
-                // Equator, AirPit, Bowl and Iceberg reroute their interior group (AmbientIn parent); Bay5's exterior bus needs no reroute.
+                // Equator, AirPit, Bowl, Iceberg and AutoService reroute their interior group (AmbientIn parent); Bay5's exterior bus needs no reroute.
                 float volume = float.NaN;
                 bool neutralParent = _leases.TryGetValue(route.Bus, out var lease) && lease.IsNeutral && _ambientMixer != null &&
                     _ambientMixer.GetFloat(AmbientAudioProfiles.Parameter(route.Bus), out volume) && Mathf.Approximately(volume, 0f);

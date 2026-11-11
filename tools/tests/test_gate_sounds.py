@@ -32,7 +32,7 @@ import validate_map_descriptors as VD  # noqa: E402
 
 MAPS = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl")
 ICEBERG = "arena_iceberg"     # joined the released set on 2026-10-30 (PLAN-ICEBERG item 12): its rows, clips and fits are per map, so it has its own classes below and the four-map loops stay as they are
-AUTOSERVICE = "arena_autoservice"     # Catalog-only until its promotion (PLAN-AUTOSERVICE item 12): own classes at the end of this file
+AUTOSERVICE = "arena_autoservice"     # joined the released set on 2026-11-11 (PLAN-AUTOSERVICE item 12): its rows, clips and fits are per map, so it has its own classes at the end of this file
 STEM = {key: key.removeprefix("arena_") for key in MAPS + (ICEBERG, AUTOSERVICE)}
 # ARENAMAPPORT_GATE_SOUNDS_DIR points the package tests at another work/extract/gate-sounds (a worktree has no ignored work/ folder)
 PACKAGE = Path(os.environ.get("ARENAMAPPORT_GATE_SOUNDS_DIR", REPO / "work" / "extract" / "gate-sounds"))

@@ -66,9 +66,9 @@ public sealed class MapNoticeSchedulerTests
         Assert.Empty(h.Env.Toasts);
         Assert.Equal(0, h.Env.ProbeStarts);
         Assert.Equal(1, h.Env.ScanCalls);
-        Assert.Equal(5, h.Env.LastScanScope.Count);
+        Assert.Equal(6, h.Env.LastScanScope.Count);
         Assert.True(h.Sched.T1Done);
-        Assert.Contains("[Notice] availability: arena=verified, offered=5/5 [arena_equator,arena_bay5,arena_airpit,arena_bowl,arena_iceberg], files=ok, server=not_needed", h.Env.Debugs);
+        Assert.Contains("[Notice] availability: arena=verified, offered=6/6 [arena_equator,arena_bay5,arena_airpit,arena_bowl,arena_iceberg,arena_autoservice], files=ok, server=not_needed", h.Env.Debugs);
         Assert.Empty(h.Env.Infos);
         Assert.Empty(h.Env.Warnings);
         Assert.False(h.Sched.Work); // idle: one flag read per frame from here on
@@ -138,7 +138,7 @@ public sealed class MapNoticeSchedulerTests
         Assert.Equal(modal.Text.Length > MapNoticeText.ModalLimit, modal.Scrolled); // the 480-character rule decides the window
         Assert.StartsWith("The Arena maps are not available: ArenaMapPort did not find Escape from Tarkov: Arena on this PC.\n", modal.Text);
         Assert.EndsWith("\nArenaMapPort 0.3.0 - ref NO_ARENA", modal.Text);
-        Assert.Equal("[Notice] showing 'ClientNoArena' (modal) ref=NO_ARENA client=not_verified:not_registered server=not_needed offered=?/5",
+        Assert.Equal("[Notice] showing 'ClientNoArena' (modal) ref=NO_ARENA client=not_verified:not_registered server=not_needed offered=?/6",
             Assert.Single(h.Env.Infos));
         Assert.Contains(h.Env.Debugs, line => line.StartsWith("[Notice] text: The Arena maps are not available: ArenaMapPort did not find") && line.Contains(" | "));
     }
@@ -203,7 +203,7 @@ public sealed class MapNoticeSchedulerTests
         Assert.Equal(
             new[] { "ArenaMapPort: still checking your Arena installation (slow disk or unreachable path). The Arena maps load once it passes." },
             h.Env.Toasts);
-        Assert.Equal("[Notice] showing 'CheckPending' (toast) ref=PENDING client=checking:none server=not_needed offered=?/5", Assert.Single(h.Env.Infos));
+        Assert.Equal("[Notice] showing 'CheckPending' (toast) ref=PENDING client=checking:none server=not_needed offered=?/6", Assert.Single(h.Env.Infos));
 
         h.Run(20); // only once
         Assert.Single(h.Env.Toasts);
@@ -299,7 +299,7 @@ public sealed class MapNoticeSchedulerTests
     {
         var h = new Harness();
         h.Env.OfferedAvailable = false;
-        h.Env.Scan = new FileScan(5, new[] { "arena_bay5_scenes.bundle" }, new[] { "Bay 5" });
+        h.Env.Scan = new FileScan(6, new[] { "arena_bay5_scenes.bundle" }, new[] { "Bay 5" });
         h.Sched.OnMenuShown(true);
         h.Run(25);
         Assert.Empty(h.Env.Modals);
@@ -308,9 +308,9 @@ public sealed class MapNoticeSchedulerTests
 
         h.Run(10); // past 30 menu-seconds
         Assert.Contains("[Notice] the location list was not available after 30 s; offered is unknown", h.Env.Debugs);
-        Assert.Contains(h.Env.Debugs, line => line.StartsWith("[Notice] availability: arena=verified, offered=?/5, files=1 missing, server=not_needed"));
+        Assert.Contains(h.Env.Debugs, line => line.StartsWith("[Notice] availability: arena=verified, offered=?/6, files=1 missing, server=not_needed"));
         Assert.Equal(0, h.Env.ProbeStarts); // an unknown list asks no one
-        Assert.Equal(5, h.Env.LastScanScope.Count); // unknown: every registry map is checked
+        Assert.Equal(6, h.Env.LastScanScope.Count); // unknown: every registry map is checked
         Assert.EndsWith("- ref FILES_MISSING", h.Text());
         Assert.Contains("files for Bay 5 are incomplete (missing: 1, for example arena_bay5_scenes.bundle)", h.Text());
     }
@@ -326,7 +326,7 @@ public sealed class MapNoticeSchedulerTests
         h.Run(1.0);
         Assert.Empty(h.Env.Modals);
         Assert.True(h.Sched.T1Done);
-        Assert.Contains("[Notice] availability: arena=verified, offered=5/5 [arena_equator,arena_bay5,arena_airpit,arena_bowl,arena_iceberg], files=ok, server=not_needed", h.Env.Debugs);
+        Assert.Contains("[Notice] availability: arena=verified, offered=6/6 [arena_equator,arena_bay5,arena_airpit,arena_bowl,arena_iceberg,arena_autoservice], files=ok, server=not_needed", h.Env.Debugs);
     }
 
     // ---- T1: the server ------------------------------------------------------------------------------------------------------
@@ -358,7 +358,7 @@ public sealed class MapNoticeSchedulerTests
         Assert.Contains("the SPT server could not verify Escape from Tarkov: Arena (no launcher entry for Arena on the server PC)", modal.Text);
         Assert.Contains("create SPT_Runtime\\user\\mods\\ArenaMapPort\\config\\arena-install.json", modal.Text);
         Assert.EndsWith("- ref SERVER_NO_ARENA, server 0.3.0", modal.Text);
-        Assert.Contains("[Notice] showing 'ServerNoArena' (modal) ref=SERVER_NO_ARENA client=verified:none server=ok:not_verified/not_registered offered=0/5",
+        Assert.Contains("[Notice] showing 'ServerNoArena' (modal) ref=SERVER_NO_ARENA client=verified:none server=ok:not_verified/not_registered offered=0/6",
             h.Env.Infos);
         Assert.Contains("[Notice] server status: ok:not_verified/not_registered", h.Env.Debugs);
         Assert.Equal(ReminderGroup.ServerNoVerify, h.Sched.ReminderGroupFound);
@@ -372,7 +372,7 @@ public sealed class MapNoticeSchedulerTests
         h.FirstMenuAndSettle();
         h.Run(0.5);
         Assert.EndsWith("- ref SERVER_UNKNOWN", h.Text());
-        Assert.Contains("server=404 offered=0/5", Assert.Single(h.Env.Infos));
+        Assert.Contains("server=404 offered=0/6", Assert.Single(h.Env.Infos));
         Assert.Equal(ReminderGroup.ServerNoOffer, h.Sched.ReminderGroupFound);
     }
 
@@ -386,7 +386,7 @@ public sealed class MapNoticeSchedulerTests
         Assert.Empty(h.Env.Modals);
         h.Run(2.0);
         Assert.EndsWith("- ref SERVER_NO_ANSWER", h.Text());
-        Assert.Contains("server=failed offered=0/5", Assert.Single(h.Env.Infos));
+        Assert.Contains("server=failed offered=0/6", Assert.Single(h.Env.Infos));
     }
 
     [Fact]
@@ -395,7 +395,7 @@ public sealed class MapNoticeSchedulerTests
         Harness h = NothingOffered();
         h.Env.WhenProbeStarts = () => throw new InvalidOperationException("no http");
         h.FirstMenuAndSettle();
-        Assert.Contains("server=no_http offered=0/5", Assert.Single(h.Env.Infos));
+        Assert.Contains("server=no_http offered=0/6", Assert.Single(h.Env.Infos));
         Assert.EndsWith("- ref SERVER_UNKNOWN", h.Text());
         Assert.Contains(h.Env.Warnings, line => line.Contains("could not show 'probe' (InvalidOperationException: no http)"));
     }
@@ -404,7 +404,7 @@ public sealed class MapNoticeSchedulerTests
     public void SomeMapsMissingShowsTheVersionSkewTextWhenTheServerHasNoRoute()
     {
         var h = new Harness();
-        h.Env.Locations = NoticeTestData.Offered("arena_equator", "arena_bay5", "arena_airpit", "arena_iceberg");     // only Bowl is missing
+        h.Env.Locations = NoticeTestData.Offered("arena_equator", "arena_bay5", "arena_airpit", "arena_iceberg", "arena_autoservice");     // only Bowl is missing
         h.Env.WhenProbeStarts = () => h.Env.Probe = new ProbeView(ProbeState.NotFound);
         h.FirstMenuAndSettle();
         h.Run(0.5);
@@ -451,7 +451,7 @@ public sealed class MapNoticeSchedulerTests
     public void AMissingFileIsReportedWithoutAnyRequest()
     {
         var h = new Harness();
-        h.Env.Scan = new FileScan(5, new[] { "arena_bowl.json", "arena_bay5_scenes.bundle" }, new[] { "Bay 5", "Bowl" });
+        h.Env.Scan = new FileScan(6, new[] { "arena_bowl.json", "arena_bay5_scenes.bundle" }, new[] { "Bay 5", "Bowl" });
         h.FirstMenuAndSettle();
         Assert.Equal(0, h.Env.ProbeStarts);
         Assert.EndsWith("- ref FILES_MISSING", h.Text());
@@ -463,7 +463,7 @@ public sealed class MapNoticeSchedulerTests
     {
         var h = new Harness();
         h.Env.SkippedHooks = new[] { "BundlesManager.LoadBundleAsync" };
-        h.Env.Scan = new FileScan(5, new[] { "x" }, new[] { "Bowl" });
+        h.Env.Scan = new FileScan(6, new[] { "x" }, new[] { "Bowl" });
         h.FirstMenuAndSettle();
         Assert.EndsWith("- ref HOOK_MISSING", h.Text());
         Assert.Contains("(part BundlesManager.LoadBundleAsync could not be attached)", h.Text());
@@ -699,7 +699,7 @@ public sealed class MapNoticeSchedulerTests
         Assert.Equal(
             new[] { "ArenaMapPort: the Arena maps are not available (Arena was not found on this PC). Install Arena with the launcher, or set F12 > ArenaInstallPath, then restart." },
             h.Env.Toasts);
-        Assert.Contains("[Notice] showing 'SelectionReminder' (toast) ref=SELECTION client=not_verified:not_registered server=not_needed offered=?/5", h.Env.Infos);
+        Assert.Contains("[Notice] showing 'SelectionReminder' (toast) ref=SELECTION client=not_verified:not_registered server=not_needed offered=?/6", h.Env.Infos);
 
         h.Sched.OnSelectionShown(); // the player opens the screen again
         h.Run(1.0);
@@ -753,7 +753,7 @@ public sealed class MapNoticeSchedulerTests
     public void ThereIsNoReminderForRowsFourteenToSixteen()
     {
         var h = new Harness();
-        h.Env.Scan = new FileScan(5, new[] { "x" }, new[] { "Bowl" });
+        h.Env.Scan = new FileScan(6, new[] { "x" }, new[] { "Bowl" });
         h.FirstMenuAndSettle();
         h.Env.LastTicket.Accept(h.Env.Now);
         h.Run(1.0);

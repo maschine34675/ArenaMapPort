@@ -583,12 +583,12 @@ DOOR_SOURCES = ("clip", "dotanimator", "borrowed")
 DOOR_EASES = ("smoothstep", "linear", "inOutQuint", "curve")
 DOOR_AT_TOLERANCE = 0.05   # m: the client matches a barrier root instance to `at` within this (ArenaDoorPose.AtTolerance)
 DOOR_CLOSED_TOLERANCE = 0.05   # m: rows that repeat a part name are told apart by the closed position within this
-# Catalog-only maps whose door / monitor sidecars are staged AHEAD of the lock-step promotion (Autoservice, plan item 7 -> item 12).
+# Catalog-only maps whose door / monitor sidecars are staged AHEAD of the lock-step promotion (Autoservice, plan item 7 -> item 12; the tuple is empty since the promotion).
 # Such a sidecar is validated in itself (schema, rows, sources, the gate-sound join) but is not yet mirrored by the registry's DoorPoses /
 # ScoreMonitors (the C# literals arrive at the promotion), and the door barrier rule waits for the descriptor's opened_barriers (plan item 8)
 # while it has none. Both waivers apply only while the registry list is EMPTY; the promotion removes the map from this tuple, and main()
 # refuses a map here that is already a released one.
-PENDING_MIRROR_KEYS = ("arena_autoservice",)
+PENDING_MIRROR_KEYS: tuple[str, ...] = ()   # Autoservice left it at its promotion (PLAN-AUTOSERVICE item 12, 2026-11-11)
                                # (ArenaDoorPose.ClosedPositionTolerance, DoorPoseModel.SelectRowsForNode)
 # Pose barriers that are NOT opened_barriers entries. Equator's booth doors are opened by BoothDoorRepairs.OpenDoors by the NAME of
 # their leaves, not as barriers; their poses name the assembly root (SPAWN_DOORS/Door_Sliding_Respawn[ (n)], and the fifth door
@@ -1122,14 +1122,15 @@ def registry_entries(text: str) -> dict[str, dict]:
 
 # Bowl joined with PLAN-BOWL item 8 (2026-10-18) and shipped with 0.3.0; Iceberg joined with PLAN-ICEBERG item 12 (2026-10-30), registered and
 # staged on feature/iceberg, not released yet (its bundles wait for the first Unity build).
-RELEASE_MAP_NAMES = ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg")
-RELEASE_MAP_KEYS = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg")
+# Autoservice joined with PLAN-AUTOSERVICE item 12 (2026-11-11) in the same state (its bundles wait for U1, item 13).
+RELEASE_MAP_NAMES = ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService")
+RELEASE_MAP_KEYS = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice")
 # Released maps that have NO spectator crowd (PLAN-ICEBERG "No spectator crowd and no murmur bed", 2026-10-30: Iceberg's scenes hold no crowd objects,
 # only 12 FansAmbient sound entries). They get no spectators/<key>/ package and no crowd murmur: everything that would otherwise demand a crowd
 # for every released map (the packer's rules and required files, the distribution validator) reads this one list; the crowd maps themselves are
 # extract_spectator.MAP_SCENES, and tools/tests/test_crowdless_maps.py pins that both sets partition the release and that the client's
 # ArenaSpectators.DesignScene returns null for exactly these keys. Adding a map here is a decision, never a way around a missing package.
-CROWDLESS_MAP_KEYS = ("arena_iceberg",)
+CROWDLESS_MAP_KEYS = ("arena_iceberg", "arena_autoservice")
 # Maps with a native sea-water package, the ONE list validate_distribution (WATER_MAP_KEYS: the exact file set under water/), the packer (the required
 # files of the map's part) and the extractor's table (extract_water.MAPS, pinned by tools/tests/test_water_extraction.py) agree on. native_water_errors
 # makes every sidecar's has_native_water and every descriptor's HasNativeWater equal to membership here. Bay5's harbor (2026-09-28) and Iceberg's sea

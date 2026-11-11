@@ -30,7 +30,7 @@ public sealed class MapNoticeSelectorTests
     [Fact]
     public void AVerifiedClientWithAnUnknownLocationListAndCompleteFilesHasNothingToSay()
     {
-        Assert.Null(Menu(NoticeTestData.Input(NoticeTestData.Verified(), null, null, FileScan.Clean(5))));
+        Assert.Null(Menu(NoticeTestData.Input(NoticeTestData.Verified(), null, null, FileScan.Clean(6))));
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public sealed class MapNoticeSelectorTests
         Assert.Equal(NoticeId.ClientNoArena, plan.Id);
         Assert.Equal(NoticeLead.Menu, plan.Lead);
         Assert.Equal(ReminderGroup.ArenaNotFound, plan.Reminder);
-        Assert.Equal("client=not_verified:not_registered server=not_needed offered=?/5", plan.LogSummary);
+        Assert.Equal("client=not_verified:not_registered server=not_needed offered=?/6", plan.LogSummary);
         Assert.Equal("0.3.0", plan.Get("ver"));
     }
 
@@ -207,7 +207,7 @@ public sealed class MapNoticeSelectorTests
         {
             ("arena_equator", "failed", "base_json_parse"), ("arena_bay5", "failed", "base_json_missing"),
             ("arena_airpit", "failed", "base_json_parse"), ("arena_bowl", "failed", "base_json_missing"),
-            ("arena_iceberg", "failed", "base_json_parse"),
+            ("arena_iceberg", "failed", "base_json_parse"), ("arena_autoservice", "failed", "base_json_parse"),
         });
         MapNoticePlan plan = NoneOffered(NoticeTestData.Ok(dataBad));
         Assert.Equal(NoticeId.ServerAllFailed, plan.Id);
@@ -221,7 +221,7 @@ public sealed class MapNoticeSelectorTests
         {
             ("arena_equator", "failed", "base_json_parse"), ("arena_bay5", "failed", "registration"),
             ("arena_airpit", "failed", "base_json_parse"), ("arena_bowl", "failed", "base_json_parse"),
-            ("arena_iceberg", "failed", "base_json_parse"),
+            ("arena_iceberg", "failed", "base_json_parse"), ("arena_autoservice", "failed", "base_json_parse"),
         });
         Assert.Equal(NoticeWhy.RegistrationFailed, NoneOffered(NoticeTestData.Ok(mixed)).Why);
     }
@@ -274,9 +274,9 @@ public sealed class MapNoticeSelectorTests
         {
             ("arena_equator", "registered", "none"), ("arena_bay5", "failed", "base_json_parse"),
             ("arena_airpit", "failed", "base_json_missing"), ("arena_bowl", "registered", "none"),
-            ("arena_iceberg", "registered", "none"),
+            ("arena_iceberg", "registered", "none"), ("arena_autoservice", "registered", "none"),
         });
-        MapNoticePlan plan = SomeOffered(NoticeTestData.Ok(status), "arena_equator", "arena_bowl", "arena_iceberg");
+        MapNoticePlan plan = SomeOffered(NoticeTestData.Ok(status), "arena_equator", "arena_bowl", "arena_iceberg", "arena_autoservice");
         Assert.Equal(NoticeId.ServerSomeFailed, plan.Id);
         Assert.Equal("Bay 5, Air Pit", plan.Get("maps"));
         Assert.Equal(NoticeWhy.MapDataBad, plan.Why);
@@ -287,9 +287,9 @@ public sealed class MapNoticeSelectorTests
         {
             ("arena_equator", "registered", "none"), ("arena_bay5", "registered", "none"),
             ("arena_airpit", "registered", "none"), ("arena_bowl", "failed", "registration"),
-            ("arena_iceberg", "registered", "none"),
+            ("arena_iceberg", "registered", "none"), ("arena_autoservice", "registered", "none"),
         });
-        MapNoticePlan one = SomeOffered(NoticeTestData.Ok(registration), "arena_equator", "arena_bay5", "arena_airpit", "arena_iceberg");
+        MapNoticePlan one = SomeOffered(NoticeTestData.Ok(registration), "arena_equator", "arena_bay5", "arena_airpit", "arena_iceberg", "arena_autoservice");
         Assert.Equal("Bowl", one.Get("maps"));
         Assert.Equal(NoticeWhy.RegistrationFailed, one.Why);
     }
@@ -305,13 +305,13 @@ public sealed class MapNoticeSelectorTests
                      NoticeTestData.Ok(NoticeTestData.Status("verified", "none", maps: new[] { ("arena_bowl", "not_registered", "none") })),
                  })
         {
-            MapNoticePlan plan = SomeOffered(probe, "arena_equator", "arena_bay5", "arena_airpit", "arena_iceberg");     // only Bowl is missing
+            MapNoticePlan plan = SomeOffered(probe, "arena_equator", "arena_bay5", "arena_airpit", "arena_iceberg", "arena_autoservice");     // only Bowl is missing
             Assert.Equal(NoticeId.ServerSomeMissing, plan.Id);
             Assert.Equal("Bowl", plan.Get("maps"));
             Assert.Equal(ReminderGroup.None, plan.Reminder);
         }
 
-        MapNoticePlan two = SomeOffered(new ProbeView(ProbeState.NotFound), "arena_equator", "arena_bay5", "arena_iceberg");
+        MapNoticePlan two = SomeOffered(new ProbeView(ProbeState.NotFound), "arena_equator", "arena_bay5", "arena_iceberg", "arena_autoservice");
         Assert.Equal("Air Pit, Bowl", two.Get("maps"));
         Assert.Equal("0.3.0", two.Get("ver"));
     }
@@ -321,7 +321,7 @@ public sealed class MapNoticeSelectorTests
     {
         // the server says Bowl failed, but the backend lists it (an old record): the missing map is Air Pit and the server never failed it
         var status = NoticeTestData.Status("verified", "none", maps: new[] { ("arena_bowl", "failed", "registration") });
-        MapNoticePlan plan = SomeOffered(NoticeTestData.Ok(status), "arena_equator", "arena_bay5", "arena_bowl", "arena_iceberg");
+        MapNoticePlan plan = SomeOffered(NoticeTestData.Ok(status), "arena_equator", "arena_bay5", "arena_bowl", "arena_iceberg", "arena_autoservice");
         Assert.Equal(NoticeId.ServerSomeMissing, plan.Id);
         Assert.Equal("Air Pit", plan.Get("maps"));
     }
@@ -331,7 +331,7 @@ public sealed class MapNoticeSelectorTests
     [Fact]
     public void Row16ClientFilesAreMissing()
     {
-        var scan = new FileScan(5, new[] { "arena_bay5_scenes.bundle", "arena_bowl.json" }, new[] { "Bay 5", "Bowl" });
+        var scan = new FileScan(6, new[] { "arena_bay5_scenes.bundle", "arena_bowl.json" }, new[] { "Bay 5", "Bowl" });
         MapNoticePlan plan = Menu(NoticeTestData.Input(NoticeTestData.Verified(), NoticeTestData.AllOffered(), null, scan));
         Assert.Equal(NoticeId.InstallIncomplete, plan.Id);
         Assert.Equal("Bay 5, Bowl", plan.Get("maps"));

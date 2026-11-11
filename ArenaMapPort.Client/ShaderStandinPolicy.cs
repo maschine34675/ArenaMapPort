@@ -38,6 +38,15 @@ namespace ArenaMapPort.Client
     /// shader), gated by its own switch that defaults to ON, plus <see cref="FixFor"/> (texture slots the
     /// substitute reads under other names, an alpha-cutoff override) and the generated fog texture. The backface
     /// cloth uses a double-sided substitute (<see cref="TwoSidedClothShader"/>), see below.</item>
+    /// <item>Bowl: only its tarp tunnel shader (<see cref="TwoSidedReflectiveShader"/>), its own switch, a plain swap.</item>
+    /// <item>AutoService (PLAN-AUTOSERVICE item 11/12, 2026-11-11): its four names (fog sheet, both cloth shaders, the Baked reflective
+    /// shader), gated by its own switch (<c>AutoServiceShaderStandins</c>, default ON). It takes AirPit's extended handling for the cloth
+    /// (<see cref="UsesExtendedStandins"/>: the normal-map slot and the zeroed <c>_Cutoff</c>, because the same Arena cloth shader and the
+    /// same material family reach <c>p0/Cutout/Bumped Diffuse</c>, whose cutoff would otherwise discard the whole mesh) and AirPit's
+    /// double-sided substitute for <c>ClothShader_backface</c> (<see cref="AutoServiceTargets"/>: the plain table row is Cull Back and a backface cloth
+    /// would vanish from behind). The fog sheet gets the generated soft texture exactly as on AirPit (the capture is not map-gated). Its
+    /// fourth name keeps the table row <c>p0/Reflective/Bumped Specular SMap</c>. Like AirPit's, the fog sheet and cloth are expected to
+    /// resolve in process (the rows are the safety net); the Baked shader (sharedassets216) is inferred NOT loaded, so its row is the live one.</item>
     /// <item>Every other map, Equator included: an empty list, no fallback table. A name not allowed keeps the
     /// stand-in and is logged as unresolved (Error).</item>
     /// </list>
@@ -72,6 +81,7 @@ namespace ArenaMapPort.Client
         // First-run (code) defaults of the AirPit keys. AirPit never shipped with saved keys, so no migration.
         internal const bool AirPitStandinsDefault = true;
         internal const bool BowlStandinsDefault = true;   // first-run default of BowlShaderStandins (new key, no migration)
+        internal const bool AutoServiceStandinsDefault = true;   // first-run default of AutoServiceShaderStandins (new key, no migration)
         internal const FogSheetMode FogSheetModeDefault = FogSheetMode.StandIn;
         internal const float FogSheetOpacityDefault = 1f;
         internal const float FogSheetOpacityMin = 0f;
@@ -102,11 +112,19 @@ namespace ArenaMapPort.Client
             [TwoSidedReflectiveShader] = TwoSidedClothShader,
         };
 
+        // AutoService's own row (PLAN-AUTOSERVICE item 12): the backface cloth must draw from both sides, as on AirPit (the shipped table row,
+        // p0/Cutout/Bumped Diffuse, is Cull Back in all three passes). Its other three names keep the shipped rows.
+        static readonly Dictionary<string, string> AutoServiceTargets = new Dictionary<string, string>
+        {
+            [ClothBackfaceShader] = TwoSidedClothShader,
+        };
+
         internal static IReadOnlyDictionary<string, string> FallbackTable => Table;
 
         static bool IsBay5(string mapKey) => mapKey == ArenaMapRegistry.Bay5.Key;
         static bool IsAirPit(string mapKey) => mapKey == ArenaMapRegistry.AirPit.Key;
         static bool IsBowl(string mapKey) => mapKey == ArenaMapRegistry.Bowl.Key;
+        static bool IsAutoService(string mapKey) => mapKey == ArenaMapRegistry.AutoService.Key;
 
         /// <summary>
         /// The Arena shader names this map may rebind to an SPT substitute: its descriptor's
@@ -128,10 +146,10 @@ namespace ArenaMapPort.Client
         /// <summary>
         /// Whether the table is switched on for this map's raid: Bay5 follows the legacy
         /// <c>EnableShaderFallbacks</c> value only, AirPit its own key only (<c>AirPitShaderStandins</c>), Bowl its
-        /// own key only (<c>BowlShaderStandins</c>), every other map is never on.
+        /// own key only (<c>BowlShaderStandins</c>), AutoService its own key only (<c>AutoServiceShaderStandins</c>), every other map is never on.
         /// </summary>
-        internal static bool FallbacksActive(string mapKey, bool bay5LegacySwitch, bool airPitSwitch, bool bowlSwitch) =>
-            IsBay5(mapKey) ? bay5LegacySwitch : IsAirPit(mapKey) ? airPitSwitch : IsBowl(mapKey) && bowlSwitch;
+        internal static bool FallbacksActive(string mapKey, bool bay5LegacySwitch, bool airPitSwitch, bool bowlSwitch, bool autoServiceSwitch = false) =>
+            IsBay5(mapKey) ? bay5LegacySwitch : IsAirPit(mapKey) ? airPitSwitch : IsBowl(mapKey) ? bowlSwitch : IsAutoService(mapKey) && autoServiceSwitch;
 
         /// <summary>The SPT shader allowed to stand in for <paramref name="originalName"/> on this map, if any.</summary>
         internal static bool TryGetFallback(string mapKey, string originalName, out string fallbackName)
@@ -142,14 +160,15 @@ namespace ArenaMapPort.Client
             string target = null;
             bool found = (IsAirPit(mapKey) && AirPitTargets.TryGetValue(originalName, out target)) ||
                          (IsBowl(mapKey) && BowlTargets.TryGetValue(originalName, out target)) ||
+                         (IsAutoService(mapKey) && AutoServiceTargets.TryGetValue(originalName, out target)) ||
                          Table.TryGetValue(originalName, out target);
             if (!found) return false;
             fallbackName = target;
             return true;
         }
 
-        /// <summary>Texture and float handling beyond the shader swap is AirPit only; Bay5 keeps a plain swap.</summary>
-        internal static bool UsesExtendedStandins(string mapKey) => IsAirPit(mapKey);
+        /// <summary>Texture and float handling beyond the shader swap is AirPit and AutoService only (the cloth fix); Bay5 and Bowl keep a plain swap.</summary>
+        internal static bool UsesExtendedStandins(string mapKey) => IsAirPit(mapKey) || IsAutoService(mapKey);
 
         /// <summary>The fog-sheet quads are disabled (rather than rebound) only on AirPit in Hidden mode.</summary>
         internal static bool HidesFogSheets(string mapKey, FogSheetMode mode) =>
@@ -226,7 +245,8 @@ namespace ArenaMapPort.Client
             new[] { new TextureRemap("_NormalMap1", "_BumpMap") },
             new[] { new FloatOverride("_Cutoff", 0f) });
 
-        /// <summary>The extra material work for a name that was rebound through the table (AirPit only).</summary>
+        /// <summary>The extra material work for a name that was rebound through the table (AirPit and AutoService; AutoService's allow-list holds
+        /// no rock shader, so for it only the two cloth names have a fix).</summary>
         internal static StandinFix FixFor(string mapKey, string originalName)
         {
             if (!UsesExtendedStandins(mapKey)) return StandinFix.None;

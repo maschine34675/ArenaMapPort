@@ -321,7 +321,8 @@ namespace ArenaMapPort.Client
             // fallback mapping. Per-map allow-list (ArenaMapDescriptor.ShaderFallbackNames) and rows in
             // ShaderStandinPolicy: Bay5 behind the legacy
             // EnableShaderFallbacks switch (default OFF, plain swap, as before), AirPit behind
-            // AirPitShaderStandins (default ON, only its four names, plus ShaderStandins' texture/float work),
+            // AirPitShaderStandins (default ON, only its four names, plus ShaderStandins' texture/float work), Bowl and
+            // AutoService behind their own switches (BowlShaderStandins, AutoServiceShaderStandins; AutoService with the cloth work too),
             // every other map never — several of these names (Cloth/ClothShader,
             // Custom/Billboard_FogSheet_Simple) are also used on arena_equator, which was never evaluated
             // with these unverified substitutes (adversarial review). Widening it needs its own review.
@@ -329,7 +330,7 @@ namespace ArenaMapPort.Client
             if (target == null &&
                 ShaderStandinPolicy.FallbacksActive(map.Key,
                     _enableShaderFallbacks != null && _enableShaderFallbacks.Value, ShaderStandins.AirPitStandinsEnabled,
-                    ShaderStandins.BowlStandinsEnabled) &&
+                    ShaderStandins.BowlStandinsEnabled, ShaderStandins.AutoServiceStandinsEnabled) &&
                 ShaderStandinPolicy.TryGetFallback(map.Key, originalName, out var fallbackName))
             {
                 target = FindLoadedExact(fallbackName) ?? Shader.Find(fallbackName);

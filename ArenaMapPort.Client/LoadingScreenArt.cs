@@ -14,7 +14,7 @@ namespace ArenaMapPort.Client
 {
     /// <summary>
     /// PLAN-TWO-MAPS item 10b — loading-screen art for ported maps (every map in
-    /// <see cref="ArenaMapRegistry.All"/> that has art staged: Equator, Bay5, AirPit, Bowl and Iceberg).
+    /// <see cref="ArenaMapRegistry.All"/> that has art staged: Equator, Bay5, AirPit, Bowl, Iceberg and AutoService).
     ///
     /// What vanilla does: EFT's own "Deploying in progress (NN%)" deploy screen
     /// (<c>EFT.UI.Matchmaker.MatchmakerTimeHasCome.Show</c>, decompile

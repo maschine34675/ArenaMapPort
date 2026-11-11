@@ -1,5 +1,23 @@
 # Current distribution contract: Equator, Bay5, AirPit, Bowl and Iceberg (0.5.0, encrypted bundles; the 0.4.0 four-map contract below is kept as history)
 
+2026-11-11 (Autoservice joined the release lists, PENDING: NOT built, NOT staged as bundles, NOT released; PLAN-AUTOSERVICE item 12, record
+[progress/autoservice-release.md](progress/autoservice-release.md)): `ArenaMapRegistry.All`, `RELEASE_MAP_KEYS`, the csproj rows and the packer now expect a
+**sixth** map, `arena_autoservice` (Arena's `Arena_AutoService`, "Chop Shop"). The published 0.5.0 contract (359 files) below stays the published one. Once its
+bundles exist (U1, item 13) and are staged (item 14), dist holds **383 files** (359 plus 24) and the multi-part plan reads core 230, equator 24, bay5 30, airpit 22,
+bowl 26, iceberg 27, **autoservice 24**: `bundles/arena_autoservice_{scenes,navmesh,preset}.bundle` (3, AMPB, encrypted), `keys/arena_autoservice.json` (1; the
+first staging creates the content key with `-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_autoservice`), `acoustics/arena_autoservice/`
+(`spatial-audio.json`, `source.audiobakedata`, `sharedassets112.assets_29.wav`: 3), `gate-sounds/arena_autoservice/` (`gate-sounds.json` and four WAVs: 5),
+`flares/arena_autoservice/` (`flares.json` and two raw textures: 3, eight active gas-lamp flares), `ai/autoservice.ai.json` (1), `loadscreens/arena_autoservice_1..5.jpg`
+(5), `material-shaders.arena_autoservice.json` (1), `db/arena_autoservice/base.json` (1) and `banners/arena_autoservice.jpg` (1). It has no spectator package (the
+second crowdless map: `validate_map_descriptors.CROWDLESS_MAP_KEYS`), no water and no DynamicMaps overview (Phase C "not yet" lists: it is in none of
+`OVERVIEW_MAP_NAMES` and `WATER_MAP_KEYS`, and in `FLARE_MAP_KEYS`). The core part does not change.
+
+State on the day of the promotion (a DllOnly client build and a server build from this tree, nothing built by Unity): dist holds **378 files**, the 19 inputs of the
+list above that need no bundle; the five missing ones are the three bundles, the key file and the shader sidecar, which only U1 and the first stage produce.
+`make_release_zips.py --plan` therefore stops with "incomplete dist: part 'autoservice' lacks" those five, and `validate_distribution.py` ends in `DISTRIBUTION_OK 6
+maps 18 bundles 6 sidecars encrypted` only after U1 and the first stage. `tools/deploy-to-spt.ps1` refuses the whole-dist deploy while the server mod holds
+`db/arena_autoservice` and the client plugin lacks the map's bundles and key file (Iceberg rule 6); nothing deploys before item 14.
+
 The current contract is the five-map one of release 0.5.0 (2026-11-07, see the last section, "Release 0.5.0 contract"). Every table and count between here and that section describes an earlier stage; the 256-file layout of 0.4.0 (published 2026-10-30) is history.
 
 2026-10-31 (Iceberg overview): the current unpublished five-map staging adds

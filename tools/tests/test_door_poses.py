@@ -439,8 +439,10 @@ class SidecarTests(unittest.TestCase):
         self.assertEqual(VD.door_pose_errors(self.bowl, SIDECAR, entries["Bowl"].get("DoorPoses")), [])
         iceberg = json.loads((REPO / "tools" / "maps" / "iceberg.json").read_text(encoding="utf-8"))
         self.assertEqual(VD.door_pose_errors(iceberg, REPO / "tools" / "maps" / "iceberg.doors.json", entries["Iceberg"].get("DoorPoses")), [])
+        autoservice = json.loads((REPO / "tools" / "maps" / "autoservice.json").read_text(encoding="utf-8"))
+        self.assertEqual(VD.door_pose_errors(autoservice, REPO / "tools" / "maps" / "autoservice.doors.json", entries["AutoService"].get("DoorPoses")), [])
         for name, entry in entries.items():
-            if name not in ("Bowl", "Equator", "Bay5", "AirPit", "Iceberg"):     # the five released maps; the spike maps carry none
+            if name not in ("Bowl", "Equator", "Bay5", "AirPit", "Iceberg", "AutoService"):     # the six released maps; the spike maps carry none
                 self.assertIsNone(entry.get("DoorPoses"), name)
 
     def test_the_registry_carries_exactly_the_generated_csharp(self):
@@ -2815,25 +2817,30 @@ class AutoserviceSidecarTests(unittest.TestCase):
             self.assertEqual(descriptor.get("start_gates"), list(AUTOSERVICE_GATES))
             self.assertEqual(descriptor.get("held_gates", []), [])
 
-    def test_the_validator_accepts_the_sidecar_as_a_pending_map_and_judges_the_barriers_once_the_descriptor_has_them(self):
+    def test_the_validator_mirrors_the_registry_and_judges_the_barriers_since_the_promotion(self):
+        # PLAN-AUTOSERVICE item 12 (2026-11-11): the map left VD.PENDING_MIRROR_KEYS, the registry carries the 23 rows and the descriptor the four gates
         descriptor = autoservice_descriptor()
         path = REPO / "tools" / "maps" / "autoservice.doors.json"
-        self.assertIn("arena_autoservice", VD.PENDING_MIRROR_KEYS)
-        self.assertEqual(VD.door_pose_errors(descriptor, path, None), [])                    # as committed (with or without opened_barriers)
-        with_barriers = dict(descriptor, opened_barriers=list(AUTOSERVICE_GATES), start_gates=list(AUTOSERVICE_GATES), held_gates=[])
-        self.assertEqual(VD.door_pose_errors(with_barriers, path, None), [])
+        self.assertNotIn("arena_autoservice", VD.PENDING_MIRROR_KEYS)
+        registry = VD.registry_entries((REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs").read_text(encoding="utf-8"))["AutoService"]["DoorPoses"]
+        self.assertEqual(len(registry), 23)
+        self.assertEqual(VD.door_pose_errors(descriptor, path, registry), [])
         missing = dict(descriptor, opened_barriers=list(AUTOSERVICE_GATES[:2]))
-        errors = VD.door_pose_errors(missing, path, None)
+        errors = VD.door_pose_errors(missing, path, registry)
         self.assertEqual(len(errors), 12)                                                    # the twelve techlight rows lose their barrier
         self.assertTrue(all("is not an opened_barriers entry" in e and "techlight" in e for e in errors), errors)
-        # the waivers are for the pending map only: the same file under another key is judged and mirrored like any other map
-        other = dict(descriptor, key="arena_equator")
-        self.assertTrue(VD.door_pose_errors(other, path, None))
-        # once the registry carries the rows, the mirror is compared even for the pending key (a wrong count is reported)
-        self.assertTrue(any("registry's DoorPoses" in e for e in VD.door_pose_errors(with_barriers, path, [dict(self.poses[0])])))
+        # the mirror is compared like any other map's: a wrong count, and rows missing altogether, are reported
+        self.assertTrue(any("registry's DoorPoses" in e for e in VD.door_pose_errors(descriptor, path, [dict(registry[0])])))
+        self.assertTrue(any("registry's DoorPoses" in e for e in VD.door_pose_errors(descriptor, path, None)))
+        # the waivers still exist for a pending key (the next map's sidecar may land ahead of its promotion), and only for it
+        from unittest.mock import patch
+        with patch.object(VD, "PENDING_MIRROR_KEYS", ("arena_autoservice",)):
+            self.assertEqual(VD.door_pose_errors(descriptor, path, None), [])
+            self.assertTrue(VD.door_pose_errors(dict(descriptor, key="arena_equator"), path, None))
 
     def test_the_pending_list_holds_only_maps_that_are_not_released(self):
         self.assertFalse(set(VD.PENDING_MIRROR_KEYS) & set(VD.RELEASE_MAP_KEYS))
+        self.assertEqual(VD.PENDING_MIRROR_KEYS, ())
 
 
 class RealAutoserviceTests(unittest.TestCase):

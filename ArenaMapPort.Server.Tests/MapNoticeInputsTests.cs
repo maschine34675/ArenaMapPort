@@ -21,7 +21,7 @@ public sealed class MapNoticeInputsTests
     {
         IReadOnlyList<MapInfo> maps = MapInfo.FromRegistry();
         Assert.Equal(ArenaMapRegistry.All.Select(map => map.Key), maps.Select(map => map.Key));
-        Assert.Equal(new[] { "Equator", "Bay 5", "Air Pit", "Bowl", "Iceberg" }, maps.Select(map => map.Name));
+        Assert.Equal(new[] { "Equator", "Bay 5", "Air Pit", "Bowl", "Iceberg", "Chop Shop" }, maps.Select(map => map.Name));
 
         MapInfo bay5 = maps.Single(map => map.Key == "arena_bay5");
         ArenaMapDescriptor descriptor = ArenaMapRegistry.All.Single(map => map.Key == "arena_bay5");
@@ -98,7 +98,7 @@ public sealed class MapNoticeInputsTests
     {
         var input = NoticeTestData.Input(NoticeTestData.Verified(), NoticeTestData.Offered("arena_equator", "arena_bowl"));
         Assert.True(input.OfferedKnown);
-        Assert.Equal(new[] { "arena_bay5", "arena_airpit", "arena_iceberg" }, input.MissingMaps.Select(map => map.Key));
+        Assert.Equal(new[] { "arena_bay5", "arena_airpit", "arena_iceberg", "arena_autoservice" }, input.MissingMaps.Select(map => map.Key));
         Assert.Equal(new[] { "arena_equator", "arena_bowl" }, input.ScopeMaps.Select(map => map.Key));
 
         var unknown = NoticeTestData.Input(NoticeTestData.Verified(), null);
@@ -115,7 +115,7 @@ public sealed class MapNoticeInputsTests
     {
         MapAvailabilityInput input = MapNoticeInputs.Build(null, null, null, null, null, null, "0.3.0", true);
         Assert.Equal(GateState.NotStarted, input.Gate.State);
-        Assert.Equal(5, input.Maps.Count);
+        Assert.Equal(6, input.Maps.Count);
         Assert.Equal(ProbeState.NotAsked, input.Probe.State);
         Assert.Empty(input.SkippedHooks);
         Assert.Null(input.Files);
@@ -225,7 +225,7 @@ public sealed class MapNoticeInputsTests
             FileScan scan = MapNoticeInputs.ScanFiles(PluginDir, NoticeTestData.Maps, files);
             Assert.Equal(0, scan.MissingCount);
             Assert.Null(scan.FirstMissing);
-            Assert.Equal(5, scan.MapsChecked);
+            Assert.Equal(6, scan.MapsChecked);
             Assert.Empty(scan.MapNames);
         }
     }
@@ -358,26 +358,26 @@ public sealed class MapNoticeInputsTests
     public void TheAvailabilityLineNamesTheStateOfEveryInput()
     {
         MapAvailabilityInput healthy = NoticeTestData.Healthy();
-        Assert.Equal("availability: arena=verified, offered=5/5 [arena_equator,arena_bay5,arena_airpit,arena_bowl,arena_iceberg], files=ok, server=not_needed",
+        Assert.Equal("availability: arena=verified, offered=6/6 [arena_equator,arena_bay5,arena_airpit,arena_bowl,arena_iceberg,arena_autoservice], files=ok, server=not_needed",
             MapNoticeInputs.DescribeAvailability(healthy));
 
         MapAvailabilityInput failing = NoticeTestData.Input(NoticeTestData.NotVerified(ArenaInstallCause.NotRegistered), null, hooks: new[] { "BundleHost" });
-        Assert.Equal("availability: arena=not_verified:not_registered, offered=?/5, files=skipped, server=not_needed, skipped hooks=BundleHost",
+        Assert.Equal("availability: arena=not_verified:not_registered, offered=?/6, files=skipped, server=not_needed, skipped hooks=BundleHost",
             MapNoticeInputs.DescribeAvailability(failing));
 
         MapAvailabilityInput missing = NoticeTestData.Input(NoticeTestData.Verified(), NoticeTestData.Offered("arena_equator"),
             NoticeTestData.Ok(NoticeTestData.Status("not_verified", "not_registered")), new FileScan(1, new[] { "a", "b" }, new[] { "Equator" }));
-        Assert.Equal("availability: arena=verified, offered=1/5 [arena_equator], files=2 missing, server=ok:not_verified/not_registered",
+        Assert.Equal("availability: arena=verified, offered=1/6 [arena_equator], files=2 missing, server=ok:not_verified/not_registered",
             MapNoticeInputs.DescribeAvailability(missing));
     }
 
     [Fact]
     public void TheShowingSummaryCarriesTheCauseCodes()
     {
-        Assert.Equal("client=verified:none server=not_needed offered=5/5", MapNoticeInputs.DescribeSummary(NoticeTestData.Healthy()));
-        Assert.Equal("client=not_verified:files_mismatch server=not_needed offered=?/5",
+        Assert.Equal("client=verified:none server=not_needed offered=6/6", MapNoticeInputs.DescribeSummary(NoticeTestData.Healthy()));
+        Assert.Equal("client=not_verified:files_mismatch server=not_needed offered=?/6",
             MapNoticeInputs.DescribeSummary(NoticeTestData.Input(NoticeTestData.NotVerified(ArenaInstallCause.FilesMismatch), null)));
-        Assert.Equal("client=verified:none server=404 offered=0/5",
+        Assert.Equal("client=verified:none server=404 offered=0/6",
             MapNoticeInputs.DescribeSummary(NoticeTestData.Input(NoticeTestData.Verified(), new List<OfferedLocation>(), new ProbeView(ProbeState.NotFound))));
     }
 

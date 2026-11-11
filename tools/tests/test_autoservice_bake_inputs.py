@@ -93,10 +93,10 @@ DECIDED_SIDECAR_KEYS = {
     "uses_server_time": USES_SERVER_TIME,
     "puddle_water_material_names": PUDDLE_WATER_MATERIAL_NAMES,
 }
-# Keys the sidecar must NOT carry, and why: no extra puddle surface (Concrete suffices), no shader fallback row yet (item 11 decides after
-# the shader census), no authored_borders (the ExcludeLevelBorders polygon is a culling outline, not the movement border), no emission cap
+# Keys the sidecar must NOT carry, and why: no extra puddle surface (Concrete suffices), no shader fallback row WHEN ITEM 8 WROTE THE FILE (item 11
+# decided four names after the shader census and item 12 wrote them: tools/tests/test_autoservice_light.py pins the list), no authored_borders (the ExcludeLevelBorders polygon is a culling outline, not the movement border), no emission cap
 # (the strongest emissive material is 3.88), no native water (the map has no water surface: decision "No native water").
-OMITTED_SIDECAR_KEYS = ("puddle_extra_surfaces", "shader_fallback_names", "authored_borders", "emission_cap", "emission_floor", "has_native_water")
+OMITTED_SIDECAR_KEYS = ("puddle_extra_surfaces", "authored_borders", "emission_cap", "emission_floor", "has_native_water")
 
 # Anchors outside the package markers. The capture point is Arena's CapturePointEntity 33001; the two exits are the DRAFTS of the plan
 # (item 12 decides them): on Arena's main component, outside the gates.

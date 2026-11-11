@@ -69,6 +69,7 @@ namespace ArenaMapPort.Client
 
         static ConfigEntry<bool> _airPitStandins;
         static ConfigEntry<bool> _bowlStandins;
+        static ConfigEntry<bool> _autoServiceStandins;
         static ConfigEntry<FogSheetMode> _fogSheetMode;
         static ConfigEntry<float> _fogSheetOpacity;
 
@@ -83,6 +84,9 @@ namespace ArenaMapPort.Client
 
         internal static bool BowlStandinsEnabled =>
             _bowlStandins != null ? _bowlStandins.Value : ShaderStandinPolicy.BowlStandinsDefault;
+
+        internal static bool AutoServiceStandinsEnabled =>
+            _autoServiceStandins != null ? _autoServiceStandins.Value : ShaderStandinPolicy.AutoServiceStandinsDefault;
 
         internal static FogSheetMode FogMode =>
             _fogSheetMode != null ? _fogSheetMode.Value : ShaderStandinPolicy.FogSheetModeDefault;
@@ -104,6 +108,14 @@ namespace ArenaMapPort.Client
                 "2 side (draws both sides; a stand-in not verified against Arena's look); false = leave it on the " +
                 "magenta stand-in. The map bundle keeps rebound materials cached: restart EFT after switching this " +
                 "back to false.");
+            _autoServiceStandins = settings.Bind("MaterialFixes", "AutoServiceShaderStandins", ShaderStandinPolicy.AutoServiceStandinsDefault,
+                "AutoService only (arena_autoservice). Four of its Arena shaders are not in SPT's global shader bundle: the fog sheet " +
+                "(Custom/Billboard_FogSheet_Simple, 80 renderers), the cloth shaders (Cloth/ClothShader 92, Cloth/ClothShader_backface) " +
+                "and p0/Reflective/Bumped Specular SMap Baked (1 renderer). true = substitute SPT shaders where EFT's own copy is not " +
+                "loaded (fog: Unlit/Transparent Colored with a generated soft texture, cloth: p0/Cutout/Bumped Diffuse, the backface cloth: " +
+                "Legacy Shaders/Transparent/Cutout/Bumped Diffuse 2 side, Baked: p0/Reflective/Bumped Specular SMap; inferred, not " +
+                "verified against Arena's look); false = leave them on the magenta stand-in. The map bundle keeps rebound materials " +
+                "cached: restart EFT after switching this back to false.");
             _fogSheetMode = settings.Bind("MaterialFixes", "AirPitFogSheets", ShaderStandinPolicy.FogSheetModeDefault,
                 "AirPit only. StandIn = fog-sheet quads use the substitute shader (needs AirPitShaderStandins = true, " +
                 "otherwise they stay magenta). Hidden = their renderers are disabled at raid start, whatever " +

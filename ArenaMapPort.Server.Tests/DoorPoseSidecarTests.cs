@@ -36,12 +36,13 @@ public sealed class DoorPoseSidecarTests
         "bay5" => ArenaMapRegistry.Bay5,
         "airpit" => ArenaMapRegistry.AirPit,
         "iceberg" => ArenaMapRegistry.Iceberg,
+        "autoservice" => ArenaMapRegistry.AutoService,
         _ => throw new ArgumentOutOfRangeException(nameof(stem)),
     };
 
     public static IEnumerable<object[]> Maps => new[]
     {
-        new object[] { "bowl" }, new object[] { "equator" }, new object[] { "bay5" }, new object[] { "airpit" }, new object[] { "iceberg" },
+        new object[] { "bowl" }, new object[] { "equator" }, new object[] { "bay5" }, new object[] { "airpit" }, new object[] { "iceberg" }, new object[] { "autoservice" },
     };
 
     private static double Distance(float[] a, float[] b) =>
@@ -214,9 +215,10 @@ public sealed class DoorPoseSidecarTests
             Assert.True(boothRoot || map.OpenedBarriers.Contains(pose.Barrier) || lampGroup,
                 $"{stem}: pose barrier '{pose.Barrier}' is neither an OpenedBarriers entry, a booth assembly root nor a lamp group");
         }
-        // which barriers are lamp groups: Equator's EXIT_LIGHT_EMISSIVE and AirPit's BUS_LIGHT, nothing on Bowl and Bay5
+        // which barriers are lamp groups: Equator's EXIT_LIGHT_EMISSIVE, AirPit's BUS_LIGHT and Autoservice's DOORS (the four gate lamps LIGHT_1..4,
+        // the parent of its four gate barriers), nothing on Bowl, Bay5 and Iceberg
         var groups = map.DoorPoses.GroupBy(p => p.Barrier).Where(g => g.All(p => p.IsSwitch)).Select(g => g.Key).ToArray();
-        Assert.Equal(stem switch { "equator" => new[] { "EXIT_LIGHT_EMISSIVE" }, "airpit" => new[] { "BUS_LIGHT" }, _ => new string[0] }, groups);
+        Assert.Equal(stem switch { "equator" => new[] { "EXIT_LIGHT_EMISSIVE" }, "airpit" => new[] { "BUS_LIGHT" }, "autoservice" => new[] { "DOORS" }, _ => new string[0] }, groups);
     }
 
     [Fact]
@@ -416,13 +418,45 @@ public sealed class DoorPoseSidecarTests
     }
 
     [Fact]
-    public void OnlyTheFiveReleasedMapsCarryDoorPoses()
+    public void OnlyTheSixReleasedMapsCarryDoorPoses()
     {
         foreach (var map in ArenaMapRegistry.Catalog)
             Assert.Equal(ArenaMapRegistry.All.Contains(map), map.DoorPoses.Length > 0);
         Assert.All(ArenaMapRegistry.Bowl.DoorPoses.Concat(ArenaMapRegistry.Bay5.DoorPoses).Concat(ArenaMapRegistry.Iceberg.DoorPoses),
             p => Assert.False(p.IsSwitch));                                         // switches: AirPit's lamps and Equator's exit lamps only
         Assert.All(ArenaMapRegistry.Equator.DoorPoses.Where(p => p.IsSwitch), p => Assert.Equal("EXIT_LIGHT_EMISSIVE", p.Barrier));
+        Assert.All(ArenaMapRegistry.AutoService.DoorPoses.Where(p => p.IsSwitch), p => Assert.Equal("DOORS", p.Barrier));
+    }
+
+    [Fact]
+    public void AutoServiceHasNineteenMecanimRowsOnFourGatesAndFourLampSwitchesAndTheDoorsGroupIsNoGate()
+    {
+        // PLAN-AUTOSERVICE item 7/12 (docs/progress/autoservice-release.md, 2026-11-11): the big metal gate's leaf (8.0 s), the Equator roller's six
+        // nodes (4.5 s) and the two techlight rollers' six nodes each (6.733 s) come from Mecanim clips (smoothstep, no At: every barrier is a unit
+        // path of its own); the four lamps LIGHT_1..4 under DOORS are DotAnimator switch rows (1 and 3 GREEN on when open, 2 and 4 RED off).
+        var map = ArenaMapRegistry.AutoService;
+        Assert.Equal(23, map.DoorPoses.Length);
+        Assert.Equal(19, map.DoorPoses.Count(p => !p.IsSwitch));
+        Assert.All(map.DoorPoses.Where(p => !p.IsSwitch), p =>
+        {
+            Assert.Equal((ArenaDoorPose.SourceClip, ArenaDoorPose.EaseSmoothstep), (p.Source, p.Ease));
+            Assert.Null(p.At);
+            Assert.Contains(p.Barrier, map.StartGates);
+        });
+        Assert.Equal(new[] { 1, 6, 6, 6 }, map.OpenedBarriers.Select(b => map.DoorPoses.Count(p => p.Barrier == b)).ToArray());
+        Assert.Equal(new[] { 8.0f }, map.DoorPoses.Where(p => p.Barrier == "DOORS/big_gate_metal").Select(p => p.Seconds).Distinct().ToArray());
+        Assert.Equal(new[] { 4.5f }, map.DoorPoses.Where(p => p.Barrier == "DOORS/equator_roller_shutters_01").Select(p => p.Seconds).Distinct().ToArray());
+        Assert.Equal(new[] { 6.733f }, map.DoorPoses.Where(p => p.Barrier.StartsWith("DOORS/roller_shutters_techlight_01")).Select(p => p.Seconds).Distinct().ToArray());
+        // the lamp group: four parts, GREEN lit while open (1, 3) and RED lit while closed (2, 4)
+        var lamps = map.DoorPosesOfBarrier("DOORS");
+        Assert.Equal(4, lamps.Length);
+        Assert.All(lamps, p => Assert.True(p.IsSwitch));
+        Assert.Equal(new[] { "LIGHT_1", "LIGHT_2", "LIGHT_3", "LIGHT_4" }, lamps.Select(p => p.Part).ToArray());
+        Assert.Equal(new[] { "GREEN", "RED", "GREEN", "RED" }, lamps.Select(p => p.Node).ToArray());
+        Assert.Equal(new[] { false, true, false, true }, lamps.Select(p => p.ClosedActive == true).ToArray());
+        Assert.DoesNotContain("DOORS", map.OpenedBarriers);                         // the group root is NOT a gate (it would make it no lamp group)
+        Assert.DoesNotContain("DOORS", map.StartGates);
+        Assert.Empty(map.HeldGates);
     }
 
     private const string Passport = "PASSPORT_CONTROL_DOORS";

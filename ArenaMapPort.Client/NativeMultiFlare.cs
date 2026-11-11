@@ -34,7 +34,8 @@ namespace ArenaMapPort.Client
         {
             // AirPit carries no active FlareLight (PLAN-AIRPIT item 22) and stays out. Bowl (PLAN-BOWL item 17) has 4
             // active of 28 source lights, all far outside the play space: see docs/progress/native-multiflare.md.
-            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.Bowl })
+            // AutoService (PLAN-AUTOSERVICE item 11/12) has 8 active gas-lamp flares inside the play space (package work/extract/multiflare/arena_autoservice).
+            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.Bowl, ArenaMapRegistry.AutoService })
             {
                 Enabled[map.Key] = Plugin.Instance.Settings.Bind("Lighting (" + map.Key + ")", "NativeMultiFlare", true,
                     "Restore original per-lamp flare sprites and lens effects with native depth occlusion. " +

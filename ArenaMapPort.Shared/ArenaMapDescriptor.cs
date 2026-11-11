@@ -1243,7 +1243,116 @@ namespace ArenaMapPort.Shared
             // Heating_register renderers and is not listed. Mirrors tools/maps/autoservice.json puddle_water_material_names.
             PuddleWaterMaterialNames: new[] { "0877f2335044042e" },
             // Native advancing server time (user, 2026-11-08): no Directional light exists in the imported scenes, the WeatherRig supplies it.
-            UsesServerTime: true);
+            UsesServerTime: true,
+            // PLAN-AUTOSERVICE item 6/12 (docs/progress/autoservice-release.md, 2026-11-11). Exits mirror tools/maps/autoservice.exits.json
+            // (AutoServiceMapTests): one gate in the yard outside each pocket, on Arena's own NavMesh main component. Offline draft, not walked on
+            // the host; Arena authors no extraction on this map.
+            Exits: new[]
+            {
+                new ArenaExitDescriptor("Chop Shop East Gate", -349.0f, -3.77f, 488.5f),
+                new ArenaExitDescriptor("Chop Shop West Gate", -393.0f, -3.79f, 501.0f),
+            },
+            // Shader stand-ins (PLAN-AUTOSERVICE item 11/12; mirrors tools/maps/autoservice.json shader_fallback_names). All 28 shader names of the
+            // package exist in EFT 0.16.9.5; these four live only in scene shared assets (fog sheet sharedassets13, the two cloth shaders
+            // sharedassets5, SMap Baked sharedassets216). Fog sheet and cloth resolve in process on AirPit by host evidence (the stand-ins stay the
+            // safety net); the Baked reflective shader is inferred NOT loaded on a ported raid (Reserve_Base_Scripts and MenuUIScene do not list
+            // sharedassets216), which would leave Factory_Building_04_Outdoor_LODLAST magenta. Switch: MaterialFixes/AutoServiceShaderStandins.
+            ShaderFallbackNames: new[]
+            {
+                "Custom/Billboard_FogSheet_Simple",
+                "Cloth/ClothShader",
+                "Cloth/ClothShader_backface",
+                "p0/Reflective/Bumped Specular SMap Baked",
+            },
+            // Arena animates the four gates of Arena_AutoService_TeamFight_DesignStuff's DOORS with Mecanim clips (one gate leaf, three roller
+            // shutters of six nodes each) and the four gate lamps LIGHT_1..4 with DotAnimators (switch rows). Decoded by
+            // tools/extract/extract_door_poses.py (Arena 0.6.2.0.48473). The equator shutter keeps the scene pose as the closed pose of its
+            // collider nodes. Mirrors tools/maps/autoservice.doors.json (DoorPoseSidecarTests).
+            DoorPoses: new[]
+            {
+                new ArenaDoorPose("DOORS/big_gate_metal", "gate", "", "1_big_gate_metal_animation", 8.0f,
+                    new[] { 0.0f, 3.08f, 2.96f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, -2.7f, 2.96f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/equator_roller_shutters_01", "roller_shutters_01_BALLISTIC_metalthin", "", "1_equator_roller_shutters_01_animation", 4.5f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 3.008f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/equator_roller_shutters_01", "roller_shutters_01_COLLIDER", "", "1_equator_roller_shutters_01_animation", 4.5f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 3.008f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/equator_roller_shutters_01", "roller_shutters_01_LOD0", "", "1_equator_roller_shutters_01_animation", 4.5f,
+                    new[] { 0.0f, 0.0f, 0.981f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 3.008f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/equator_roller_shutters_01", "roller_shutters_01_LOD1", "", "1_equator_roller_shutters_01_animation", 4.5f,
+                    new[] { 0.0f, 0.0f, 0.981f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 3.008f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/equator_roller_shutters_01", "roller_shutters_01_LOD2", "", "1_equator_roller_shutters_01_animation", 4.5f,
+                    new[] { 0.0f, 0.0f, 0.981f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 3.008f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/equator_roller_shutters_01", "roller_shutters_01_SHADOW_LOD0", "", "1_equator_roller_shutters_01_animation", 4.5f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 3.008f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/roller_shutters_techlight_01", "roller_shutters_techlight_01_BALLISTIC_metalthin", "", "2_roller_shutters_techlight_01_animation", 6.733f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 2.713f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/roller_shutters_techlight_01", "roller_shutters_techlight_01_COLLIDER", "", "2_roller_shutters_techlight_01_animation", 6.733f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 2.713f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/roller_shutters_techlight_01", "roller_shutters_techlight_01_LOD0", "", "2_roller_shutters_techlight_01_animation", 6.733f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 2.713f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/roller_shutters_techlight_01", "roller_shutters_techlight_01_LOD1", "", "2_roller_shutters_techlight_01_animation", 6.733f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 2.713f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/roller_shutters_techlight_01", "roller_shutters_techlight_01_LOD2", "", "2_roller_shutters_techlight_01_animation", 6.733f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 2.713f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/roller_shutters_techlight_01", "roller_shutters_techlight_01_SHADOW_LOD0", "", "2_roller_shutters_techlight_01_animation", 6.733f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 2.713f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/roller_shutters_techlight_01 (1)", "roller_shutters_techlight_01_BALLISTIC_metalthin", "", "2_roller_shutters_techlight_01_animation", 6.733f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 2.713f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/roller_shutters_techlight_01 (1)", "roller_shutters_techlight_01_COLLIDER", "", "2_roller_shutters_techlight_01_animation", 6.733f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 2.713f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/roller_shutters_techlight_01 (1)", "roller_shutters_techlight_01_LOD0", "", "2_roller_shutters_techlight_01_animation", 6.733f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 2.713f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/roller_shutters_techlight_01 (1)", "roller_shutters_techlight_01_LOD1", "", "2_roller_shutters_techlight_01_animation", 6.733f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 2.713f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/roller_shutters_techlight_01 (1)", "roller_shutters_techlight_01_LOD2", "", "2_roller_shutters_techlight_01_animation", 6.733f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 2.713f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS/roller_shutters_techlight_01 (1)", "roller_shutters_techlight_01_SHADOW_LOD0", "", "2_roller_shutters_techlight_01_animation", 6.733f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 2.713f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS", "LIGHT_1", "GREEN", "DotAnimator", 0.0f,
+                    new[] { -121.665f, -3.604f, 9.888f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -121.665f, -3.604f, 9.888f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("DOORS", "LIGHT_2", "RED", "DotAnimator", 0.0f,
+                    new[] { -76.377f, -2.733f, -82.713f }, new[] { 0.0f, -96.507f, 0.0f },
+                    new[] { -76.377f, -2.733f, -82.713f }, new[] { 0.0f, -96.507f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: true, OpenActive: false),
+                new ArenaDoorPose("DOORS", "LIGHT_3", "GREEN", "DotAnimator", 0.0f,
+                    new[] { -120.861f, -3.78f, 10.3f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -120.861f, -3.78f, 10.3f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("DOORS", "LIGHT_4", "RED", "DotAnimator", 0.0f,
+                    new[] { -76.376f, -2.708f, -82.719f }, new[] { 0.0f, -96.507f, 0.0f },
+                    new[] { -76.376f, -2.708f, -82.719f }, new[] { 0.0f, -96.507f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: true, OpenActive: false),
+            },
+            // Score monitors (tools/maps/autoservice.monitors.json, docs/progress/score-monitors.md): four TV props of Arena_AutoService_DesignStuff,
+            // all active: two timer faces (type word 0) and two alive faces (word 2).
+            ScoreMonitors: new[]
+            {
+                new ArenaScoreMonitor("Arena_AutoService_DesignStuff", "TV (1)/Arena_Home_theater (1)", new[] { -381.4771f, 4.8499f, 468.8919f }, 2, true),
+                new ArenaScoreMonitor("Arena_AutoService_DesignStuff", "TV (1)/Arena_Home_theater (2)", new[] { -400.9498f, 8.1449f, 489.424f }, 0, true),
+                new ArenaScoreMonitor("Arena_AutoService_DesignStuff", "TV (1)/Arena_Home_theater (3)", new[] { -345.8202f, 8.1699f, 489.18f }, 0, true),
+                new ArenaScoreMonitor("Arena_AutoService_DesignStuff", "TV (1)/Arena_Home_theater (5)", new[] { -367.771f, 4.7428f, 509.5993f }, 2, true),
+            });
 
         // Source scene selection: tools/extract/plans/bowl.json. Identity is permanent.
         public static readonly ArenaMapDescriptor Bowl = new(
@@ -1649,7 +1758,7 @@ namespace ArenaMapPort.Shared
         /// <summary>Playable and distributable maps. Runtime consumers must iterate this release subset.
         /// Equator, Bay5 and AirPit are the released ones (0.2.2); Bowl joined for 0.3.0 (PLAN-BOWL item 8, 2026-10-18) and shipped with it;
         /// Iceberg joined on feature/iceberg (PLAN-ICEBERG item 12, 2026-10-30) and is registered and staged, not yet released (its bundles
-        /// wait for the first Unity build).</summary>
-        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5, AirPit, Bowl, Iceberg };
+        /// wait for the first Unity build); AutoService joined on feature/autoservice (PLAN-AUTOSERVICE item 12, 2026-11-11) in the same state.</summary>
+        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5, AirPit, Bowl, Iceberg, AutoService };
     }
 }

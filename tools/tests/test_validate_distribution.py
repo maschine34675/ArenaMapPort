@@ -47,7 +47,8 @@ KEY_SOURCES = {"arena_equator": ((51, "assets.resS"), (55, "assets.resS"), (57, 
                                 (40, "assets.resS"), (324, "assets.resS")),
                "arena_bowl": ((41, "assets.resS"), (41, "resource"), (45, "assets.resS"), (46, "assets.resS"), (47, "assets.resS"),
                               (48, "assets.resS"), (48, "resource"), (95, "assets.resS")),
-               "arena_iceberg": ((256, "assets.resS"), (258, "assets.resS"), (375, "assets.resS"), (376, "assets.resS"))}
+               "arena_iceberg": ((256, "assets.resS"), (258, "assets.resS"), (375, "assets.resS"), (376, "assets.resS")),
+               "arena_autoservice": ((62, "assets.resS"), (62, "resource"), (66, "assets.resS"))}
 
 
 def source(n, kind="assets.resS", size=None):
@@ -184,7 +185,8 @@ class DistributionSidecarTests(unittest.TestCase):
         (self.plugin / "material-shaders.arena_equator.json").write_text("{}", encoding="utf-8")
         for key, scene in (("arena_equator", "Arena_Equator_Lighting"),
                            ("arena_bay5", "Arena_Bay5_Light"),
-                           ("arena_bowl", "Arena_Bowl_Light")):
+                           ("arena_bowl", "Arena_Bowl_Light"),
+                           ("arena_autoservice", "Arena_AutoService_Light")):
             package = flare_graph()
             package["map_key"] = key
             package["lights"][0]["scene"] = scene
@@ -216,12 +218,14 @@ class DistributionSidecarTests(unittest.TestCase):
         for folder in (self.server / "db/arena_equator", self.repo / "ArenaMapPort.Server/db/arena_equator"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_equator"}', encoding="utf-8")
-        # The release is exactly five maps (Bowl since PLAN-BOWL item 8, 2026-10-18, Iceberg since PLAN-ICEBERG item 12, 2026-10-30), even
+        # The release is exactly six maps (Bowl since PLAN-BOWL item 8, 2026-10-18, Iceberg since PLAN-ICEBERG item 12, 2026-10-30, Autoservice since
+        # PLAN-AUTOSERVICE item 12, 2026-11-11), even
         # when parked descriptors remain in source.
         (self.maps / "bay5.json").write_text(json.dumps({"key": "arena_bay5", "db_base_json_path": "arena_bay5/base.json"}), encoding="utf-8")
         (self.maps / "airpit.json").write_text(json.dumps({"key": "arena_airpit", "db_base_json_path": "arena_airpit/base.json"}), encoding="utf-8")
         (self.maps / "bowl.json").write_text(json.dumps({"key": "arena_bowl", "db_base_json_path": "arena_bowl/base.json"}), encoding="utf-8")
         (self.maps / "iceberg.json").write_text(json.dumps({"key": "arena_iceberg", "db_base_json_path": "arena_iceberg/base.json"}), encoding="utf-8")
+        (self.maps / "autoservice.json").write_text(json.dumps({"key": "arena_autoservice", "db_base_json_path": "arena_autoservice/base.json"}), encoding="utf-8")
         self.put_bundles("arena_bay5")
         (self.plugin / "material-shaders.arena_bay5.json").write_text("{}", encoding="utf-8")
         for folder in (self.server / "db/arena_bay5", self.repo / "ArenaMapPort.Server/db/arena_bay5"):
@@ -248,6 +252,13 @@ class DistributionSidecarTests(unittest.TestCase):
         for folder in (self.server / "db/arena_iceberg", self.repo / "ArenaMapPort.Server/db/arena_iceberg"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_iceberg"}', encoding="utf-8")
+        # Autoservice (PLAN-AUTOSERVICE item 12): bundles, shader sidecar, database, art (five loading images), AI sidecar, acoustics, gate sounds and a
+        # flare package (the loop above); no spectator package (crowdless), no water and no overview pack (explicit absences, never fake data).
+        self.put_bundles("arena_autoservice")
+        (self.plugin / "material-shaders.arena_autoservice.json").write_text("{}", encoding="utf-8")
+        for folder in (self.server / "db/arena_autoservice", self.repo / "ArenaMapPort.Server/db/arena_autoservice"):
+            folder.mkdir(parents=True)
+            (folder / "base.json").write_text('{"Id": "arena_autoservice"}', encoding="utf-8")
         self.built = {}
         for name, destination in (("Client", self.plugin), ("Server", self.server)):
             built = self.repo / f"ArenaMapPort.{name}/bin/Release/maschine-ArenaMapPort.{name}.dll"
@@ -256,7 +267,7 @@ class DistributionSidecarTests(unittest.TestCase):
             (destination / built.name).write_bytes(built.read_bytes())
             self.built[name] = built
 
-    RELEASED = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg")
+    RELEASED = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice")
 
     @staticmethod
     def banner_names():
@@ -494,7 +505,7 @@ class DistributionSidecarTests(unittest.TestCase):
         self.assertEqual(Path(descriptors[1]).name, "validate_map_descriptors.py")
         # The bundle-name validator is told where the key store is: it reads the encrypted bundles through the tool.
         self.assertEqual(names[-2:], ["--key-store", str(self.repo / "work" / "release-keys")])
-        self.assertIn("DISTRIBUTION_OK 5 maps 15 bundles 5 sidecars encrypted", output.getvalue())
+        self.assertIn("DISTRIBUTION_OK 6 maps 18 bundles 6 sidecars encrypted", output.getvalue())
 
     def test_distribution_accepts_bots_exits_and_other_dotted_sidecars(self):
         (self.maps / "equator.bots.json").write_text('{"player_spawns": []}', encoding="utf-8")
@@ -788,7 +799,7 @@ class DistributionSidecarTests(unittest.TestCase):
                 if path.parent != keys:
                     path.parent.rmdir()
         shutil.rmtree(keys)
-        with self.assertRaisesRegex(ValueError, "Key file set mismatch: missing=\\['arena_airpit.json', 'arena_bay5.json', 'arena_bowl.json', 'arena_equator.json', 'arena_iceberg.json'\\]"):
+        with self.assertRaisesRegex(ValueError, "Key file set mismatch: missing=\\['arena_airpit.json', 'arena_autoservice.json', 'arena_bay5.json', 'arena_bowl.json', 'arena_equator.json', 'arena_iceberg.json'\\]"):
             self.validate()
 
     def test_key_files_must_have_the_schema_and_nothing_else(self):
@@ -1008,6 +1019,51 @@ class DistributionSidecarTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Water file set mismatch"):
             self.validate()
         shutil.rmtree(self.plugin / "water/arena_bowl")
+        self.validate()
+
+    def test_autoservice_is_crowdless_and_carries_five_loadscreens_and_flares_but_no_sea_and_no_overview(self):
+        # PLAN-AUTOSERVICE item 12 (2026-11-11): the sixth released map is crowdless like Iceberg, ships the flare package of its eight gas lamps
+        # (FLARE_MAP_KEYS) and has neither a native sea (WATER_MAP_KEYS) nor a DynamicMaps overview pack (OVERVIEW_MAP_NAMES): explicit absences.
+        self.assertEqual(5, len(extract_loadscreens.LOADSCREENS["arena_autoservice"]))
+        self.assertEqual({f"arena_autoservice_{n}.jpg" for n in range(1, 6)},
+                         {p.name for p in (self.plugin / "loadscreens").glob("arena_autoservice_*.jpg")})
+        self.assertFalse((self.plugin / "spectators/arena_autoservice").exists())
+        self.assertFalse((self.plugin / "water/arena_autoservice").exists())
+        self.assertFalse((self.plugin / "dynamicmaps/ArenaMapPort_AutoService").exists())
+        self.assertTrue((self.plugin / "flares/arena_autoservice/flares.json").is_file())
+        self.validate()
+        # a crowd package of the crowdless map is refused by the staged-spectator check
+        (self.plugin / "spectators/arena_autoservice").mkdir()
+        (self.plugin / "spectators/arena_autoservice" / stage_spectators.GRAPH).write_bytes(b"x")
+        with self.assertRaisesRegex(ValueError, "unexpected or missing spectator folder"):
+            self.validate()
+        shutil.rmtree(self.plugin / "spectators/arena_autoservice")
+        # neither a water package nor an overview pack may appear before the map lists them on purpose
+        (self.plugin / "water/arena_autoservice").mkdir(parents=True)
+        (self.plugin / "water/arena_autoservice/water.json").write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Water file set mismatch"):
+            self.validate()
+        shutil.rmtree(self.plugin / "water/arena_autoservice")
+        stray = self.plugin / "dynamicmaps/ArenaMapPort_AutoService/Layers/Ground.svg"
+        stray.parent.mkdir(parents=True)
+        stray.write_text("<svg/>", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Unexpected or missing overview"):
+            self.validate()
+        shutil.rmtree(self.plugin / "dynamicmaps/ArenaMapPort_AutoService")
+        # the flare package is required, exactly
+        stray_flare = self.plugin / "flares/arena_autoservice/Unexpected.json"
+        stray_flare.write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Unexpected or missing flare package files"):
+            self.validate()
+        stray_flare.unlink()
+        texture = next((self.plugin / "flares/arena_autoservice/textures").glob("*.bin"))
+        data = texture.read_bytes()
+        texture.unlink()
+        try:
+            with self.assertRaises(FileNotFoundError):
+                self.validate()
+        finally:
+            texture.write_bytes(data)
         self.validate()
 
     def test_iceberg_is_crowdless_and_carries_five_loadscreens_sea_and_overview_but_no_flares(self):

@@ -55,5 +55,11 @@
   "keep_level_borders": true,
   "puddle_water_material_names": [
     "0877f2335044042e"
+  ],
+  "shader_fallback_names": [
+    "Custom/Billboard_FogSheet_Simple",
+    "Cloth/ClothShader",
+    "Cloth/ClothShader_backface",
+    "p0/Reflective/Bumped Specular SMap Baked"
   ]
 }

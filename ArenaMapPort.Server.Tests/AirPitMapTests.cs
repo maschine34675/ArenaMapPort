@@ -233,8 +233,8 @@ public sealed class AirPitMapTests
         using var server = JsonDocument.Parse(File.ReadAllText(BaseJsonPath));
         var map = ArenaMapRegistry.AirPit;
 
-        // Bowl joined the released set with PLAN-BOWL item 8 (2026-10-18), Iceberg with PLAN-ICEBERG item 12 (2026-10-30); every released map is checked below.
-        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg" }, ArenaMapRegistry.All.Select(m => m.Key));
+        // Bowl joined the released set with PLAN-BOWL item 8 (2026-10-18), Iceberg with PLAN-ICEBERG item 12 (2026-10-30), Autoservice with PLAN-AUTOSERVICE item 12 (2026-11-11); every released map is checked below.
+        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice" }, ArenaMapRegistry.All.Select(m => m.Key));
         Assert.Equal("Arena: Air Pit", map.LocaleName);
         Assert.Equal(sidecar.RootElement.GetProperty("locale_name").GetString(), map.LocaleName);
         Assert.Equal(sidecar.RootElement.GetProperty("locale_description").GetString(), map.LocaleDescription);

@@ -16,7 +16,7 @@ namespace ArenaMapPort.Client
     /// at 0.25 with a 3 m reach (17 of them; two reach 5 m, one 7 m): Bowl's mix would lift them to about 0.75 and 9 m, a hum in every interior, and would
     /// flatten the Common-in players (median 0.10) to about 0.54. With offset 0 the authored balance between the groups stays; range 2 still
     /// carries the far exterior sources (10 to 100 m) and 17 of the 20 lamps reach 6 m (the other three reach 10, 10 and 14 m). Its keys are new, so no migration step touches them.
-    /// Autoservice (PLAN-AUTOSERVICE item 4, 2026-11-08) is STAGED (no released profile yet, see <see cref="AmbientAudioProfiles.Staged"/>) and starts with
+    /// Autoservice (PLAN-AUTOSERVICE item 4, 2026-11-08; in <see cref="AmbientAudioProfiles.All"/> since item 12, 2026-11-11) starts with
     /// gain 3 dB, offset 0.2 and range 3, a start value until a listening pass: the plan's first guess was Bowl's row (3 dB, 0.4, 3), but nine of the
     /// 18 interior players are the <c>water_drops</c> season players authored at 0.07 (the other interior volumes are 0.12 x4, 0.15 x2, 0.2 x3; the exterior
     /// median is 0.30): the volume is <c>volume * gain + offset</c>, so offset 0.4 lifts the drops to about 0.50 (7x its authored level) against 0.68 for the 0.2 players

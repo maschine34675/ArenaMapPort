@@ -16,9 +16,9 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
 
     private Dictionary<string, Dictionary<string, string>> Fixture() => new()
     {
-        ["en"] = new() { ["arena_equator"] = "English mall fixture", ["arena_bay5"] = "English harbor fixture", ["arena_airpit"] = "English terminal fixture", ["arena_bowl"] = "English stadium fixture" },
-        ["ge"] = new() { ["arena_equator"] = "German mall fixture", ["arena_bay5"] = "German harbor fixture", ["arena_airpit"] = "German terminal fixture", ["arena_bowl"] = "German stadium fixture" },
-        ["ru"] = new() { ["arena_equator"] = "Russian mall fixture", ["arena_bay5"] = "Russian harbor fixture", ["arena_airpit"] = "Russian terminal fixture", ["arena_bowl"] = "Russian stadium fixture" },
+        ["en"] = new() { ["arena_equator"] = "English mall fixture", ["arena_bay5"] = "English harbor fixture", ["arena_airpit"] = "English terminal fixture", ["arena_bowl"] = "English stadium fixture", ["arena_autoservice"] = "English workshop fixture" },
+        ["ge"] = new() { ["arena_equator"] = "German mall fixture", ["arena_bay5"] = "German harbor fixture", ["arena_airpit"] = "German terminal fixture", ["arena_bowl"] = "German stadium fixture", ["arena_autoservice"] = "German workshop fixture" },
+        ["ru"] = new() { ["arena_equator"] = "Russian mall fixture", ["arena_bay5"] = "Russian harbor fixture", ["arena_airpit"] = "Russian terminal fixture", ["arena_bowl"] = "Russian stadium fixture", ["arena_autoservice"] = "Russian workshop fixture" },
     };
 
     private static string Kind(ArenaMapDescriptor map) => map.Key switch
@@ -27,7 +27,7 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
         "arena_bay5" => " harbor fixture",
         "arena_airpit" => " terminal fixture",
         "arena_bowl" => " stadium fixture", // PLAN-BOWL item 8, 2026-10-18
-        "arena_autoservice" => " workshop fixture", // PLAN-AUTOSERVICE item 9, 2026-11-11 (pending: not in All yet)
+        "arena_autoservice" => " workshop fixture", // PLAN-AUTOSERVICE item 9, 2026-11-11; released set since item 12
         _ => throw new InvalidOperationException("no official text for " + map.Key),
     };
 
@@ -41,6 +41,11 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
     /// <summary>The registry as it was before Iceberg joined: the same pack must be valid for it too.</summary>
     private static IReadOnlyList<ArenaMapDescriptor> ReleasedWithoutIceberg =>
         ArenaMapRegistry.All.Where(map => map.Key != ArenaMapRegistry.Iceberg.Key).ToArray();
+
+    /// <summary>The registry as it was before Autoservice joined (the four older maps and Iceberg): a pack that already carries Autoservice's entry
+    /// is then a pack with an entry for a Catalog map that is not released yet.</summary>
+    private static IReadOnlyList<ArenaMapDescriptor> ReleasedWithoutAutoService =>
+        ArenaMapRegistry.All.Where(map => map.Key != ArenaMapRegistry.AutoService.Key).ToArray();
 
     private void WritePack(Dictionary<string, Dictionary<string, string>> descriptions, int version = 1) =>
         File.WriteAllText(PackPath, JsonSerializer.Serialize(new { schema_version = version, descriptions }));
@@ -72,7 +77,7 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
     [Fact]
     public void Official_text_maps_are_released_maps_and_the_key_set_of_the_extractors_pack()
     {
-        // Every map with an official text is a Catalog map (released, or pending like Autoservice before its promotion, item 12),
+        // Every map with an official text is a Catalog map (released; Autoservice was pending between item 9 and its promotion, item 12),
         // every released map's official text is listed, in the order of the pack generator's table, and the C# list is the
         // key set of extract_map_descriptions.DESCRIPTION_KEYS (they change together: a new Arena location id goes into the
         // Python table, the key into ArenaMapDescriptions.OfficialTextMapKeys).
@@ -105,8 +110,8 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
     [InlineData("fr")]
     public void A_released_map_without_an_official_text_answers_with_its_own_description_and_costs_the_others_nothing(string language)
     {
-        // PLAN-ICEBERG item 10: Arena's locales have no Iceberg row, so the pack covers the four official maps only. With
-        // Iceberg released the pack still loads (no warning) and the four keep their official texts; Iceberg answers with
+        // PLAN-ICEBERG item 10: Arena's locales have no Iceberg row, so the pack covers the official maps only (five since Autoservice). With
+        // Iceberg released the pack still loads (no warning) and the official maps keep their texts; Iceberg answers with
         // the descriptor's own text, one string for every language.
         WritePack(Fixture());
         var warnings = new List<string>();
@@ -158,7 +163,7 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
         // edit it on purpose (review of 2026-10-30): Iceberg is the one released map Arena's locales have no Name or Description row for.
         var without = ArenaMapRegistry.All.Where(map => !ArenaMapDescriptions.HasOfficialText(map)).Select(map => map.Key).ToArray();
         Assert.Equal(new[] { "arena_iceberg" }, without);
-        // OfficialTextMapKeys also lists the pending Autoservice (item 9, before its promotion): the released maps with a text are All minus Iceberg.
+        // OfficialTextMapKeys lists the five maps with an official text (Autoservice since item 9, released with item 12): the released maps with a text are All minus Iceberg.
         var releasedKeys = ArenaMapRegistry.All.Select(m => m.Key).ToHashSet();
         var releasedOfficial = ArenaMapDescriptions.OfficialTextMapKeys.Where(releasedKeys.Contains).ToArray();
         Assert.Equal(ArenaMapRegistry.All.Count - 1, releasedOfficial.Length);
@@ -180,67 +185,59 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
         }
     }
 
-    private static Dictionary<string, Dictionary<string, string>> FixtureWithAutoService()
-    {
-        var data = new Dictionary<string, Dictionary<string, string>>();
-        foreach (var (language, texts) in new Dictionary<string, Dictionary<string, string>>
-        {
-            ["en"] = new() { ["arena_autoservice"] = "English workshop fixture" },
-            ["ge"] = new() { ["arena_autoservice"] = "German workshop fixture" },
-            ["ru"] = new() { ["arena_autoservice"] = "Russian workshop fixture" },
-        }) data[language] = texts;
-        return data;
-    }
-
     [Fact]
-    public void Autoservice_is_an_official_text_map_that_is_pending_until_it_is_released()
+    public void Autoservice_is_an_official_text_map_of_the_released_set()
     {
-        // PLAN-AUTOSERVICE item 9: Arena's location id 6441004f... has Name and Description rows, so the map is in
-        // OfficialTextMapKeys ahead of its promotion (item 12). The extractor's pack then carries its entry too.
+        // PLAN-AUTOSERVICE item 9: Arena's location id 6441004f... has Name and Description rows, so the map is in OfficialTextMapKeys; it joined
+        // ArenaMapRegistry.All with item 12 (2026-11-11), which makes its pack entry mandatory by itself (the loader did not change).
         Assert.True(ArenaMapDescriptions.HasOfficialText(ArenaMapRegistry.AutoService));
-        Assert.DoesNotContain(ArenaMapRegistry.AutoService, ArenaMapRegistry.All);
+        Assert.Contains(ArenaMapRegistry.AutoService, ArenaMapRegistry.All);
+        Assert.Contains(ArenaMapRegistry.AutoService, OfficialTextMaps);
     }
 
     [Theory]
     [InlineData("en")]
     [InlineData("ge")]
     [InlineData("ru")]
-    public void A_pack_with_the_pending_autoservice_entry_loads_for_the_released_maps_and_costs_them_nothing(string language)
+    public void The_five_entry_pack_gives_autoservice_its_official_text_and_costs_the_others_nothing(string language)
     {
-        // The pack the extractor writes today has five entries per language; the server that registers five maps must neither
-        // discard it (the four official texts would be lost) nor require the pending entry from a pack that lacks it.
-        var data = Fixture();
-        foreach (var (lang, texts) in FixtureWithAutoService()) data[lang]["arena_autoservice"] = texts["arena_autoservice"];
-        WritePack(data);
+        WritePack(Fixture());
         var warnings = new List<string>();
         var pack = ArenaMapDescriptions.Load(PackPath, warnings.Add);
         Assert.Empty(warnings);
         foreach (var map in OfficialTextMaps)
             Assert.EndsWith(Kind(map), pack.Resolve(language, map));
         Assert.EndsWith(" workshop fixture", pack.Resolve(language, ArenaMapRegistry.AutoService));
-
-        // And the four-entry pack stays valid until the promotion.
-        WritePack(Fixture());
-        warnings.Clear();
-        ArenaMapDescriptions.Load(PackPath, warnings.Add);
-        Assert.Empty(warnings);
     }
 
     [Fact]
-    public void Once_autoservice_is_released_its_entry_is_required()
+    public void A_pack_from_before_the_autoservice_promotion_is_discarded_whole()
     {
-        // The promotion (item 12) makes the pending entry mandatory: a pack from before it is discarded whole, as for every map.
-        var released = ArenaMapRegistry.All.Append(ArenaMapRegistry.AutoService).ToArray();
+        // The promotion (item 12) made the Autoservice entry mandatory: a four-entry pack (the pack the extractor wrote before item 9) is discarded
+        // whole, as for every released map, and every map answers with its own description. The extractor's pack already carries the entry.
         var data = Fixture();
-        foreach (var (lang, texts) in FixtureWithAutoService()) data[lang]["arena_autoservice"] = texts["arena_autoservice"];
+        foreach (var language in data.Values) language.Remove("arena_autoservice");
         WritePack(data);
         var warnings = new List<string>();
-        ArenaMapDescriptions.Load(PackPath, warnings.Add, released);
-        Assert.Empty(warnings);
-
-        WritePack(Fixture());
-        ArenaMapDescriptions.Load(PackPath, warnings.Add, released);
+        var pack = ArenaMapDescriptions.Load(PackPath, warnings.Add);
         Assert.Single(warnings);
+        Assert.Contains("locales/map-descriptions.json", warnings[0]);
+        foreach (var map in ArenaMapRegistry.All)
+            Assert.Equal(map.LocaleDescription, pack.Resolve("ge", map));
+    }
+
+    [Fact]
+    public void The_generic_pending_rule_stays_an_entry_for_a_catalog_map_that_is_not_released_is_accepted()
+    {
+        // The loader's rule is map-agnostic: against a registry that does not release Autoservice (the registry of 0.5.0 plus Iceberg), the five-entry
+        // pack loads without a warning and the entry costs the released maps nothing.
+        WritePack(Fixture());
+        var warnings = new List<string>();
+        var pack = ArenaMapDescriptions.Load(PackPath, warnings.Add, ReleasedWithoutAutoService);
+        Assert.Empty(warnings);
+        foreach (var map in ReleasedWithoutAutoService.Where(ArenaMapDescriptions.HasOfficialText))
+            Assert.EndsWith(Kind(map), pack.Resolve("en", map));
+        Assert.EndsWith(" workshop fixture", pack.Resolve("en", ArenaMapRegistry.AutoService));
     }
 
     [Theory]

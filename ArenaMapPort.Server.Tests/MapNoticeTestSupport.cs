@@ -11,7 +11,7 @@ internal static class NoticeTestData
     internal const string Version = "0.3.0";
     internal const string ArenaPath = @"D:\Battlestate Games\Escape from Tarkov Arena";
 
-    internal static readonly string[] RegistryKeys = { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg" };
+    internal static readonly string[] RegistryKeys = { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice" };
 
     internal static IReadOnlyList<MapInfo> Maps => MapInfo.FromRegistry();
 
@@ -35,7 +35,7 @@ internal static class NoticeTestData
         FileScan files = null, IReadOnlyList<string> hooks = null, bool enabled = true) =>
         MapNoticeInputs.Build(gate, Maps, offered, files, probe, hooks, Version, enabled);
 
-    internal static MapAvailabilityInput Healthy() => Input(Verified(), AllOffered(), null, FileScan.Clean(5));
+    internal static MapAvailabilityInput Healthy() => Input(Verified(), AllOffered(), null, FileScan.Clean(6));
 
     internal static ServerStatusView Status(string gateState, string cause, string source = "none", string overrideFile = "absent",
         string serverVersion = "0.3.0", string manifestVersion = null, int mismatches = 0, params (string Key, string State, string Cause)[] maps) =>
@@ -155,7 +155,7 @@ internal sealed class FakeNoticeEnvironment : INoticeEnvironment
     public GateSnapshot Gate { get; set; } = NoticeTestData.Verified();
     public bool OfferedAvailable { get; set; } = true;
     public List<OfferedLocation> Locations { get; set; } = NoticeTestData.AllOffered();
-    public FileScan Scan { get; set; } = FileScan.Clean(5);
+    public FileScan Scan { get; set; } = FileScan.Clean(6);
     public int ScanCalls { get; private set; }
     public IReadOnlyList<MapInfo> LastScanScope { get; private set; }
 

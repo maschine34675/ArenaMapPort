@@ -1,11 +1,11 @@
-"""The crowdless-map rule (PLAN-ICEBERG "No spectator crowd and no murmur bed", 2026-10-30).
+"""The crowdless-map rule (PLAN-ICEBERG "No spectator crowd and no murmur bed", 2026-10-30; Autoservice joined it with PLAN-AUTOSERVICE item 12, 2026-11-11).
 
-Iceberg is a released map without a spectator crowd. Everything that would otherwise demand a crowd for every released map reads ONE list,
+Iceberg and Autoservice are released maps without a spectator crowd. Everything that would otherwise demand a crowd for every released map reads ONE list,
 validate_map_descriptors.CROWDLESS_MAP_KEYS: the packer (its rules and its required files), validate_distribution (the partition of the release into crowd
 maps and crowdless maps) and, by hand, the client (ArenaSpectators.DesignScene returns null for exactly these keys). The crowd maps themselves are
 extract_spectator.MAP_SCENES, which stage_spectators stages. These tests pin the partition and each reader; the not-yet rules for the other Phase C
 packages of Iceberg are pinned here too, so adding one later is a deliberate edit of the explicit lists. Its water package and DynamicMaps overview
-joined on 2026-10-31 and are pinned as present; flares remain absent.
+joined on 2026-10-31 and are pinned as present; flares remain absent. Autoservice has a flare package (eight gas-lamp flares) and none of the others.
 """
 import re
 import sys
@@ -35,7 +35,7 @@ def crowd_keys():
 class PartitionTests(unittest.TestCase):
     def test_the_crowd_maps_and_the_crowdless_maps_partition_the_released_maps(self):
         crowdless = set(VD.CROWDLESS_MAP_KEYS)
-        self.assertEqual(crowdless, {"arena_iceberg"})
+        self.assertEqual(crowdless, {"arena_iceberg", "arena_autoservice"})
         self.assertEqual(len(crowdless), len(VD.CROWDLESS_MAP_KEYS))
         self.assertFalse(crowd_keys() & crowdless)
         self.assertEqual(crowd_keys() | crowdless, set(VD.RELEASE_MAP_KEYS))
@@ -46,6 +46,7 @@ class PartitionTests(unittest.TestCase):
         self.assertEqual(set(extract_spectator.MAP_SCENES), {"airpit", "equator", "bay5", "bowl"})
         text = (REPO / "tools" / "extract" / "stage_spectators.py").read_text(encoding="utf-8")
         self.assertNotIn("iceberg", text.lower())                  # no per-map literal: MAP_SCENES is the one list
+        self.assertNotIn("autoservice", text.lower())
         self.assertTrue(hasattr(stage_spectators, "MAP_SCENES"))
 
     def test_the_client_has_a_crowd_scene_for_exactly_the_crowd_maps(self):
@@ -64,6 +65,7 @@ class PartitionTests(unittest.TestCase):
         target = text[start:text.index("</Target>", start)]
         self.assertIn("stage_spectators.py", target)
         self.assertNotIn("iceberg", target.lower())
+        self.assertNotIn("autoservice", target.lower())
 
 
 class PackerTests(unittest.TestCase):
@@ -79,6 +81,7 @@ class PackerTests(unittest.TestCase):
             self.assertEqual(graph in required[stem], key not in VD.CROWDLESS_MAP_KEYS, key)
         labels = {(rule.part, rule.label) for rule in release.build_rules(spec)}
         self.assertNotIn(("iceberg", "spectators"), labels)
+        self.assertNotIn(("autoservice", "spectators"), labels)
         for stem in ("equator", "bay5", "airpit", "bowl"):
             self.assertIn((stem, "spectators"), labels)
 
@@ -88,10 +91,13 @@ class PackerTests(unittest.TestCase):
             self.assertEqual(release.classify(rel, rules).part, part)
         with self.assertRaises(release.ClassificationError):
             release.classify(f"{PLUGIN}/spectators/arena_iceberg/spectator.json.gz", rules)
+        with self.assertRaises(release.ClassificationError):
+            release.classify(f"{PLUGIN}/spectators/arena_autoservice/spectator.json.gz", rules)
 
-    def test_iceberg_partitions_without_a_crowd_and_every_other_map_still_needs_one(self):
+    def test_the_crowdless_maps_partition_without_a_crowd_and_every_other_map_still_needs_one(self):
         files = fake_dist_files(PROD_MAPS)
-        del files[f"{PLUGIN}/spectators/arena_iceberg/spectator.json.gz"]      # the fixture stages a crowd for every map: Iceberg has none
+        for key in VD.CROWDLESS_MAP_KEYS:
+            del files[f"{PLUGIN}/spectators/{key}/spectator.json.gz"]      # the fixture stages a crowd for every map: Iceberg and Autoservice have none
         spec = self.spec()
         with tempfile.TemporaryDirectory() as temporary:
             write_tree(Path(temporary), files)
@@ -101,6 +107,8 @@ class PackerTests(unittest.TestCase):
             self.assertEqual(sorted(by_id), sorted(["core"] + [m.stem for m in spec.maps]))
             self.assertTrue(any(rel.endswith("/db/arena_iceberg/base.json") for rel in by_id["iceberg"]))
             self.assertFalse(any("spectators" in rel for rel in by_id["iceberg"]))
+            self.assertTrue(any(rel.endswith("/db/arena_autoservice/base.json") for rel in by_id["autoservice"]))
+            self.assertFalse(any("spectators" in rel for rel in by_id["autoservice"]))
             self.assertTrue(any(rel.endswith("arena_bowl/spectator.json.gz") for rel in by_id["bowl"]))
             single = release.partition_single(dist, spec)
             self.assertEqual({f.rel for f in single[0].files}, set(files))
@@ -108,21 +116,37 @@ class PackerTests(unittest.TestCase):
             broken = [f for f in dist if not f.rel.endswith("arena_bowl/spectator.json.gz")]
             with self.assertRaisesRegex(release.PackagingError, "incomplete dist"):
                 release.partition_dist(broken, spec)
-            # and so is a crowd package of the crowdless map
-            (Path(temporary) / PLUGIN / "spectators" / "arena_iceberg").mkdir(parents=True)
-            (Path(temporary) / PLUGIN / "spectators" / "arena_iceberg" / "spectator.json.gz").write_bytes(b"x")
-            with self.assertRaises(release.ClassificationError):
-                release.partition_dist(release.scan_dist(Path(temporary)), spec)
+            # and so is a crowd package of a crowdless map
+            for key in VD.CROWDLESS_MAP_KEYS:
+                (Path(temporary) / PLUGIN / "spectators" / key).mkdir(parents=True)
+                (Path(temporary) / PLUGIN / "spectators" / key / "spectator.json.gz").write_bytes(b"x")
+                with self.assertRaises(release.ClassificationError):
+                    release.partition_dist(release.scan_dist(Path(temporary)), spec)
+                (Path(temporary) / PLUGIN / "spectators" / key / "spectator.json.gz").unlink()
 
 
 class NotYetRulesTests(unittest.TestCase):
-    """Pin Iceberg's explicit feature lists: overview and water present, flares absent."""
+    """Pin the explicit feature lists: Iceberg has overview and water and no flares, Autoservice has flares and neither overview nor water."""
 
     def test_iceberg_has_an_overview_but_no_flares_yet(self):
         self.assertIn("Iceberg", VDIST.OVERVIEW_MAP_NAMES)
         self.assertNotIn("arena_iceberg", VDIST.FLARE_MAP_KEYS)
         self.assertEqual(VDIST.OVERVIEW_MAP_NAMES, ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg"))
-        self.assertEqual(VDIST.FLARE_MAP_KEYS, ("arena_equator", "arena_bay5", "arena_bowl"))
+        # Autoservice (PLAN-AUTOSERVICE item 11/12) has a flare package: the eight gas-lamp flares of work/extract/multiflare/arena_autoservice
+        self.assertEqual(VDIST.FLARE_MAP_KEYS, ("arena_equator", "arena_bay5", "arena_bowl", "arena_autoservice"))
+
+    def test_autoservice_has_flares_and_neither_overview_nor_water(self):
+        self.assertIn("arena_autoservice", VDIST.FLARE_MAP_KEYS)
+        self.assertNotIn("AutoService", VDIST.OVERVIEW_MAP_NAMES)
+        self.assertNotIn("arena_autoservice", VDIST.WATER_MAP_KEYS)
+        self.assertNotIn("arena_autoservice", VD.NATIVE_WATER_MAP_KEYS)
+        text = (REPO / "ArenaMapPort.Client" / "ArenaMapPort.Client.csproj").read_text(encoding="utf-8")
+        for target, present in (("ArenaMapPortStageMultiFlare", True), ("ArenaMapPortStageDynamicMaps", False), ("ArenaMapPortStageWater", False)):
+            start = text.index(f'<Target Name="{target}"')
+            body = text[start:text.index("</Target>", start)]
+            self.assertEqual("arena_autoservice" in body, present, target)
+        required = release.required_files(release.load_spec(REPO, "9.9.9", maps=PROD_MAPS))["autoservice"]
+        self.assertFalse([name for name in required if any(f"/{folder}/" in name for folder in ("flares", "dynamicmaps", "water", "spectators"))])
 
     def test_iceberg_has_native_water_since_2026_10_31(self):
         self.assertIn("arena_iceberg", VDIST.WATER_MAP_KEYS)
@@ -138,7 +162,7 @@ class NotYetRulesTests(unittest.TestCase):
                 self.assertIn("ArenaMapPort_Iceberg\\ArenaMapPort_Iceberg.jsonc", body)
                 self.assertIn("ArenaMapPort_Iceberg\\Layers\\Ground.svg", body)
             else:
-                self.assertNotIn("iceberg", body.lower(), target)
+                self.assertNotIn("iceberg", body.lower(), target)           # Autoservice's flare rows are pinned in test_autoservice_has_flares_and_neither_overview_nor_water
 
     def test_the_client_csproj_stages_icebergs_water_package(self):
         text = (REPO / "ArenaMapPort.Client" / "ArenaMapPort.Client.csproj").read_text(encoding="utf-8")
