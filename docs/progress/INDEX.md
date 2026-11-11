@@ -123,7 +123,10 @@ dated state in one screen; read it before this index if you only have a minute.
   the four surveys on Arena 0.6.2 (TeamFight alone with 20 markers in two pockets, one capture point, four gates, 372 new border
   cubes, 30 body-rig fans so crowdless, new season-loop audio class, no emission cap, no water), the plan decisions and the open
   questions; Phase A done offline on 2026-11-08 (plan roles, packages v1 and v2 with the ambient-audio export, the native contract with its
-  audio block, the staged client profile, the key-source rows; gates green, nothing built or deployed). Plan: [../PLAN-AUTOSERVICE.md](../PLAN-AUTOSERVICE.md).
+  audio block, the staged client profile, the key-source rows; gates green, nothing built or deployed); Phase B items 6-11 done offline on
+  2026-11-11 (mode, AI, bots and exits sidecars; 23 door rows, four gate sounds, four monitor faces; NavMesh oracle and bake inputs; banner,
+  loading rotation, official description row, locale name 'Arena: Chop Shop'; spatial acoustics with the SPT-SEB check; MultiFlare, zero
+  level, shader stand-in decision), still Catalog-only until item 12. Plan: [../PLAN-AUTOSERVICE.md](../PLAN-AUTOSERVICE.md).
 - [autoservice-source-062.md](autoservice-source-062.md) — Autoservice's Arena 0.5.4 spike package against the 0.6.2 native package v1
   (2026-11-08): no index shift, +387 objects (372 border cubes, two props), every id rehashed, the native blocks, the reviewed
   Pebbles/Rubber pair and the 28-shader census.

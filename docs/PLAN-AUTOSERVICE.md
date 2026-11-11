@@ -215,7 +215,8 @@ Catalog-only until item 12 (the registry promotion), which is why nothing deploy
    `autoservice.modes.json`, `autoservice.bots.json` (player spawns from the pockets, bot zones from the 7 core points and the
    16 born points, waves and PMC squads after AirPit), `autoservice.exits.json` (the two boxes above), `autoservice.ai.json`
    (via `extract_ai_anchors`, bake-bounds table row, the far-field leftovers dropped). Spawn-placement covers all 20 markers
-   (Arena's mesh has all 20 on the main component).
+   (Arena's mesh has all 20 on the main component). (done 2026-11-11, see the record: 4 player rows, 7 bot rows, the east exit
+   0.5 m south of the draft for clearance, exit names 'Chop Shop East Gate' / 'Chop Shop West Gate')
 7. **Doors, gate sounds, score monitors**: patch `extract_door_poses.py` (`clossed`, clips through level 70, the equator-shutter
    override). The four gates are Mecanim clips (controllers in `sharedassets70`), so they need a `MAP_SOURCES["arena_autoservice"]`
    row (scene `Arena_AutoService_TeamFight_DesignStuff`, clip scene level 70, the Bowl path `extract_clips`); the four lamps
@@ -224,25 +225,29 @@ Catalog-only until item 12 (the registry promotion), which is why nothing deploy
    both and merges the rows into one sidecar or `extract_clips` learns switch rows (decide in the item, pin it with a test); result
    `autoservice.doors.json` (4 motion rows + 4 `switch` rows); `extract_gate_sounds`
    row (`MAPS`), `gate_sound_fit.json` rows for the four clips, `autoservice.gatesounds.json`; `extract_score_monitors.MAPS`
-   row, `autoservice.monitors.json` (2 timer + 2 alive faces).
+   row, `autoservice.monitors.json` (2 timer + 2 alive faces). (done 2026-11-11, see the record: 19 motion rows, one per moved
+   node, + 4 switch rows = 23; the equator shutter keeps the scene pose as the closed pose of its collider nodes)
 8. **NavMesh oracle and bake inputs, sidecar + descriptor in ONE commit**: `ARENA_SOURCES` row, the oracle on v1/v2 (with
    `--doors`), `bake_bounds`, `navmesh_bake_layers`, `keep_level_borders`, `opened_barriers`, `start_gates`, `uses_server_time`,
    `puddle_water_material_names`, a bake-input audit (layer-0 solids in the play space: only the two MeshColliders of the
    `vaz_2106` front door at (-353.72, -3.32, 483.75); the tribune levels above y -0.43 that Arena's mesh does not cover; the
    cube-top islands; the second Arena island), `test_autoservice_bake_inputs.py` and `_spawns.py`. Precedent: Bowl `4cea40b`,
-   Iceberg item 9.
+   Iceberg item 9. (done 2026-11-11, see the record: `bake_bounds` y -5..2, not above the tribunes; oracle 1 component, 1,914.6 m2)
 9. **Identity and descriptions**: `extract_banners.BANNERS`, `extract_loadscreens.LOADSCREENS` (banner, loading screen and the
    four parallax images), `ArenaMapBanners` (+ `ArenaMapBannersTests`, `test_banners.py`), confirm the location id and add the
-   `DESCRIPTION_KEYS` / `OfficialTextMapKeys` row, drop "(spike)" from the locale name and the placeholder description.
+   `DESCRIPTION_KEYS` / `OfficialTextMapKeys` row, drop "(spike)" from the locale name and the placeholder description. (done
+   2026-11-11, see the record: locale name 'Arena: Chop Shop'; the description loader accepts a pending map's entry)
 10. **Spatial acoustics**: `extract_spatial_audio --map arena_autoservice` (no repair rules; the plan's `sound` role), graph JSON,
     bake and room tone staged; room reverb and rain audio rows. Second opinion on the bake: SPT-SEB's MIT checker
     `check_live_acoustics.py` (routes against portal connections, buffer bounds, lost pairs; see
     [progress/spt-seb-compatibility.md](progress/spt-seb-compatibility.md)) runs against the new `.audiobakedata` as tool use (no code copied); the same
-    run on Iceberg's repaired bake is cheap and still open.
+    run on Iceberg's repaired bake is cheap and still open. (done 2026-11-11 offline, see the record: export and pins; the client
+    rows move to item 12; SEB check ok for Autoservice, Iceberg's repaired bake has 510 duplicate routes in 153 pairs, open)
 11. **Light, flares and shaders offline**: MultiFlare exporter tables (`extract_multiflare.py:39-48`, tuple (21, 8, 77, 32)),
     the shader stand-in row decisions (`ShaderFallbackNames` for FogSheet and the two Cloth shaders), `MapLightingDefaults` zero
     level from the pockets' spawn floor (about y -3.72..-3.84; Iceberg's -3.7 is its own measurement, so this is a measurement,
-    not a copy), `BloomTuning` donor pair.
+    not a copy), `BloomTuning` donor pair. (done 2026-11-11 offline, see the record: ZeroLevel -8.2, no emission cap, a fourth
+    stand-in `p0/Reflective/Bumped Specular SMap Baked` and an Autoservice stand-in switch are item 12 rows)
 12. **Lock-step promotion into `ArenaMapRegistry.All`**, every list in one commit. First step: `git show --stat 1bd5868` (Iceberg's
     promotion, 79 files) and one row per file below or an explicit "no change needed because ...". Rows:
     - descriptor and sidecar; base.json (`make_base_json.py --map tools/maps/autoservice.json`, or `-SkipUnityBuild` alone).
