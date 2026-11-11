@@ -37,6 +37,7 @@ public sealed class AiAnchorsTests
     [InlineData("bay5.ai.json", 11, 4, 43)]
     [InlineData("airpit.ai.json", 19, 3, 35)] // PLAN-AIRPIT item 20: 19 core points, hubs 12/12/11 (id 7 sits in the closed north pocket, an island like Equator's 13/14)
     [InlineData("iceberg.ai.json", 11, 0, 0)] // PLAN-ICEBERG item 7: 11 core points; the scene's 4 hubs / 40 sub points lie off the map and are not shipped
+    [InlineData("autoservice.ai.json", 7, 5, 54)] // PLAN-AUTOSERVICE item 6: 7 core points, one 5-hub PatrolWay with 54 sub points, all on the map
     public void CountsMatchTheResearchPass(string file, int expectedCorePoints, int expectedHubs, int expectedSubPoints)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(file)));
@@ -53,6 +54,7 @@ public sealed class AiAnchorsTests
     [InlineData("bay5.ai.json")]
     [InlineData("airpit.ai.json")]
     [InlineData("iceberg.ai.json")]
+    [InlineData("autoservice.ai.json")]
     public void CorePointIdsAreUniqueWithFinitePositionsInTheBakeVolume(string file)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(file)));
@@ -73,6 +75,7 @@ public sealed class AiAnchorsTests
     [InlineData("bay5.ai.json")]
     [InlineData("airpit.ai.json")]
     [InlineData("iceberg.ai.json")]
+    [InlineData("autoservice.ai.json")]
     public void EveryHubCorePointIdExistsAndEveryPositionIsValid(string file)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(file)));
@@ -100,6 +103,7 @@ public sealed class AiAnchorsTests
     [InlineData("bay5.ai.json")]
     [InlineData("airpit.ai.json")]
     [InlineData("iceberg.ai.json")]
+    [InlineData("autoservice.ai.json")]
     public void NoConnectionOrEdgeFieldsAreShipped(string file)
     {
         // Deliberate -- extract_ai_anchors.py's own module docstring: AICorePoint.ConnectionsAtNet is
@@ -202,6 +206,46 @@ public sealed class AiAnchorsTests
             Assert.InRange(p[0], bounds[0], bounds[1]);
             Assert.InRange(p[1], bounds[2], bounds[3]);
             Assert.InRange(p[2], bounds[4], bounds[5]);
+        }
+    }
+
+    [Fact]
+    public void AutoserviceShipsArenasSevenCoreFiveHubsAndTheAiSceneDataWithinItsPlayArea()
+    {
+        // PLAN-AUTOSERVICE item 6 (extract_ai_anchors.py, PLAY_AREA / AI_SCENE_DATA): everything Arena authored for bots in
+        // Arena_AutoService_AI lies on the map (nothing is dropped, so there is no "dropped" record), and the sidecar adds the
+        // 16 bot born points (SpawnPointMarker "p1"), the 23 AIMinePoints (AI data, not minefields) and a census of the
+        // far-field leftovers (beyond 400 m, never exported). Autoservice is Catalog-only: this pins the sidecar, not the release.
+        using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("autoservice.ai.json")));
+        Assert.False(doc.RootElement.TryGetProperty("dropped", out _));
+        Assert.Equal(16, doc.RootElement.GetProperty("born_points").GetArrayLength());
+        Assert.Equal(23, doc.RootElement.GetProperty("mine_points").GetArrayLength());
+        // Arena's NavMeshSurface volume rounded outward (the extractor's PLAY_AREA row): x -421.2..-319.4, z 445.9..527.7
+        var anchors = new List<JsonElement>();
+        anchors.AddRange(doc.RootElement.GetProperty("core_points").EnumerateArray().Select(cp => cp.GetProperty("position")));
+        anchors.AddRange(doc.RootElement.GetProperty("born_points").EnumerateArray().Select(p => p.GetProperty("position")));
+        anchors.AddRange(doc.RootElement.GetProperty("mine_points").EnumerateArray().Select(p => p.GetProperty("position")));
+        foreach (var hub in doc.RootElement.GetProperty("patrol_ways").EnumerateArray().SelectMany(way => way.GetProperty("hubs").EnumerateArray()))
+        {
+            anchors.Add(hub.GetProperty("position"));
+            anchors.AddRange(hub.GetProperty("sub_points").EnumerateArray());
+        }
+        Assert.Equal(7 + 16 + 23 + 5 + 54, anchors.Count);
+        foreach (var position in anchors)
+        {
+            var p = position.EnumerateArray().Select(v => v.GetSingle()).ToArray();
+            Assert.InRange(p[0], -421.2f, -319.4f);
+            Assert.InRange(p[1], -8f, 12f);
+            Assert.InRange(p[2], 445.9f, 527.7f);
+        }
+        var census = doc.RootElement.GetProperty("scene_census");
+        Assert.Equal(400f, census.GetProperty("far_field_radius").GetSingle());
+        Assert.Equal(3021, census.GetProperty("totals").GetProperty("transforms").GetInt32());
+        foreach (var released in new[] { "equator.ai.json", "bay5.ai.json", "airpit.ai.json", "bowl.ai.json", "iceberg.ai.json" })
+        {
+            using var other = JsonDocument.Parse(File.ReadAllText(Sidecar(released)));
+            Assert.False(other.RootElement.TryGetProperty("born_points", out _), released);
+            Assert.False(other.RootElement.TryGetProperty("scene_census", out _), released);
         }
     }
 

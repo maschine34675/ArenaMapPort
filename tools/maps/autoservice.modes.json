@@ -1,0 +1,427 @@
+{
+  "_comment": "Arena TeamFight mode objects (positions only) composed from the extracted scenes by tools/extract/extract_mode_objects.py with the side-bound rule (sides are east and west, named by the spawn bound that contains the marker); schema and method in docs/progress/autoservice-release.md. Data for ArenaMode, not read by the map mod itself.",
+  "capture_point": {
+    "lights": [
+      {
+        "path": "CAPTURE_POINT/BOWL_CAPTURE_POINT_LIGHT_03",
+        "position": [
+          -369.29,
+          -3.8,
+          499.49
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff"
+      }
+    ],
+    "method": "capture_point_light_centroid",
+    "position": [
+      -369.29,
+      -3.8,
+      499.49
+    ]
+  },
+  "capture_zones": [],
+  "counts": {
+    "capture_zones": 0,
+    "spawn_bounds": 2,
+    "spawn_markers_east": 10,
+    "spawn_markers_west": 10
+  },
+  "map_key": "arena_autoservice",
+  "schema_version": 1,
+  "side_rule": {
+    "edge_tolerance": 0.05,
+    "generic_pocket_split": {
+      "cut_distance": 66.2853,
+      "limit": 2.0,
+      "pocket_spread": 31.2284,
+      "ratio": 2.1226
+    },
+    "method": "bound_containment",
+    "naming": "side = the spawn bound that contains the marker (east = SPAWN_BOUND_Fighter, west = SPAWN_BOUND_Fighter (1)); never north/south, never by mean z or by marker stem",
+    "sides": {
+      "east": {
+        "bound": "SPAWN_BOUND_Fighter",
+        "centroid_xz": [
+          -337.7741,
+          492.7696
+        ],
+        "markers": 10
+      },
+      "west": {
+        "bound": "SPAWN_BOUND_Fighter (1)",
+        "centroid_xz": [
+          -408.2504,
+          488.1571
+        ],
+        "markers": 10
+      }
+    }
+  },
+  "source_package": {
+    "extracted_utc": "2026-11-08T13:46:59Z",
+    "extractor_script": "tools/extract/extract_map.py",
+    "name": "autoservice-native-v2",
+    "scenes": [
+      "Arena_AutoService",
+      "Arena_AutoService_DesignStuff",
+      "Arena_AutoService_TeamFight_DesignStuff",
+      "Arena_AutoService_Light"
+    ]
+  },
+  "spawn_bounds": [
+    {
+      "active": true,
+      "center": [
+        -338.4315,
+        -2.8034,
+        492.7926
+      ],
+      "name": "SPAWN_BOUND_Fighter",
+      "path": "SPAWNS/SPAWN_BOUND_Fighter",
+      "rotation": [
+        0.0,
+        -0.7071,
+        0.0,
+        0.7071
+      ],
+      "scene": "Arena_AutoService_TeamFight_DesignStuff",
+      "side": "east",
+      "size": [
+        38.6431,
+        17.114,
+        11.566
+      ],
+      "yaw": 270.0
+    },
+    {
+      "active": true,
+      "center": [
+        -408.2015,
+        -2.8033,
+        492.4696
+      ],
+      "name": "SPAWN_BOUND_Fighter (1)",
+      "path": "SPAWNS/SPAWN_BOUND_Fighter (1)",
+      "rotation": [
+        0.0,
+        -0.7071,
+        0.0,
+        0.7071
+      ],
+      "scene": "Arena_AutoService_TeamFight_DesignStuff",
+      "side": "west",
+      "size": [
+        38.6431,
+        9.8396,
+        11.566
+      ],
+      "yaw": 270.0
+    }
+  ],
+  "spawn_markers": {
+    "east": [
+      {
+        "active": true,
+        "index": null,
+        "name": "Usec house",
+        "path": "SPAWNS/Usec house",
+        "position": [
+          -337.789,
+          -3.8,
+          485.627
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "east",
+        "stem": "Usec house",
+        "yaw": 239.9997
+      },
+      {
+        "active": true,
+        "index": 1,
+        "name": "Usec house (1)",
+        "path": "SPAWNS/Usec house (1)",
+        "position": [
+          -338.448,
+          -3.8,
+          490.47
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "east",
+        "stem": "Usec house",
+        "yaw": 269.9997
+      },
+      {
+        "active": true,
+        "index": 2,
+        "name": "Usec house (2)",
+        "path": "SPAWNS/Usec house (2)",
+        "position": [
+          -337.87,
+          -3.8,
+          495.48
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "east",
+        "stem": "Usec house",
+        "yaw": 314.9997
+      },
+      {
+        "active": true,
+        "index": 3,
+        "name": "Usec house (3)",
+        "path": "SPAWNS/Usec house (3)",
+        "position": [
+          -336.619,
+          -3.8,
+          497.847
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "east",
+        "stem": "Usec house",
+        "yaw": 239.9997
+      },
+      {
+        "active": true,
+        "index": 4,
+        "name": "Usec house (4)",
+        "path": "SPAWNS/Usec house (4)",
+        "position": [
+          -337.278,
+          -3.8,
+          502.69
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "east",
+        "stem": "Usec house",
+        "yaw": 269.9997
+      },
+      {
+        "active": true,
+        "index": 8,
+        "name": "Usec house (8)",
+        "path": "SPAWNS/Usec house (8)",
+        "position": [
+          -336.7,
+          -3.8,
+          507.7
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "east",
+        "stem": "Usec house",
+        "yaw": 269.9998
+      },
+      {
+        "active": true,
+        "index": 16,
+        "name": "Usec house (16)",
+        "path": "SPAWNS/Usec house (16)",
+        "position": [
+          -338.781,
+          -3.783,
+          476.541
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "east",
+        "stem": "Usec house",
+        "yaw": 281.4502
+      },
+      {
+        "active": true,
+        "index": 17,
+        "name": "Usec house (17)",
+        "path": "SPAWNS/Usec house (17)",
+        "position": [
+          -338.85,
+          -3.783,
+          482.13
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "east",
+        "stem": "Usec house",
+        "yaw": 255.353
+      },
+      {
+        "active": true,
+        "index": 18,
+        "name": "Usec house (18)",
+        "path": "SPAWNS/Usec house (18)",
+        "position": [
+          -340.59,
+          -3.797,
+          506.675
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "east",
+        "stem": "Usec house",
+        "yaw": 271.065
+      },
+      {
+        "active": true,
+        "index": 19,
+        "name": "Usec house (19)",
+        "path": "SPAWNS/Usec house (19)",
+        "position": [
+          -334.816,
+          -3.84,
+          482.536
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "east",
+        "stem": "Usec house",
+        "yaw": 255.0871
+      }
+    ],
+    "west": [
+      {
+        "active": true,
+        "index": 5,
+        "name": "Usec house (5)",
+        "path": "SPAWNS/Usec house (5)",
+        "position": [
+          -409.9721,
+          -3.74,
+          491.243
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "west",
+        "stem": "Usec house",
+        "yaw": 59.9998
+      },
+      {
+        "active": true,
+        "index": 6,
+        "name": "Usec house (6)",
+        "path": "SPAWNS/Usec house (6)",
+        "position": [
+          -409.313,
+          -3.74,
+          487.0409
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "west",
+        "stem": "Usec house",
+        "yaw": 89.9998
+      },
+      {
+        "active": true,
+        "index": 7,
+        "name": "Usec house (7)",
+        "path": "SPAWNS/Usec house (7)",
+        "position": [
+          -409.451,
+          -3.74,
+          483.84
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "west",
+        "stem": "Usec house",
+        "yaw": 134.9998
+      },
+      {
+        "active": true,
+        "index": 9,
+        "name": "Usec house (9)",
+        "path": "SPAWNS/Usec house (9)",
+        "position": [
+          -409.256,
+          -3.74,
+          499.843
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "west",
+        "stem": "Usec house",
+        "yaw": 89.9997
+      },
+      {
+        "active": true,
+        "index": 10,
+        "name": "Usec house (10)",
+        "path": "SPAWNS/Usec house (10)",
+        "position": [
+          -409.402,
+          -3.74,
+          477.391
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "west",
+        "stem": "Usec house",
+        "yaw": 89.9998
+      },
+      {
+        "active": true,
+        "index": 11,
+        "name": "Usec house (11)",
+        "path": "SPAWNS/Usec house (11)",
+        "position": [
+          -407.045,
+          -3.74,
+          482.428
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "west",
+        "stem": "Usec house",
+        "yaw": 134.9998
+      },
+      {
+        "active": true,
+        "index": 12,
+        "name": "Usec house (12)",
+        "path": "SPAWNS/Usec house (12)",
+        "position": [
+          -406.688,
+          -3.74,
+          501.696
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "west",
+        "stem": "Usec house",
+        "yaw": 92.8713
+      },
+      {
+        "active": true,
+        "index": 13,
+        "name": "Usec house (13)",
+        "path": "SPAWNS/Usec house (13)",
+        "position": [
+          -405.933,
+          -3.72,
+          476.098
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "west",
+        "stem": "Usec house",
+        "yaw": 71.763
+      },
+      {
+        "active": true,
+        "index": 14,
+        "name": "Usec house (14)",
+        "path": "SPAWNS/Usec house (14)",
+        "position": [
+          -409.503,
+          -3.72,
+          495.572
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "west",
+        "stem": "Usec house",
+        "yaw": 77.189
+      },
+      {
+        "active": true,
+        "index": 15,
+        "name": "Usec house (15)",
+        "path": "SPAWNS/Usec house (15)",
+        "position": [
+          -405.941,
+          -3.72,
+          486.419
+        ],
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "side": "west",
+        "stem": "Usec house",
+        "yaw": 159.278
+      }
+    ]
+  }
+}

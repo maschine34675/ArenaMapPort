@@ -1,0 +1,39 @@
+{
+  "_comment": "PLAN-AUTOSERVICE item 6 (docs/progress/autoservice-release.md, 2026-11-11): optional sidecar read by tools/server/make_base_json.py next to tools/maps/autoservice.json; emits base.json 'exits'. The client authors the ExfiltrationPoint objects at runtime from the descriptor's Exits (ArenaMapPort.Shared/ArenaMapDescriptor.cs, added with the lock-step promotion): names, positions and box sizes there must equal this file. OFFLINE DRAFT, not walked on the host yet. Arena authors no extraction on this map; one gate outside each pocket, in the yard between them. The East gate stands west of the east pocket's big gate (the gate leaf at x -344.1 slides +4.4 m along z; the box centre is 9.9 m from the gate root (-344.09, 479.86) and 4.8 m from the gate's swept footprint, so the box edge keeps 2.8 m from the leaf's whole travel), the West gate east of the west pocket's two roller shutters (x -402.3; the centre is 9.3 m from the nearer shutter root (-402.26, 501.22), the box edge 7.0 m from the swept footprint). Both boxes (4 x 3 x 4 m) lie on Arena's own 1,915.6 m2 NavMesh main component (sharedassets63.assets path 2, identity placement) with 3.49 m / 3.37 m of border clearance at the centre against the 2.83 m half-diagonal of the box, no port solid inside the box above the floor, 10.7 m / 13.7 m from the nearest pocket marker and 10 m or more from every player and bot row, so nobody spawns inside a trigger box. The east centre moved from the plan's (-349.0, 489.0), which keeps 3.30 m of clearance (below the 3.33 m bar), to (-349.0, 488.5) (3.49 m). Both are outside the gates, so a team held behind its gate (ArenaMode hold) cannot extract before the release. EntryPoints is always the map's infiltration name; names double as locale keys.",
+  "exits": [
+    {
+      "name": "Chop Shop East Gate",
+      "position": [
+        -349.0,
+        -3.77,
+        488.5
+      ],
+      "box_size": [
+        4.0,
+        3.0,
+        4.0
+      ],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    },
+    {
+      "name": "Chop Shop West Gate",
+      "position": [
+        -393.0,
+        -3.79,
+        501.0
+      ],
+      "box_size": [
+        4.0,
+        3.0,
+        4.0
+      ],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    }
+  ]
+}

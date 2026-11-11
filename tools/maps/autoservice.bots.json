@@ -1,0 +1,218 @@
+{
+  "_comment": "PLAN-AUTOSERVICE item 6 (docs/progress/autoservice-release.md, 2026-11-11): optional sidecar read by tools/server/make_base_json.py next to tools/maps/autoservice.json. OFFLINE DRAFT, not walked on the host yet: the first Autoservice raid must confirm every point with uibridge_teleport dryRun=true. Autoservice is Catalog-only until the lock-step promotion. Player spawns are the world positions of four of the 20 pocket markers of tools/maps/autoservice.modes.json (all 'Usec house' markers; the sides below are the plain raid's faction split, copied from Bowl, and a guess): (1) (All) and (4) (Usec) in the east pocket SPAWN_BOUND_Fighter (x -344..-333, z 476..508, yaw 270) and (6) (Bear) and (14) (All) in the west pocket SPAWN_BOUND_Fighter (1) (x -410..-405, z 476..502); the other 16 markers stay unused until ArenaMode places teams. Each row keeps 1.7 to 3.9 m of border clearance in Arena's own NavMesh. Bot spawns come from the AI scene (tools/maps/autoservice.ai.json): its 7 core points and the 16 born points (the SpawnPointMarkers 'p1', five in each pocket and six in the yard). Rule, as Iceberg's: no bot spawn within 10 m of a gate (the closed-to-open swept volume of the four gates) or of a pocket marker, and none within 10 m of an exit box centre, so the 10 pocket born points (0.5 to 4.3 m from a pocket marker) and born points 12 and 13 (8.2 and 7.5 m from the east big gate) are not used. Rows keep at least 1.35 m of border clearance in Arena's mesh: core 1 (0.87 m), core 3 (0.96 m), core 4 (1.15 m) and born point 0 (0.92 m) move 0.56 to 1.95 m onto open floor (1.5 to 1.6 m), a spot within 3.5 m with 1.5 m does not exist for core 6 (0.83 m, also 9.0 m from the east big gate) and born points 7 and 8 (0.54 and 0.55 m), which are dropped. Born point 1 (1.8 m from born point 0) is a duplicate and is dropped; the other rows stand on their point. The y of every row is Arena's NavMesh surface at the point (the core point's own within 0.02 m). That leaves 7 rows: cores 1, 2, 3, 4, 5, 7 and born point 0; all lie on Arena's 1,915.6 m2 main component. The south-east of the yard (x > -370, z < 480) has no bot spawn (core 6 and born points 12 and 13 are beside the east big gate). Waves and PMC boss waves copied from airpit.bots.json (Equator's). No loot, no scav raids.",
+  "zone": "BotZone_Main",
+  "max_bots": 8,
+  "player_spawns": [
+    {
+      "id": "arena_autoservice-player-all",
+      "name": "SpawnPoint_Player_All",
+      "sides": [
+        "All"
+      ],
+      "position": [
+        -338.45,
+        -3.8,
+        490.47
+      ],
+      "rotation": 270.0,
+      "radius": 5
+    },
+    {
+      "id": "arena_autoservice-player-usec",
+      "name": "SpawnPoint_Player_Usec",
+      "sides": [
+        "Usec"
+      ],
+      "position": [
+        -337.28,
+        -3.8,
+        502.69
+      ],
+      "rotation": 270.0,
+      "radius": 5
+    },
+    {
+      "id": "arena_autoservice-player-bear",
+      "name": "SpawnPoint_Player_Bear",
+      "sides": [
+        "Bear"
+      ],
+      "position": [
+        -409.31,
+        -3.74,
+        487.04
+      ],
+      "rotation": 90.0,
+      "radius": 5
+    },
+    {
+      "id": "arena_autoservice-player-west-all",
+      "name": "SpawnPoint_Player_West_All",
+      "sides": [
+        "All"
+      ],
+      "position": [
+        -409.5,
+        -3.72,
+        495.57
+      ],
+      "rotation": 77.2,
+      "radius": 5
+    }
+  ],
+  "bot_spawns": [
+    {
+      "id": "arena_autoservice-bot-core-01",
+      "position": [
+        -372.74,
+        -3.79,
+        503.03
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_autoservice-bot-core-02",
+      "position": [
+        -368.43,
+        -3.79,
+        501.75
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_autoservice-bot-core-03",
+      "position": [
+        -367.44,
+        -3.79,
+        492.11
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_autoservice-bot-core-04",
+      "position": [
+        -385.94,
+        -3.79,
+        493.88
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_autoservice-bot-core-05",
+      "position": [
+        -384.98,
+        -3.79,
+        476.7
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_autoservice-bot-core-07",
+      "position": [
+        -354.41,
+        -3.79,
+        499.38
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_autoservice-bot-born-00",
+      "position": [
+        -383.73,
+        -3.79,
+        507.89
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    }
+  ],
+  "waves": [
+    {
+      "time_min": 10,
+      "time_max": 30,
+      "slots_min": 2,
+      "slots_max": 3
+    },
+    {
+      "time_min": 90,
+      "time_max": 150,
+      "slots_min": 1,
+      "slots_max": 2
+    },
+    {
+      "time_min": 240,
+      "time_max": 330,
+      "slots_min": 2,
+      "slots_max": 3
+    },
+    {
+      "time_min": 420,
+      "time_max": 540,
+      "slots_min": 1,
+      "slots_max": 2
+    },
+    {
+      "time_min": 600,
+      "time_max": 720,
+      "slots_min": 1,
+      "slots_max": 2
+    }
+  ],
+  "boss_waves": [
+    {
+      "boss_name": "pmcUSEC",
+      "escort_type": "pmcUSEC",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcUSEC",
+      "escort_type": "pmcUSEC",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcBEAR",
+      "escort_type": "pmcBEAR",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcBEAR",
+      "escort_type": "pmcBEAR",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    }
+  ]
+}

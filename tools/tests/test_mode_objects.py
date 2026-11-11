@@ -1168,5 +1168,253 @@ class IcebergSidecarTests(unittest.TestCase):
             self.assertNotEqual(data.get("side_rule", {}).get("method"), "team_bounds")
 
 
+# --------------------------------------------------------------------------------------------------------------
+# PLAN-AUTOSERVICE item 6 (2026-11-11): the side-bound rule and Autoservice's sidecar
+# --------------------------------------------------------------------------------------------------------------
+
+SIDE_RULE = M.SIDE_BOUND_RULES["arena_autoservice"]
+
+
+def side_layout(east=((50.0, -2.0), (51.0, 1.0), (49.0, 4.0)), west=((-50.0, -3.0), (-49.0, 0.0), (-51.0, 3.0)), bounds=None,
+                scene=None, lights=1, stem="Usec house", extra_markers=()):
+    """An Autoservice-like TeamFight scene: SPAWNS with markers that all carry ONE stem (the team cannot be read from it), the two
+    bounds SPAWN_BOUND_Fighter (east) and SPAWN_BOUND_Fighter (1) (west) as 10 x 20 m boxes, and a CAPTURE_POINT container with
+    ``lights`` lights."""
+    objects = [obj(1, "SPAWNS")]
+    index = 0
+    for pocket in (east, west):
+        for x, z in pocket:
+            objects.append(obj(len(objects) + 1, f"{stem} ({index})", parent=1, pos=(x, 0.05, z)))
+            index += 1
+    for name, x, z in extra_markers:
+        objects.append(obj(len(objects) + 1, name, parent=1, pos=(x, 0.05, z)))
+    for name, center, size in (bounds or [("SPAWN_BOUND_Fighter", (50.0, 2.0, 1.0), (10.0, 6.0, 20.0)),
+                                          ("SPAWN_BOUND_Fighter (1)", (-50.0, 2.0, 0.0), (10.0, 6.0, 20.0))]):
+        objects.append(obj(len(objects) + 1, name, parent=1, pos=center, components=[box((0, 0, 0), size)]))
+    if lights:
+        objects.append(obj(len(objects) + 1, "CAPTURE_POINT"))
+        container = len(objects)
+        for n in range(lights):
+            objects.append(obj(len(objects) + 1, f"BOWL_CAPTURE_POINT_LIGHT_0{n + 3}", parent=container, pos=(2.0 * n, -3.0, 10.0)))
+    return graph(objects, scene or SIDE_RULE.scene)
+
+
+def side_extract(scene, rule=SIDE_RULE):
+    return quiet(M.extract_scenes, [scene], rule)[0]
+
+
+class SideBoundRuleTests(AlmostMixin, unittest.TestCase):
+    """The per-map rule that names the sides by the bound that contains a marker (module docstring, "Side bounds")."""
+
+    def test_only_autoservice_has_a_side_rule_and_the_other_tables_are_untouched(self):
+        self.assertEqual(sorted(M.SIDE_BOUND_RULES), ["arena_autoservice"])
+        self.assertEqual(sorted(M.TEAM_BOUND_RULES), ["arena_iceberg"])
+        self.assertEqual([(s.key, s.bound) for s in SIDE_RULE.sides],
+                         [("east", "SPAWN_BOUND_Fighter"), ("west", "SPAWN_BOUND_Fighter (1)")])
+        self.assertEqual((SIDE_RULE.mode, SIDE_RULE.scene), ("TeamFight", "Arena_AutoService_TeamFight_DesignStuff"))
+
+    def test_sides_are_the_bounds_that_contain_the_markers(self):
+        found = side_extract(side_layout())
+        self.assertEqual(sorted(found["spawn_markers"]), ["east", "west"])
+        self.assertEqual([m["index"] for m in found["spawn_markers"]["east"]], [0, 1, 2])
+        self.assertEqual([m["index"] for m in found["spawn_markers"]["west"]], [3, 4, 5])
+        self.assertEqual({b["name"]: b["side"] for b in found["spawn_bounds"]},
+                         {"SPAWN_BOUND_Fighter": "east", "SPAWN_BOUND_Fighter (1)": "west"})
+        for item in found["spawn_bounds"] + found["spawn_markers"]["east"] + found["spawn_markers"]["west"]:
+            self.assertNotIn("_z", item)
+        for marker in found["spawn_markers"]["east"] + found["spawn_markers"]["west"]:
+            self.assertNotIn("pocket", marker)          # all 20 are initial starts, there are no stage bounds
+        self.assertNotIn("north", found["spawn_markers"])
+        self.assertNotIn("capture_points", found)
+
+    def test_the_names_never_follow_the_mean_z_or_the_marker_stem(self):
+        # east pocket at the LOWER z: the ordinary rule would call it south and the west pocket north
+        layout = dict(east=((50.0, -60.0), (51.0, -57.0), (49.0, -54.0)), west=((-50.0, 40.0), (-49.0, 43.0), (-51.0, 46.0)),
+                      bounds=[("SPAWN_BOUND_Fighter", (50.0, 2.0, -57.0), (10.0, 6.0, 20.0)),
+                              ("SPAWN_BOUND_Fighter (1)", (-50.0, 2.0, 43.0), (10.0, 6.0, 20.0))])
+        generic = extract([side_layout(**layout)])                                    # no rule: the pocket split decides
+        self.assertEqual(sorted(generic["spawn_markers"]), ["north", "south"])
+        self.assertEqual(min(m["position"][0] for m in generic["spawn_markers"]["south"]), 49.0)    # east = south by mean z
+        ruled = side_extract(side_layout(**layout))
+        self.assertEqual(sorted(m["position"][0] for m in ruled["spawn_markers"]["east"]), [49.0, 50.0, 51.0])
+        self.assertEqual(sorted(m["position"][0] for m in ruled["spawn_markers"]["west"]), [-51.0, -50.0, -49.0])
+        other = side_extract(side_layout(stem="Bear house"))                           # the stem is not read at all
+        self.assertEqual(len(other["spawn_markers"]["east"]), 3)
+
+    def test_the_side_rule_record_names_the_method_the_tolerance_and_the_generic_margin(self):
+        found = side_extract(side_layout())
+        rule = found["side_rule"]
+        self.assertEqual(rule["method"], "bound_containment")
+        self.assertEqual(rule["edge_tolerance"], M.BOUND_EDGE_TOLERANCE)
+        self.assertEqual({k: (v["bound"], v["markers"]) for k, v in rule["sides"].items()},
+                         {"east": ("SPAWN_BOUND_Fighter", 3), "west": ("SPAWN_BOUND_Fighter (1)", 3)})
+        self.assertEqual(rule["sides"]["east"]["centroid_xz"], [50.0, 1.0])
+        self.assertEqual(rule["sides"]["west"]["centroid_xz"], [-50.0, 0.0])
+        generic = rule["generic_pocket_split"]
+        self.assertEqual(set(generic), {"cut_distance", "pocket_spread", "ratio", "limit"})
+        self.assertGreater(generic["ratio"], generic["limit"])
+        # two pockets of one cluster each: the ordinary rule finds no pockets, and the record says so
+        tight = side_extract(side_layout(east=((50.0, 0.0), (51.0, 0.0)), west=((52.5, 0.0), (53.5, 0.0)),
+                                         bounds=[("SPAWN_BOUND_Fighter", (50.5, 2.0, 0.0), (3.0, 6.0, 4.0)),
+                                                 ("SPAWN_BOUND_Fighter (1)", (53.0, 2.0, 0.0), (3.0, 6.0, 4.0))]))
+        self.assertIsNone(tight["side_rule"]["generic_pocket_split"])
+
+    def test_a_marker_on_the_edge_of_its_bound_is_in_and_one_clearly_outside_is_refused(self):
+        edge = side_extract(side_layout(east=((45.0 - 0.04, 0.0), (51.0, 0.0), (49.0, 3.0))))
+        self.assertEqual(len(edge["spawn_markers"]["east"]), 3)
+        with self.assertRaisesRegex(HardExtractError, "inside 0 of the side bounds"):
+            side_extract(side_layout(east=((45.0 - 0.2, 0.0), (51.0, 0.0), (49.0, 3.0))))
+
+    def test_a_marker_inside_both_bounds_is_refused(self):
+        overlap = [("SPAWN_BOUND_Fighter", (50.0, 2.0, 1.0), (10.0, 6.0, 20.0)),
+                   ("SPAWN_BOUND_Fighter (1)", (50.0, 2.0, 1.0), (10.0, 6.0, 20.0))]
+        with self.assertRaisesRegex(HardExtractError, "inside 2 of the side bounds"):
+            side_extract(side_layout(bounds=overlap))
+
+    def test_unequal_sides_are_refused(self):
+        with self.assertRaisesRegex(HardExtractError, "same number"):
+            side_extract(side_layout(east=((50.0, -2.0), (51.0, 1.0), (49.0, 4.0), (52.0, 5.0))))
+
+    def test_unknown_missing_and_repeated_bounds_are_refused(self):
+        bounds = [("SPAWN_BOUND_Fighter", (50.0, 2.0, 1.0), (10.0, 6.0, 20.0)),
+                  ("SPAWN_BOUND_Fighter (1)", (-50.0, 2.0, 0.0), (10.0, 6.0, 20.0))]
+        with self.assertRaisesRegex(HardExtractError, "is none of"):
+            side_extract(side_layout(bounds=bounds + [("SPAWN_BOUND_Fighter (2)", (0.0, 2.0, 0.0), (4.0, 6.0, 4.0))]))
+        with self.assertRaisesRegex(HardExtractError, "no spawn bound SPAWN_BOUND_Fighter \\(1\\)"):
+            side_extract(side_layout(bounds=bounds[:1], west=()))
+        with self.assertRaisesRegex(HardExtractError, "two spawn bounds named"):
+            side_extract(side_layout(bounds=bounds + [("SPAWN_BOUND_FIGHTER ", (0.0, 2.0, 0.0), (4.0, 6.0, 4.0))]))
+
+    def test_a_second_scene_is_refused(self):
+        with self.assertRaisesRegex(HardExtractError, "not in the scene"):
+            side_extract(side_layout(scene="Another_Scene"))
+
+    def test_the_capture_point_stays_the_single_light_centroid(self):
+        found = side_extract(side_layout(lights=1))
+        self.assertEqual(found["capture_point"]["method"], "capture_point_light_centroid")
+        self.assertVec(found["capture_point"]["position"], [0.0, -3.0, 10.0])
+        self.assertEqual(len(found["capture_point"]["lights"]), 1)
+        none = side_extract(side_layout(lights=0))
+        self.assertIsNone(none["capture_point"])
+
+    def test_the_package_and_the_command_line_carry_the_side_records(self):
+        scenes = {SIDE_RULE.scene: side_layout().objects}
+        with tempfile.TemporaryDirectory() as tmp:
+            package = PackageTests().make_package(tmp, {"map_key": "arena_autoservice", "extractor_script": "tools/extract/extract_map.py"},
+                                                  scenes=scenes)
+            first, second = Path(tmp) / "a.json", Path(tmp) / "b.json"
+            for target in (first, second):
+                code, err = quiet(M.main, ["--package", str(package), "--output", str(target)])
+                self.assertEqual(code, 0)
+            self.assertIn("markers east 3, west 3 (bound containment)", err)
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            data = json.loads(first.read_text(encoding="utf-8"))
+        self.assertEqual(data["counts"], {"capture_zones": 0, "spawn_bounds": 2, "spawn_markers_east": 3, "spawn_markers_west": 3})
+        self.assertEqual(data["side_rule"]["method"], "bound_containment")
+        self.assertIn("TeamFight", data["_comment"])
+        self.assertNotIn("stages", data)
+        self.assertNotIn("spawn_markers_north", data["counts"])
+
+    def test_a_map_without_a_rule_is_unchanged_by_the_new_branch(self):
+        # the released maps never see the side rule: pockets that straddle z == 0 keep the original sign rule and its keys
+        found = extract([side_layout(east=((50.0, 10.0), (51.0, 12.0), (49.0, 14.0)), west=((-50.0, -10.0), (-49.0, -12.0), (-51.0, -14.0)),
+                                     bounds=[("SPAWN_BOUND_Fighter", (50.0, 2.0, 12.0), (10.0, 6.0, 20.0)),
+                                             ("SPAWN_BOUND_Fighter (1)", (-50.0, 2.0, -12.0), (10.0, 6.0, 20.0))])])
+        self.assertEqual(sorted(found["spawn_markers"]), ["north", "south"])
+        self.assertNotIn("side_rule", found)
+
+
+AUTOSERVICE_PACKAGE = "autoservice-native-v2"
+
+
+class AutoserviceSidecarTests(unittest.TestCase):
+    """tools/maps/autoservice.modes.json (PLAN-AUTOSERVICE item 6): the data half needs only the file."""
+
+    def data(self):
+        path = MAPS / "autoservice.modes.json"
+        if not path.is_file():
+            self.skipTest("autoservice.modes.json not generated yet")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_equals_a_fresh_extraction_of_the_package_it_names(self):
+        text = (MAPS / "autoservice.modes.json").read_text(encoding="utf-8")
+        package = WORK / "extract" / json.loads(text)["source_package"]["name"]
+        self.assertEqual(package.name, AUTOSERVICE_PACKAGE)
+        if not (package / "manifest.json").is_file():
+            self.skipTest(f"{package.name} package is local only")
+        data, _ = quiet(M.extract_package, package)
+        self.assertEqual(text, M.dumps(data))
+
+    def test_counts_sides_and_the_rule_record(self):
+        data = self.data()
+        self.assertEqual(data["map_key"], "arena_autoservice")
+        self.assertEqual(data["counts"], {"capture_zones": 0, "spawn_bounds": 2, "spawn_markers_east": 10, "spawn_markers_west": 10})
+        self.assertEqual(sorted(data["spawn_markers"]), ["east", "west"])
+        rule = data["side_rule"]
+        self.assertEqual(rule["method"], "bound_containment")
+        self.assertEqual({k: (v["bound"], v["markers"]) for k, v in rule["sides"].items()},
+                         {"east": ("SPAWN_BOUND_Fighter", 10), "west": ("SPAWN_BOUND_Fighter (1)", 10)})
+        self.assertNotIn("capture_points", data)
+        self.assertNotIn("stages", data)
+
+    def test_the_ordinary_pocket_rule_passes_only_marginally_and_calls_east_and_west_north_and_south(self):
+        data = self.data()
+        points = [(m["position"][0], m["position"][2]) for side in data["spawn_markers"].values() for m in side]
+        pockets = M.split_pockets(points)
+        self.assertIsNotNone(pockets)                       # it passes ...
+        group_a, group_b, cut, spread = pockets
+        ratio = cut / spread
+        self.assertGreater(ratio, M.POCKET_SEPARATION)       # ... but only just: measured 2.1226 against the limit 2.0
+        self.assertLess(ratio, 2.2)
+        self.assertAlmostEqual(ratio, 2.1226, places=3)
+        self.assertAlmostEqual(cut, 66.2853, places=3)
+        self.assertAlmostEqual(spread, 31.2284, places=3)
+        recorded = data["side_rule"]["generic_pocket_split"]
+        self.assertEqual((recorded["cut_distance"], recorded["pocket_spread"], recorded["limit"]), (round(cut, 4), round(spread, 4), 2.0))
+        self.assertAlmostEqual(recorded["ratio"], ratio, places=4)
+        # the pockets are 4.6 m apart in mean z and 70 m apart in x: the ordinary names say north / south for east / west
+        east, west = data["side_rule"]["sides"]["east"]["centroid_xz"], data["side_rule"]["sides"]["west"]["centroid_xz"]
+        self.assertGreater(east[1] - west[1], 4.0)
+        self.assertLess(east[1] - west[1], 5.0)
+        self.assertGreater(east[0] - west[0], 69.0)
+
+    def test_the_two_pockets_are_the_two_fighter_bounds_ten_markers_each_all_inside(self):
+        data = self.data()
+        bounds = {b["name"]: b for b in data["spawn_bounds"]}
+        self.assertEqual(sorted(bounds), ["SPAWN_BOUND_Fighter", "SPAWN_BOUND_Fighter (1)"])
+        self.assertEqual((bounds["SPAWN_BOUND_Fighter"]["side"], bounds["SPAWN_BOUND_Fighter (1)"]["side"]), ("east", "west"))
+        self.assertAlmostEqual(bounds["SPAWN_BOUND_Fighter"]["center"][0], -338.4315, places=3)
+        self.assertAlmostEqual(bounds["SPAWN_BOUND_Fighter (1)"]["center"][0], -408.2015, places=3)
+        for side, name in (("east", "SPAWN_BOUND_Fighter"), ("west", "SPAWN_BOUND_Fighter (1)")):
+            own, other = bounds[name], bounds["SPAWN_BOUND_Fighter (1)" if side == "east" else "SPAWN_BOUND_Fighter"]
+            for marker in data["spawn_markers"][side]:
+                with self.subTest(marker=marker["name"]):
+                    # measured 2026-11-11: east 2.17..5.77 m inside, west 2.95..4.00 m, 62 m outside the other bound
+                    self.assertGreaterEqual(M.box_margin(own, marker["position"]), 2.0)
+                    self.assertLess(M.box_margin(other, marker["position"]), -60.0)
+        indexes = sorted(m["index"] for side in data["spawn_markers"].values() for m in side if m["index"] is not None)
+        self.assertEqual(indexes, list(range(1, 20)))      # the unsuffixed marker plus (1)..(19)
+        self.assertEqual({m["stem"] for side in data["spawn_markers"].values() for m in side}, {"Usec house"})
+        self.assertEqual({m["index"] for m in data["spawn_markers"]["east"]} - {None}, {1, 2, 3, 4, 8, 16, 17, 18, 19})
+        self.assertEqual({m["index"] for m in data["spawn_markers"]["west"]}, {5, 6, 7, 9, 10, 11, 12, 13, 14, 15})
+
+    def test_the_capture_point_is_the_one_light_of_the_capture_point_container(self):
+        data = self.data()
+        capture = data["capture_point"]
+        self.assertEqual(capture["method"], "capture_point_light_centroid")
+        self.assertEqual(capture["position"], [-369.29, -3.8, 499.49])
+        self.assertEqual([l["path"] for l in capture["lights"]], ["CAPTURE_POINT/BOWL_CAPTURE_POINT_LIGHT_03"])
+        self.assertEqual(data["capture_zones"], [])
+
+    def test_the_released_maps_have_no_side_bound_records(self):
+        for stem in STEMS + ("bowl", "iceberg"):
+            path = MAPS / f"{stem}.modes.json"
+            if not path.is_file():
+                continue
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertNotEqual(data.get("side_rule", {}).get("method"), "bound_containment")
+            self.assertNotIn("spawn_markers_east", data["counts"])
+
+
 if __name__ == "__main__":
     unittest.main()

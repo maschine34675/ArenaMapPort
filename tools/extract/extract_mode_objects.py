@@ -115,6 +115,25 @@ or ``initial`` value that disagrees with the bound's name, a marker listed twice
 other team, and an ``initial`` record whose marker list is not exactly the geometric pocket. Without
 ``--arena-data`` the sidecar has no ``stages`` key (the tracked one is made with it).
 
+Side bounds (Autoservice, PLAN-AUTOSERVICE item 6, 2026-11-11). Autoservice's TeamFight scene is a two-pocket
+map like the first four, but the pocket rule is the wrong tool for it. All 20 markers carry one stem ("Usec house",
+suffix none and 1-19, so the stem cannot name a team), and the pocket split passes only marginally: measured on package
+autoservice-native-v2 the cut between the pockets is 66.29 m against a wider-pocket diameter of 31.23 m, a ratio of 2.12
+against the limit ``POCKET_SEPARATION`` = 2.0, and it calls the pockets north (x -338, mean z 492.8) and south (x -408,
+mean z 488.2) although they lie east and west of each other (the mean-z difference is 4.6 m). A map listed in
+``SIDE_BOUND_RULES`` therefore names its sides by the bound that CONTAINS a marker instead:
+
+* a ``SideRule`` pairs a side key with the name of its spawn bound (Autoservice: ``east`` = ``SPAWN_BOUND_Fighter``,
+  ``west`` = ``SPAWN_BOUND_Fighter (1)``; the keys are geometric facts, checked by the tests against the bound centres);
+* every spawn bound must belong to exactly one side and every side has exactly one bound; a marker belongs to the side
+  whose published box (``center``, ``size``, ``rotation``) contains it with ``BOUND_EDGE_TOLERANCE`` to spare; a marker
+  in no box or in two boxes fails the run, and so do unequal marker counts (the mode is 10 against 10);
+* the capture point stays the single-light centroid of the ordinary rule (``capture_point``), there is no ``capture_points``;
+* ``side_rule`` has the method ``bound_containment`` and records per side the bound, the marker count and the centroid, and
+  under ``generic_pocket_split`` what the ordinary rule would have measured (``cut_distance``, ``pocket_spread``, ``ratio``
+  or null when it finds no pockets), so a change of that margin is visible in the file.
+Markers carry no ``pocket`` flag (all 20 are initial starts, there are no stage bounds).
+
 Transforms are composed as translate * rotate * scale with unit quaternions and no shear
 handling (Unity's lossy-scale approximation); values are rounded to 1e-4 m / degree, and
 -0.0 is written as 0.0, so the output is byte-reproducible.
@@ -132,6 +151,7 @@ CLI:
     python tools/extract/extract_mode_objects.py --package work/extract/iceberg-native-v2
         --arena-data "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
     (Iceberg only: --arena-data adds the stage graph; one line in practice)
+    python tools/extract/extract_mode_objects.py --package work/extract/autoservice-native-v2
     (the map key comes from the manifest, or from the extractor script for the two legacy
      packages, or from --map-key; the output defaults to tools/maps/<stem>.modes.json)
 """
@@ -189,6 +209,21 @@ class TeamBoundRule:
     teams: tuple             # of TeamRule; the order is the output order
 
 
+@dataclass(frozen=True)
+class SideRule:
+    """One side of a side-bound map: the key written to the sidecar and the bound that contains its markers."""
+    key: str    # "east"
+    bound: str  # "SPAWN_BOUND_Fighter"; compared stripped and case-folded, exact (no numbered stage bounds)
+
+
+@dataclass(frozen=True)
+class SideBoundRule:
+    """Per-map rule that names the two sides by bound containment (module docstring, "Side bounds")."""
+    mode: str                # the Arena mode the scene belongs to, for the sidecar comment
+    scene: str               # the scene whose SPAWNS container holds every marker and bound
+    sides: tuple             # of SideRule; the order is the output order
+
+
 TEAM_BOUND_RULES = {
     # Arena_Sanatorium CheckPoint (level376, Arena 0.6.1): FIGHTER = Bear = the east pocket, DEFENCE = Usec = the west one.
     "arena_iceberg": TeamBoundRule(
@@ -196,6 +231,15 @@ TEAM_BOUND_RULES = {
         scene="Arena_Sanatorium_CheckPoint_DesignStuff",
         teams=(TeamRule("bear", "Bear house", "SPAWN_BOUND_FIGHTER", 1),
                TeamRule("usec", "Usec house", "SPAWN_BOUND_DEFENCE", 0))),
+}
+
+SIDE_BOUND_RULES = {
+    # Arena_AutoService TeamFight (level136, Arena 0.6.2): SPAWN_BOUND_Fighter is the east pocket (x -344.2..-332.6),
+    # SPAWN_BOUND_Fighter (1) the west one (x -414..-402.4); all 20 markers are "Usec house".
+    "arena_autoservice": SideBoundRule(
+        mode="TeamFight",
+        scene="Arena_AutoService_TeamFight_DesignStuff",
+        sides=(SideRule("east", "SPAWN_BOUND_Fighter"), SideRule("west", "SPAWN_BOUND_Fighter (1)"))),
 }
 
 
@@ -583,6 +627,60 @@ def assign_team_bounds(markers: list, bounds: list, rule: TeamBoundRule) -> dict
                       for team in rule.teams}}
 
 
+def assign_side_bounds(markers: list, bounds: list, rule: SideBoundRule) -> dict:
+    """Set ``side`` (the side key) on every marker and bound by containment; return the ``side_rule`` record.
+    Fails closed on anything the rule cannot explain (module docstring, "Side bounds")."""
+    for item in markers + bounds:
+        if item["scene"] != rule.scene:
+            raise HardExtractError(
+                f"mode objects: {_label(item)} is not in the scene {rule.scene} of the side rule (a second SPAWNS "
+                f"container would need its own rule)")
+    by_bound = {norm_name(side.bound): side for side in rule.sides}
+    side_bound = {}
+    for bound in bounds:
+        side = by_bound.get(norm_name(bound["name"]))
+        if side is None:
+            raise HardExtractError(
+                f"mode objects: spawn bound {_label(bound)} is none of {[s.bound for s in rule.sides]}")
+        if side.key in side_bound:
+            raise HardExtractError(f"mode objects: side {side.key} has two spawn bounds named {side.bound}")
+        bound["side"] = side.key
+        side_bound[side.key] = bound
+    for side in rule.sides:
+        if side.key not in side_bound:
+            raise HardExtractError(f"mode objects: side {side.key} has no spawn bound {side.bound}")
+    members = {side.key: [] for side in rule.sides}
+    for marker in markers:
+        inside = [side.key for side in rule.sides
+                  if box_margin(side_bound[side.key], marker["position"]) >= -BOUND_EDGE_TOLERANCE]
+        if len(inside) != 1:
+            raise HardExtractError(
+                f"mode objects: spawn marker {_label(marker)} lies inside {len(inside)} of the side bounds "
+                f"{[s.bound for s in rule.sides]}; it must lie inside exactly one")
+        marker["side"] = inside[0]
+        members[inside[0]].append(marker)
+    counts = {key: len(items) for key, items in members.items()}
+    if len(set(counts.values())) != 1 or 0 in counts.values():
+        raise HardExtractError(f"mode objects: the sides hold {counts} markers; they must hold the same number")
+    for item in markers + bounds:
+        del item["_z"]
+    pockets = split_pockets([(m["position"][0], m["position"][2]) for m in markers])
+    generic = (None if pockets is None else
+               {"cut_distance": _clean(pockets[2]), "pocket_spread": _clean(pockets[3]),
+                "ratio": _clean(pockets[2] / pockets[3]), "limit": POCKET_SEPARATION})
+
+    def centroid(items):
+        return [_clean(sum(m["position"][axis] for m in items) / len(items)) for axis in (0, 2)]
+
+    return {"method": "bound_containment",
+            "naming": ("side = the spawn bound that contains the marker (east = SPAWN_BOUND_Fighter, west = SPAWN_BOUND_Fighter (1)); "
+                       "never north/south, never by mean z or by marker stem"),
+            "edge_tolerance": BOUND_EDGE_TOLERANCE,
+            "generic_pocket_split": generic,
+            "sides": {side.key: {"bound": side.bound, "markers": counts[side.key],
+                                 "centroid_xz": centroid(members[side.key])} for side in rule.sides}}
+
+
 def capture_points_of(lights: list) -> list:
     """The capture-point lights as individual points: ``label`` (the ``_A`` / ``_B`` / ``_C`` suffix of the name),
     ``scene``, ``path``, ``position``. A light without a label, or two with one label, fails the run."""
@@ -886,9 +984,11 @@ def _sort_markers(markers: list) -> list:
     return sorted(markers, key=lambda m: (m["scene"], m["stem"], m["index"] if m["index"] is not None else -1, m["path"]))
 
 
-def extract_scenes(graphs: list, rule: TeamBoundRule | None = None) -> dict:
+def extract_scenes(graphs: list, rule=None) -> dict:
     """Mode objects of the given SceneGraphs (scene order as given). ``rule`` (``TEAM_BOUND_RULES[map key]``)
-    replaces the two-pocket side rule by the team rule and the capture point by the individual points."""
+    replaces the two-pocket side rule by the team rule and the capture point by the individual points; a
+    ``SIDE_BOUND_RULES[map key]`` replaces only the side rule (sides by bound containment)."""
+    team_rule = rule if isinstance(rule, TeamBoundRule) else None
     lights, zones, bounds, markers = [], [], [], []
     for graph in graphs:
         lights.extend(capture_lights(graph))
@@ -902,25 +1002,31 @@ def extract_scenes(graphs: list, rule: TeamBoundRule | None = None) -> dict:
                 for child in graph.children.get(obj["id"], []):
                     if not norm_name(child["name"]).startswith("spawn_bound"):
                         markers.append(spawn_marker(graph, child))
-    if rule is None:
+    if team_rule is None:
         capture, capture_points = resolve_capture_point(lights, zones), None
     else:  # several capture points: no centroid, every point on its own
         capture, capture_points = None, capture_points_of(lights)
     for zone in zones:
         zone["distance_to_capture_point"] = (None if capture is None or zone["anchor_position"] is None
                                              else _clean(math.dist(capture["position"], zone["anchor_position"])))
-    if rule is None and capture is None:
+    if team_rule is None and capture is None:
         _warn("no capture point marker (no CAPTURE_POINT light child, no Capture_Zone away from the origin)")
-    if rule is not None and not capture_points:
+    if team_rule is not None and not capture_points:
         _warn("no CAPTURE_POINT light child: the team-bound map lists no capture points")
     if not bounds:
         _warn("no SPAWN_BOUND* object")
     if not markers:
         _warn("no SPAWNS container children")
-    side_rule = assign_team_bounds(markers, bounds, rule) if rule is not None else assign_sides(markers, bounds)
+    if isinstance(rule, SideBoundRule):
+        side_rule = assign_side_bounds(markers, bounds, rule)
+        sides = tuple(side.key for side in rule.sides)
+    elif team_rule is not None:
+        side_rule = assign_team_bounds(markers, bounds, team_rule)
+        sides = tuple(team.key for team in team_rule.teams)
+    else:
+        side_rule, sides = assign_sides(markers, bounds), ("north", "south")
     bounds.sort(key=lambda b: (b["scene"], b["side"], b["path"]))
     zones.sort(key=lambda z: (z["scene"], z["path"]))
-    sides = tuple(team.key for team in rule.teams) if rule is not None else ("north", "south")
     found = {"capture_point": capture, "capture_zones": zones, "spawn_bounds": bounds,
              "spawn_markers": {side: _sort_markers([m for m in markers if m["side"] == side]) for side in sides}}
     if capture_points is not None:
@@ -958,7 +1064,7 @@ def extract_package(package: Path, map_key: str | None = None, arena_data=None, 
             graphs.append(SceneGraph(name, json.loads(path.read_text(encoding="utf-8"))))
         except (OSError, json.JSONDecodeError) as exc:
             raise HardExtractError(f"mode objects: cannot read scene {path}: {exc}") from exc
-    rule = TEAM_BOUND_RULES.get(key)
+    rule = TEAM_BOUND_RULES.get(key) or SIDE_BOUND_RULES.get(key)
     found = extract_scenes(graphs, rule)
     source = manifest.get("source", {})
     markers = found["spawn_markers"]
@@ -968,6 +1074,17 @@ def extract_package(package: Path, map_key: str | None = None, arena_data=None, 
         "source_package": {"name": package.resolve().name, "extracted_utc": source.get("extracted_utc"),
                            "extractor_script": source.get("extractor_script"), "scenes": list(names)},
     }
+    if isinstance(rule, SideBoundRule):
+        return {
+            "_comment": (f"Arena {rule.mode} mode objects (positions only) composed from the extracted scenes by "
+                         "tools/extract/extract_mode_objects.py with the side-bound rule (sides are east and west, named by the "
+                         "spawn bound that contains the marker); schema and method in docs/progress/autoservice-release.md. "
+                         "Data for ArenaMode, not read by the map mod itself."),
+            **head,
+            "counts": {"capture_zones": len(found["capture_zones"]), "spawn_bounds": len(found["spawn_bounds"]),
+                       **{f"spawn_markers_{side.key}": len(markers[side.key]) for side in rule.sides}},
+            **found,
+        }
     if rule is None:
         return {
             "_comment": ("Arena TeamFight mode objects (positions only) composed from the extracted scenes by "
@@ -1043,6 +1160,12 @@ def main(argv=None) -> int:
               f"-> {output}", file=sys.stderr)
         return 0
     capture = data["capture_point"]
+    if data.get("side_rule", {}).get("method") == "bound_containment":
+        sides = ", ".join(f"{side} {counts['spawn_markers_' + side]}" for side in data["side_rule"]["sides"])
+        print(f"[extract_mode_objects] {data['map_key']}: capture point {capture['position'] if capture else None} "
+              f"({capture['method'] if capture else 'none'}), {counts['spawn_bounds']} spawn bound(s), markers {sides} "
+              f"(bound containment) -> {output}", file=sys.stderr)
+        return 0
     print(f"[extract_mode_objects] {data['map_key']}: capture point "
           f"{capture['position'] if capture else None} ({capture['method'] if capture else 'none'}), "
           f"{counts['spawn_bounds']} spawn bound(s), markers north {counts['spawn_markers_north']} / "
