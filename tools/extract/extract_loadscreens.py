@@ -137,6 +137,18 @@ LOADSCREENS = {
         {"asset_name": "Arena_MainMenu_Paralax_Resort-3", "path_id": 1343, "file": "sharedassets1.assets", "size": (2048, 1024)},
         {"asset_name": "Arena_MainMenu_Paralax_Resort-4", "path_id": 288, "file": "sharedassets1.assets", "size": (2048, 1024)},
     ],
+    # Autoservice (PLAN-AUTOSERVICE item 9, 2026-11-11; Arena 0.6.2.0.48473 path ids, hints only): Arena calls the map
+    # "Chop Shop" in its art. Entry 1 is AllScreens_Loadingscreen-chop-shop (1920x1080), entries 2-5 the four
+    # Arena_MainMenu_Paralax_ChopShop-1..4 menu backgrounds (2048x1024); the 1920x500 "Popup_background_chop-shop" strip
+    # is a popup background, not a rotation image, and stays out. See docs/progress/autoservice-release.md for the
+    # visual check of each image.
+    "arena_autoservice": [
+        {"asset_name": "AllScreens_Loadingscreen-chop-shop", "path_id": 1731, "file": "resources.assets", "size": (1920, 1080)},
+        {"asset_name": "Arena_MainMenu_Paralax_ChopShop-1", "path_id": 438, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_ChopShop-2", "path_id": 1445, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_ChopShop-3", "path_id": 987, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_ChopShop-4", "path_id": 135, "file": "sharedassets1.assets", "size": (2048, 1024)},
+    ],
 }
 
 

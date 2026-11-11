@@ -17,9 +17,11 @@ def synthetic_pack():
         "schema_version": 1,
         "descriptions": {
             "en": {"arena_equator": "Synthetic mall text.", "arena_bay5": "Synthetic harbor text.",
-                   "arena_airpit": "Synthetic terminal text.", "arena_bowl": "Synthetic stadium text."},
+                   "arena_airpit": "Synthetic terminal text.", "arena_bowl": "Synthetic stadium text.",
+                   "arena_autoservice": "Synthetic workshop text."},
             "ge": {"arena_equator": "Synthetic ä text.", "arena_bay5": "Synthetic ß text.",
-                   "arena_airpit": "Synthetic ö text.", "arena_bowl": "Synthetic ü text."},
+                   "arena_airpit": "Synthetic ö text.", "arena_bowl": "Synthetic ü text.",
+                   "arena_autoservice": "Synthetic é text."},
         },
     }
 
@@ -38,7 +40,7 @@ def synthetic_source():
 
 class DescriptionContractTests(unittest.TestCase):
     def test_keys_are_exactly_the_maps_that_have_an_official_text(self):
-        self.assertEqual(set(descriptions.DESCRIPTION_KEYS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"})
+        self.assertEqual(set(descriptions.DESCRIPTION_KEYS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_autoservice"})
 
     def test_iceberg_has_no_official_text_and_a_pack_carrying_it_is_rejected(self):
         # PLAN-ICEBERG item 10: Arena's en/ge/ru locales have no Name/Description row for Iceberg (only
@@ -50,12 +52,12 @@ class DescriptionContractTests(unittest.TestCase):
             pack["descriptions"][locale]["arena_iceberg"] = "Synthetic extra text."
             with self.subTest(locale=locale), self.assertRaises(ValueError):
                 descriptions.validate_pack(pack)
-        # ... and the unchanged four-map pack is complete without it.
+        # ... and the pack is complete without it.
         self.assertEqual(set(descriptions.validate_pack(synthetic_pack())["en"]), set(descriptions.DESCRIPTION_KEYS))
 
     def test_the_extractor_reads_no_iceberg_row_from_the_locales(self):
         # pack_from_assets only looks up DESCRIPTION_KEYS ids, so Iceberg-like extra rows in the source are ignored
-        # and the pack stays the four official maps.
+        # and the pack stays the official maps of the table.
         source = synthetic_source()
         for obj in source.objects.values():
             data = json.loads(obj.read().m_Script)
@@ -85,6 +87,23 @@ class DescriptionContractTests(unittest.TestCase):
         self.assertEqual(descriptions.DESCRIPTION_KEYS["arena_airpit"], "61e800b841ee214fbf1f0e53 Description")
         sidecar = json.loads((Path(__file__).resolve().parents[1] / "maps" / "airpit.json").read_text(encoding="utf-8"))
         self.assertNotIn(sidecar["id_field"], descriptions.DESCRIPTION_KEYS["arena_airpit"])
+
+    def test_autoservice_uses_arenas_location_id_not_the_sidecar_id_field(self):
+        # PLAN-AUTOSERVICE item 9: Arena's own location id (its "Name" row reads Chop Shop, as the key Arena_AutoService
+        # does); the ported location's id_field has no row in any locale.
+        self.assertEqual(descriptions.DESCRIPTION_KEYS["arena_autoservice"], "6441004f8ab20b218807f14b Description")
+        sidecar = json.loads((Path(__file__).resolve().parents[1] / "maps" / "autoservice.json").read_text(encoding="utf-8"))
+        self.assertEqual(sidecar["id_field"], "e6aa4591d3e1a59835d625b3")
+        self.assertNotIn(sidecar["id_field"], descriptions.DESCRIPTION_KEYS["arena_autoservice"])
+
+    def test_a_pack_without_autoservice_is_rejected(self):
+        # The extractor's pack is complete for its own table; the server accepts a pack without the pending entry
+        # (ArenaMapDescriptionsTests), but validate_pack demands what the extractor writes.
+        pack = synthetic_pack()
+        for maps in pack["descriptions"].values():
+            del maps["arena_autoservice"]
+        with self.assertRaises(ValueError):
+            descriptions.validate_pack(pack)
 
     def test_a_pack_without_airpit_is_rejected(self):
         # A pack generated before AirPit was promoted must fail validation (the server discards it wholesale).

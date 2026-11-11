@@ -9,7 +9,8 @@ namespace ArenaMapPort.Server;
 /// Arena's locales carry a map description for only some maps (Equator, Bay5, AirPit and Bowl among the released ones;
 /// Iceberg has no Name or Description row at all, PLAN-ICEBERG item 10). The pack
 /// (<c>locales/map-descriptions.json</c>, written by <c>tools/extract/extract_map_descriptions.py</c>) must cover exactly
-/// the released maps that HAVE an official text (<see cref="OfficialTextMapKeys"/>); a map without one is not in the pack
+/// the released maps that HAVE an official text (<see cref="OfficialTextMapKeys"/>), plus, optionally, the entries of official-text
+/// maps that are not released yet (Autoservice before its promotion); a map without one is not in the pack
 /// and answers with its descriptor's <see cref="ArenaMapDescriptor.LocaleDescription"/> (the port's own words, one
 /// English string for every language). A damaged, stale or over-complete pack is still discarded as a whole, so the
 /// official texts are never half-applied.
@@ -20,7 +21,9 @@ public sealed class ArenaMapDescriptions
     /// The maps whose official description exists in Arena's locales: the key set of
     /// <c>extract_map_descriptions.DESCRIPTION_KEYS</c> (a test pins the two against each other). A new map joins this
     /// list only together with its Arena location id in that Python table; a released map missing here falls back to its
-    /// own <see cref="ArenaMapDescriptor.LocaleDescription"/>.
+    /// own <see cref="ArenaMapDescriptor.LocaleDescription"/>. A map listed here may precede its promotion into
+    /// <see cref="ArenaMapRegistry.All"/> (Autoservice, PLAN-AUTOSERVICE item 9): <see cref="Load(string, Action{string}, IEnumerable{ArenaMapDescriptor})"/>
+    /// then accepts, but does not require, its entry.
     /// </summary>
     public static readonly IReadOnlyList<string> OfficialTextMapKeys = new[]
     {
@@ -28,6 +31,7 @@ public sealed class ArenaMapDescriptions
         ArenaMapRegistry.Bay5.Key,
         ArenaMapRegistry.AirPit.Key,
         ArenaMapRegistry.Bowl.Key,
+        ArenaMapRegistry.AutoService.Key,
     };
 
     private readonly Dictionary<string, Dictionary<string, string>> _descriptions = new();
@@ -50,7 +54,11 @@ public sealed class ArenaMapDescriptions
                 throw new InvalidDataException("Unsupported schema version");
 
             var result = new ArenaMapDescriptions();
+            var releasedKeys = released.Select(map => map.Key).ToHashSet(StringComparer.Ordinal);
             var maps = released.Where(HasOfficialText).Select(map => map.Key).ToHashSet(StringComparer.Ordinal);
+            // Official-text maps that are not released yet: their entry is allowed in the pack (the extractor writes it ahead
+            // of the promotion) but never required, so a pack of the released maps alone stays valid.
+            var pending = OfficialTextMapKeys.Where(key => !releasedKeys.Contains(key)).ToHashSet(StringComparer.Ordinal);
             foreach (var language in root.GetProperty("descriptions").EnumerateObject())
             {
                 var values = new Dictionary<string, string>();
@@ -61,7 +69,8 @@ public sealed class ArenaMapDescriptions
                         throw new InvalidDataException("Empty map description");
                     values.Add(entry.Name, value);
                 }
-                if (!maps.SetEquals(values.Keys))
+                var covered = values.Keys.Where(key => !pending.Contains(key)).ToHashSet(StringComparer.Ordinal);
+                if (!maps.SetEquals(covered))
                     throw new InvalidDataException("Description map set differs from the released maps that have an official text");
                 result._descriptions.Add(language.Name, values);
             }

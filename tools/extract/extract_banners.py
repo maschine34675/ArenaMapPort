@@ -85,6 +85,10 @@ BANNERS = {
     # singular), the only object of that name in resources.assets of Arena 0.6.1.0.48206 (path_id 1482 is that build's
     # hint); 769x460 like the rest. The image is the hotel's rotunda sign (Cyrillic "Aisberg") and crane at dusk.
     "arena_iceberg": {"asset_name": "Matchmaker_Banners_Iceberg", "path_id": 1482},
+    # PLAN-AUTOSERVICE item 9 (2026-11-11): Arena's "Matchmaker_Banner_chop-shop" (singular like four of the five other
+    # maps; the object name is lower-case with a hyphen), the only object of that name in resources.assets of Arena
+    # 0.6.2.0.48473 (path_id 1738 is that build's hint); 769x460 RGB24 like the rest.
+    "arena_autoservice": {"asset_name": "Matchmaker_Banner_chop-shop", "path_id": 1738},
 }
 
 
