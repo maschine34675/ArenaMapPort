@@ -279,3 +279,15 @@ intensity=0.500` and the four `lamp=SBG_Bowl_Light/OO/BACK_FLARES/Flare_City_bac
 880.99 / 887.65`, every one beyond the 500 m cull from the east pocket, so nothing is drawn; no `disabled after error`
 line in the process (three raids, hideout). The package stays staged for that reason only; a visible city glow would need
 a map-specific cull rule, which remains undecided.
+
+## 2026-11-11 - Autoservice exporter tables (PLAN-AUTOSERVICE item 11, offline)
+
+`extract_multiflare.py` knows `arena_autoservice`: scenes 62 / 65 / 66 (Light) / 69 (Scripts) / 136, the same five names as the sidecar's
+`all_scene_names`, and the census tuple (21, 8, 77, 32). All 21 `FlareLight` sit in level66; the only `FlareSceneSettings` of the owned
+set is in the summer Scripts scene (level69). Level 243 (Scripts_Winter) has a second settings object and level 244 35 more lights; neither
+is part of the map. The sound, AI and culling scenes (63, 112, 135) hold none. Active lights: the 8 `armstrong_light emissive (N)/!gaslamp_NewMultiFlareLight_gas (2)` (4 elements each, 32 elements);
+the 10 `Wall_light_factory_lamp-source` flares (3 elements each) sit under an inactive ancestor and the 3 glowstick lights are disabled, so they stay as inactive entries. The package
+(`flares.json` plus two textures) is exported to the ignored `work/extract/multiflare/arena_autoservice`; staging rows, the validator's
+`FLARE_MAP_KEYS` and the client rows are item 12.
+The released maps' output did not change: the original and the changed script, run against the same installed Arena, write byte-identical
+folders for Equator, Bay5 and Bowl (`diff -r` empty).

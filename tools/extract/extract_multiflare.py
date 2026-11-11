@@ -42,10 +42,16 @@ SCENES = {
     "arena_bowl": {41: "Arena_Bowl", 43: "Arena_Bowl_DesignStuff", 44: "Arena_Bowl_Scripts",
                    45: "Arena_Bowl_Light", 46: "Arena_Bowl_Building", 47: "Arena_Bowl_TeamFight",
                    48: "Arena_Bowl_TeamFight_DesignStuff", 95: "Arena_Bowl_Grass"},
+    # Autoservice (2026-11-11): the 21 FlareLight sit in the Light scene (66); the one FlareSceneSettings
+    # belongs to the summer Scripts scene (69). The sound, AI and culling scenes (112, 63, 135) hold none
+    # (census in docs/progress/autoservice-release.md); the winter set (243-246) is not part of the map.
+    "arena_autoservice": {62: "Arena_AutoService", 65: "Arena_AutoService_DesignStuff", 66: "Arena_AutoService_Light",
+                          69: "Arena_AutoService_Scripts", 136: "Arena_AutoService_TeamFight_DesignStuff"},
 }
 # (source lights, active lights, source flare elements, active elements); a drifting Arena source fails the export.
 EXPECTED_CENSUS = {"arena_equator": (28, 25, 48, 33), "arena_bay5": (25, 24, 116, 111),
-                   "arena_bowl": (28, 4, 130, 20)}
+                   "arena_bowl": (28, 4, 130, 20),
+                   "arena_autoservice": (21, 8, 77, 32)}
 
 
 def require(value, message):
