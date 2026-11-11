@@ -93,7 +93,7 @@ CLI:
         --output tools/maps/equator.doors.json --csharp
     python tools/extract/extract_door_poses.py --map arena_bay5 --package work/extract/bay5-native-v5 \\
         --output tools/maps/bay5.doors.json --csharp
-    python tools/extract/extract_door_poses.py --map arena_airpit --package work/extract/airpit-native-v9 \\
+    python tools/extract/extract_door_poses.py --map arena_airpit --package work/extract/airpit-native-v10 \\
         --output tools/maps/airpit.doors.json --csharp
     python tools/extract/extract_door_poses.py --map arena_iceberg --package work/extract/iceberg-native-v2 \\
         --output tools/maps/iceberg.doors.json --csharp

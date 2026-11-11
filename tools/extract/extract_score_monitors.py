@@ -103,7 +103,7 @@ TYPE_WORDS = {
 MAPS = {
     "arena_equator": {"stem": "equator", "package": "equator-native-v5"},
     "arena_bay5": {"stem": "bay5", "package": "bay5-native-v5"},
-    "arena_airpit": {"stem": "airpit", "package": "airpit-native-v9"},
+    "arena_airpit": {"stem": "airpit", "package": "airpit-native-v10"},
     "arena_bowl": {"stem": "bowl", "package": "bowl-native-v2"},
     # PLAN-ICEBERG item 8, released set since the promotion (item 12): Sanatorium 256, 260, 258, 257, 375 and 376; only the CheckPoint design scene
     # (376) carries holders

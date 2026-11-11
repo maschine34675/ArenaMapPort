@@ -2179,7 +2179,7 @@ class RealAirPitTests(unittest.TestCase):
             import UnityPy  # noqa: F401
         except ImportError:
             raise unittest.SkipTest("UnityPy is not installed")
-        package = REPO / "work" / "extract" / "airpit-native-v9"
+        package = REPO / "work" / "extract" / "airpit-native-v10"
         cls.package = package if (package / "scenes" / "Arena_Airpit_TeamFight_DesignStuff.json").is_file() else None
         cls.text, cls.source, cls.summary = E.extract("arena_airpit", "auto", cls.package)
 
@@ -2206,7 +2206,7 @@ class RealAirPitTests(unittest.TestCase):
         self.assertEqual(sorted(line.rsplit(": ", 1)[1] for line in glow), ["BUS_LIGHT/Exit1", "BUS_LIGHT/Exit2", "BUS_LIGHT/Exit3"])
         self.assertEqual(self.summary[-1], "poses 36: 24 dotanimator, 12 borrowed")
         if self.package is not None:
-            self.assertTrue(any(line.startswith("package check: 36 pose(s) exist in airpit-native-v9") for line in self.summary))
+            self.assertTrue(any(line.startswith("package check: 36 pose(s) exist in airpit-native-v10") for line in self.summary))
         self.assertEqual(sum(1 for line in self.summary if "lender twin" in line), 2)
 
     def test_every_switch_of_the_surveyed_levels_flips_the_state_of_its_node(self):

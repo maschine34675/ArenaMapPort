@@ -98,9 +98,9 @@
   "map_key": "arena_airpit",
   "schema_version": 1,
   "source_package": {
-    "extracted_utc": "2026-10-17T17:40:58Z",
+    "extracted_utc": "2026-11-11T19:59:25Z",
     "extractor_script": "tools/extract/extract_map.py",
-    "name": "airpit-native-v9",
+    "name": "airpit-native-v10",
     "scenes": [
       "Arena_AirPit_ShootOut",
       "Arena_AirPit_ShootOut_Light",

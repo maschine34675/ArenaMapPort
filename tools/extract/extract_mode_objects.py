@@ -146,7 +146,7 @@ without separated pockets, or any of the side failures above). Missing categorie
 CLI:
     python tools/extract/extract_mode_objects.py --package work/extract/equator-native-v5
     python tools/extract/extract_mode_objects.py --package work/extract/bay5-native-v5
-    python tools/extract/extract_mode_objects.py --package work/extract/airpit-native-v9
+    python tools/extract/extract_mode_objects.py --package work/extract/airpit-native-v10
     python tools/extract/extract_mode_objects.py --package work/extract/bowl-native-v<N>
     python tools/extract/extract_mode_objects.py --package work/extract/iceberg-native-v2
         --arena-data "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"

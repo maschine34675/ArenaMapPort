@@ -1039,7 +1039,7 @@ class KeySourcesTests(unittest.TestCase):
                 self.assertEqual(self.entries(key), planned)
 
     def test_the_accepted_manifests_agree_when_they_are_present(self):
-        packages = {"arena_equator": "equator-native-v5", "arena_bay5": "bay5-native-v5", "arena_airpit": "airpit-native-v9", "arena_bowl": "bowl-native-v2",
+        packages = {"arena_equator": "equator-native-v5", "arena_bay5": "bay5-native-v5", "arena_airpit": "airpit-native-v10", "arena_bowl": "bowl-native-v2",
                     "arena_iceberg": "iceberg-native-v2",
                     # the accepted package of Phase A (v2 adds the ambient-audio export); a missing manifest is skipped like every other map's
                     "arena_autoservice": "autoservice-native-v2"}

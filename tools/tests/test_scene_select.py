@@ -1699,12 +1699,16 @@ LIGHT_V8_PINS = {"objects": 1538, "units": 298, "carriers": 37, "twins": 268, "d
 # v9 (2026-10-17): v8 + three explicit roots for the level38 SOO crates under the tarp City_Generic_Tarp_01 (1) at
 # (-31.3, -16.7); the roots name every same-named SOO sibling (cardbox_vinyl x8, reserve_woodBox_medium (10) x2), so the
 # five that stand elsewhere are excluded by position (213 entries). +3 units, +1 carrier (SOO), +29 objects.
-MAIN_HALL_V9_PINS = {**MAIN_HALL_V8_PINS, "objects": 13035, "units": 3550, "carriers": 246, "twins": 3215,
-                     "go_ids_sha256": "65a20b499bed3cd1c2b0b9e4ceac64d03a2a4569b63a3f39ef6deba3a49d5b7b",
-                     "excluded": 637, "exclude_entries": 213,
+# v10 (2026-11-11) also excludes the floating board OO/PROPS/INDOOR/FRONT/plywood_board_2 (46) (it rested on the SOO tarpaulin pillar the plan
+# does not import): 214 entries, -1 unit, -5 objects (the board, its collider, LOD and shadow children and its ballistic child).
+# The name keeps V9 (the structure is v9's); the pins are the v10 numbers.
+MAIN_HALL_V9_PINS = {**MAIN_HALL_V8_PINS, "objects": 13030, "units": 3549, "carriers": 246, "twins": 3215,
+                     "go_ids_sha256": "f924262440e8fe928d1f345089318e3f4e5effaff1d410dda2f795da128acdba",
+                     "excluded": 638, "exclude_entries": 214,
                      "rules": {**MAIN_HALL_V8_PINS["rules"],
                                **pin_rules(**{HALL + "SOO/cardbox_vinyl": (5, 3, 4), HALL + "SOO/reserve_woodBox_medium (10)": (2, 0, 1),
-                                              HALL + "SOO/reserve_woodBox_medium (9)": (1, 0)})}}
+                                              HALL + "SOO/reserve_woodBox_medium (9)": (1, 0),
+                                              HALL_REGION + "OO/PROPS": (1210, 1251, 162, 4)})}}
 # What the 324 / 325 twins lack (phase 1b census): the 20 Lights and 2 ShadowPlaneBox renderer children below
 # twin-skipped lamp units of level37, and the car-shadow decals of four baggage carts of level38.
 LIGHT_DESC = [
@@ -1894,10 +1898,10 @@ class LiveSelectionTests(LiveSelectionCase):
         self.need_v8()
         record = self.records["Arena_Airpit_Main_hall"]
         entries = record["select"]["exclude"]
-        self.assertEqual(len(entries), 213)   # 208 census entries + the 5 same-named crate siblings (v9)
+        self.assertEqual(len(entries), 214)   # 208 census entries + the 5 same-named crate siblings (v9) + the floating board (v10)
         self.assertTrue(all(e["reason"] for e in entries))
         sel = self.selections["Arena_Airpit_Main_hall"]
-        self.assertEqual((sel.report["excluded"], sel.report["exclude_entries"]), (637, 213))
+        self.assertEqual((sel.report["excluded"], sel.report["exclude_entries"]), (638, 214))
         # the census run of phase 1b cut the decoration box at z 90 and imported no twin descendants
         census = deepcopy(record)
         census["select"]["twin_descendants"] = "skip"
@@ -1905,8 +1909,8 @@ class LiveSelectionTests(LiveSelectionCase):
             region["max"][2] = 90.0
         sel = SS.select_nodes(census, self.graph(38), self.graph(record["select"]["skip_twins_of"]))
         self.assertEqual({k: sel.report[k] for k in ("objects", "units", "carriers", "excluded")},
-                         {"objects": 13026, "units": 3545, "carriers": 242, "excluded": 637})   # v8: 12997 / 3542 / 241 / 632
-        self.assertEqual(sel.report["go_ids_sha256"], "db3d1fadd5ae71938818e898487ac76adca86029e6af606579cdcb4396e73635")
+                         {"objects": 13021, "units": 3544, "carriers": 242, "excluded": 638})   # v9: 13026 / 3545 / 242 / 637, v8: 12997 / 3542 / 241 / 632
+        self.assertEqual(sel.report["go_ids_sha256"], "84043d0f1a4ff210ff1faa417ef023394439318132a5d5d50ee19117983fc7d5")   # v10 (the board excluded too); db3d1fad... in v9
 
     def test_v8_exclusions_are_the_only_difference_to_the_unexcluded_record(self):
         self.need_v8()
@@ -1916,7 +1920,7 @@ class LiveSelectionTests(LiveSelectionCase):
         sel = self.selections["Arena_Airpit_Main_hall"]
         self.assertEqual(set(plain.unit_tf_ids) - set(sel.unit_tf_ids), set(sel.excluded_tf_ids))
         self.assertEqual(set(sel.unit_tf_ids) - set(plain.unit_tf_ids), set())
-        self.assertEqual(len(sel.excluded_tf_ids), 637)
+        self.assertEqual(len(sel.excluded_tf_ids), 638)
 
 
 class DigestTests(unittest.TestCase):

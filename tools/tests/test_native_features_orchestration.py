@@ -321,7 +321,7 @@ class AcceptedPackageShapeTests(NativeFeatureTestCase):
 
     def test_airpit_native_v9_blocks_are_reproduced(self):
         # v9 = v8 + the three SOO crates under the tarp (explicit roots, five same-named siblings excluded by position).
-        self.check_package("airpit-native-v9")
+        self.check_package("airpit-native-v10")
 
 
 class ExtractMapCommandLineTests(unittest.TestCase):

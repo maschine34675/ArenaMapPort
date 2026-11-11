@@ -39,7 +39,7 @@ MAPS = REPO / "tools" / "maps"
 CAP = 4.6            # emission_cap (user, 2026-11-07 evening; 4.8 in 0.5.0, 4.0 before)
 FLOOR = 1.8            # (user, 2026-11-07 evening; 1.9 in 0.5.0)  # emission_floor (2026-11-01, "Emission floor")
 LIFT_MINIMUM = 0.25    # EmissionCapModel.LiftMinimum: weaker materials are glass tints and dark light bars, never lifted
-RELEASED = {"equator": "equator-native-v5", "bay5": "bay5-native-v5", "airpit": "airpit-native-v9", "bowl": "bowl-native-v2"}
+RELEASED = {"equator": "equator-native-v5", "bay5": "bay5-native-v5", "airpit": "airpit-native-v10", "bowl": "bowl-native-v2"}
 ICEBERG_PACKAGE = WORK / "extract" / "iceberg-native-v2"
 HAVE_ICEBERG = (ICEBERG_PACKAGE / "scenes" / "Arena_Sanatorium.json").is_file()
 

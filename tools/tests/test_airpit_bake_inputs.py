@@ -75,7 +75,7 @@ ARENA_LAYERS = [9, 11, 13, 18, 30]            # NavMeshSurface mask 0x40042A00 o
 # from 2a1e0ce (2026-10-12) to 2026-10-17, when the original north team box (z 69.16..85.16) needed its pocket meshed
 # again (the held passport gate keeps bots out of it in plain raids).
 BOUNDS = [-57, 37, -2, 8, -83, 83]
-PACKAGE = REPO / "work" / "extract" / "airpit-native-v9"   # v8 + the three SOO crates under the tarp (2026-10-17); v6/v7/v8 are archives
+PACKAGE = REPO / "work" / "extract" / "airpit-native-v10"   # v8 + the three SOO crates under the tarp (2026-10-17); v6/v7/v8 are archives
 HAVE_PACKAGE = (PACKAGE / "scenes" / "Arena_AirPit_ShootOut.json").is_file()
 ARENA_NAVMESH = Path("D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data/sharedassets33.assets")
 
@@ -271,7 +271,7 @@ class ValidatorTests(unittest.TestCase):
         self.assertEqual(VD.bake_input_errors(sidecar("bay5.json")), [])
 
 
-@unittest.skipUnless(HAVE_PACKAGE, "work/extract/airpit-native-v9 not present (furnished hall plus the crates under the tarp)")
+@unittest.skipUnless(HAVE_PACKAGE, "work/extract/airpit-native-v10 not present (furnished hall plus the crates under the tarp)")
 class PackageTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -422,16 +422,18 @@ class PackageTests(unittest.TestCase):
         # ballistic twins out again: sources 7772 - 32 = 7740, mask 3036 - 16 = 3020. EMISSIVE holds no collider.
         # v9 (2026-10-17) adds the three SOO crates under the tarp: 7 collider owners (2 x COLLIDER + BALLISTIC, cardbox
         # COLLIDER + 2 BALLISTIC), 3 of them on layer 18: owners 7929, sources 7747, mask 3023.
-        self.assertEqual(len(cset.owners), 7929)
-        self.assertEqual(int(everything.sum()), 7747)
-        self.assertEqual(int(masked.sum()), 3023)
+        # v10 (2026-11-11) leaves the floating level38 board plywood_board_2 (46) out: 2 collider owners (COLLIDER + BALLISTIC), one of
+        # them on layer 18: owners 7927, sources 7745, mask 3022.
+        self.assertEqual(len(cset.owners), 7927)
+        self.assertEqual(int(everything.sum()), 7745)
+        self.assertEqual(int(masked.sum()), 3022)
         per_scene = {}
         for i, owner in enumerate(cset.owners):
             counts = per_scene.setdefault(owner.scene, [0, 0, 0])
             counts[0] += 1
             counts[1] += int(everything[i])
             counts[2] += int(masked[i])
-        self.assertEqual(per_scene["Arena_Airpit_Main_hall"], [2391, 2391, 969])   # [2384, 2384, 966] before the v9 crates
+        self.assertEqual(per_scene["Arena_Airpit_Main_hall"], [2389, 2389, 968])   # v10 without the board; [2391, 2391, 969] in v9, [2384, 2384, 966] before the v9 crates
         self.assertEqual(per_scene["Arena_Airpit_Light"], [229, 229, 47])
         self.assertEqual(per_scene["Arena_AirPit_ShootOut"], [4625, 4537, 1891])   # 4554 / 1897 before the six shells, 4540 before the cubes
         self.assertEqual(per_scene["Arena_Airpit_TeamFight_DesignStuff"], [97, 3, 0])   # [97, 35, 16] while the passport leaves were sources
@@ -1018,7 +1020,7 @@ def airpit_points():
     return points
 
 
-@unittest.skipUnless(pc is not None and HAVE_PACKAGE, "numpy or work/extract/airpit-native-v9 not present")
+@unittest.skipUnless(pc is not None and HAVE_PACKAGE, "numpy or work/extract/airpit-native-v10 not present")
 class AirPitDoorBakePackageTests(unittest.TestCase):
     """The rows over the real v9 package: which colliders the new bake drops, which become walls, and what the new walls stand next to."""
 
@@ -1072,9 +1074,9 @@ class AirPitDoorBakePackageTests(unittest.TestCase):
         def on_mask(bake):
             return {i for i in bake.sources() if (mask >> bake.cset.owners[i].layer) & 1}
 
-        self.assertEqual((len(self.old.sources()), len(on_mask(self.old))), (7747, 3023))
-        self.assertEqual((len(self.new.sources()), len(on_mask(self.new))), (7777, 3035))
-        self.assertEqual(len(on_mask(self.new)) + 12, 3047)                      # + the 12 NavMeshModifierVolume sources of the real log
+        self.assertEqual((len(self.old.sources()), len(on_mask(self.old))), (7745, 3022))   # v10: 7747 / 3023 with the board
+        self.assertEqual((len(self.new.sources()), len(on_mask(self.new))), (7775, 3034))   # v9: 7777 / 3035
+        self.assertEqual(len(on_mask(self.new)) + 12, 3046)                      # + the 12 NavMeshModifierVolume sources of the real log
         dropped_on_mask = {k: len([i for i in self.new.dropped_by_barriers() if self.new.reason[i] == k and (mask >> self.new.cset.owners[i].layer) & 1])
                            for k in self.new.counts() if k.startswith("door_poses:")}
         self.assertEqual(sum(dropped_on_mask.values()), 28)

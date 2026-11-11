@@ -94,7 +94,7 @@ Export `arena_airpit_navmesh.bundle` in the isolated Unity probe, then run:
 
 ```powershell
 & ./work/dynamicmaps/venv/Scripts/python.exe tools/dynamicmaps/export_equator.py `
-  --package work/extract/airpit-native-v9 --descriptor tools/maps/airpit.json `
+  --package work/extract/airpit-native-v10 --descriptor tools/maps/airpit.json `
   --navmesh work/dynamicmaps/airpit/navmesh.json --output work/dynamicmaps/airpit/ground-only
 pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot D:/SPT41 `
   -DynamicMapsPackage work/dynamicmaps/airpit/ground-only/pack -DynamicMapsMap AirPit

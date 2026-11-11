@@ -531,7 +531,7 @@ class AirpitV8PlanTests(unittest.TestCase):
 
     def test_main_hall_exclusions(self):
         spec = self.specs()["Arena_Airpit_Main_hall"]
-        self.assertEqual(len(spec.exclude), 213)   # 208 census entries + the 5 same-named crate siblings (v9)
+        self.assertEqual(len(spec.exclude), 214)   # 208 census entries + the 5 same-named crate siblings (v9) + the floating board (v10)
         self.assertTrue(all(e.reason.strip() for e in spec.exclude))
         self.assertTrue(any(e.at is not None for e in spec.exclude))
         self.assertTrue(all(e.path.split("/")[0] in ("SBG_Arena_Airpit_Main_hall", "VARIANT", "PROPSnoCulling")

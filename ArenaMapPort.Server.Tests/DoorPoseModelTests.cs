@@ -1144,12 +1144,12 @@ public sealed class DoorPoseDataTests
     }
 }
 
-/// <summary>Runs only when the ignored extract of AirPit (work/extract/airpit-native-v9, BSG-derived) is on this machine.</summary>
+/// <summary>Runs only when the ignored extract of AirPit (work/extract/airpit-native-v10, BSG-derived) is on this machine.</summary>
 internal sealed class AirPitSceneFactAttribute : FactAttribute
 {
     public AirPitSceneFactAttribute()
     {
-        if (AirPitScene.Path() == null) Skip = "work/extract/airpit-native-v9 is not present (BSG-derived, ignored by git)";
+        if (AirPitScene.Path() == null) Skip = "work/extract/airpit-native-v10 is not present (BSG-derived, ignored by git)";
     }
 }
 
@@ -1169,7 +1169,7 @@ internal static class AirPitScene
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
         {
-            var path = System.IO.Path.Combine(dir.FullName, "work", "extract", "airpit-native-v9", "scenes", "Arena_Airpit_TeamFight_DesignStuff.json");
+            var path = System.IO.Path.Combine(dir.FullName, "work", "extract", "airpit-native-v10", "scenes", "Arena_Airpit_TeamFight_DesignStuff.json");
             if (File.Exists(path)) return path;
         }
         return null;

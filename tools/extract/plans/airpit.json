@@ -785,6 +785,10 @@
             "reason": "replaced in level324: lies inside OO/PROPS/OUTDOOR/Passenger_ladder (5)"
           },
           {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/plywood_board_2 (46)",
+            "reason": "floated in the port: in level38 it rests at y 5.86 on SOO/shopping_mall_med_camp_tarpaulin_pillar (top 5.85), a cover object this plan does not import; level324 has crates VARIANT/cardbox_vinyl_(ARENA) (4)/(2) there (top 5.45), which left the board 0.41 m in the air (2026-11-11)"
+          },
+          {
             "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
             "at": [
               -18.202,

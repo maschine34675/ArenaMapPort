@@ -151,7 +151,7 @@ Animators use a controller with no clip, so the clip path reports them as ignore
 
 ```powershell
 python tools/extract/extract_door_poses.py --map arena_bowl --arena auto --package work/extract/bowl-native-v2 --output tools/maps/bowl.doors.json --csharp
-python tools/extract/extract_door_poses.py --map arena_airpit --package work/extract/airpit-native-v9 --output tools/maps/airpit.doors.json --csharp
+python tools/extract/extract_door_poses.py --map arena_airpit --package work/extract/airpit-native-v10 --output tools/maps/airpit.doors.json --csharp
 python tools/validate/validate_map_descriptors.py       # must print OK
 ```
 
