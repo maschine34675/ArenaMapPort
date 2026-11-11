@@ -270,5 +270,52 @@ class InactiveLightRuleAndBowlPinTests(unittest.TestCase):
             M.validate_graph(d)
 
 
+class AutoservicePinTests(unittest.TestCase):
+    """2026-11-11: Autoservice joins the exporter tables (plan item 11); the package is not staged yet (item 12)."""
+
+    def test_autoservice_pins_scene_table_and_census(self):
+        self.assertEqual(M.SCENES["arena_autoservice"], {
+            62: "Arena_AutoService", 65: "Arena_AutoService_DesignStuff", 66: "Arena_AutoService_Light",
+            69: "Arena_AutoService_Scripts", 136: "Arena_AutoService_TeamFight_DesignStuff"})
+        # 21 FlareLight in level66, 8 of them active (the gas-lamp set), 77 elements, 32 of them active.
+        self.assertEqual(M.EXPECTED_CENSUS["arena_autoservice"], (21, 8, 77, 32))
+
+    def test_winter_scenes_and_scenes_without_flare_components_are_not_owned(self):
+        # 243 (Scripts_Winter) has its own FlareSceneSettings, 244 35 FlareLights: both would break the one-settings rule.
+        owned = set(M.SCENES["arena_autoservice"])
+        self.assertFalse(owned & {243, 244, 245, 246})
+        self.assertFalse(owned & {63, 112, 135})
+
+    def test_graph_scene_ownership_covers_the_light_scene_only_for_autoservice(self):
+        d = InactiveLightRuleAndBowlPinTests.bowl_graph()
+        d["map_key"] = "arena_autoservice"
+        for l in d["lights"]:
+            l["scene"] = "Arena_AutoService_Light"
+        M.validate_graph(d)
+        d["lights"][0]["scene"] = "Arena_Bowl_Light"
+        with self.assertRaises(ValueError):
+            M.validate_graph(d)
+
+    def test_released_maps_keep_their_pins(self):
+        self.assertEqual(M.EXPECTED_CENSUS["arena_equator"], (28, 25, 48, 33))
+        self.assertEqual(M.EXPECTED_CENSUS["arena_bay5"], (25, 24, 116, 111))
+        self.assertEqual(M.EXPECTED_CENSUS["arena_bowl"], (28, 4, 130, 20))
+
+    def test_exported_package_matches_the_pins_when_the_work_folder_is_available(self):
+        import os
+        root = os.environ.get("ARENAMAPPORT_WORK_DIR")
+        path = Path(root) / "extract" / "multiflare" / "arena_autoservice" / "flares.json" if root else None
+        if path is None or not path.is_file():
+            self.skipTest("ARENAMAPPORT_WORK_DIR with the exported Autoservice flare package not set")
+        d = json.loads(path.read_text(encoding="utf-8"))
+        M.validate_graph(d)
+        active = [l for l in d["lights"] if M.light_is_active(l)]
+        self.assertEqual((len(d["lights"]), len(active), sum(len(l["flares"]) for l in d["lights"]),
+                          sum(len(l["flares"]) for l in active)), M.EXPECTED_CENSUS["arena_autoservice"])
+        self.assertEqual({l["scene"] for l in d["lights"]}, {"Arena_AutoService_Light"})
+        self.assertEqual(d["settings"]["scene"], "Arena_AutoService_Scripts")
+        self.assertEqual(len(d["textures"]), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

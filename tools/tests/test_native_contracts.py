@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections import Counter
 from copy import deepcopy
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -1265,7 +1266,8 @@ class AudioFollowsTheContractTests(unittest.TestCase):
 # ---------------------------------------------------------------------------------------------
 
 def package_dir(name: str):
-    path = REPO / 'work' / 'extract' / name
+    root = os.environ.get('ARENAMAPPORT_EXTRACT_ROOT')   # a git worktree has no work/ (AGENTS.md, real-data tests)
+    path = (Path(root) if root else REPO / 'work' / 'extract') / name
     return path if (path / 'manifest.json').is_file() else None
 
 
