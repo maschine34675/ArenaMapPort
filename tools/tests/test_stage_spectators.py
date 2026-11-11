@@ -80,7 +80,7 @@ class SharedSpectators(unittest.TestCase):
         (folder / S.GRAPH).write_bytes(gzip.compress(json.dumps(data).encode()))
         with self.assertRaisesRegex(ValueError, 'filename'):
             S.stage(self.sources, self.output)
-        with self.assertRaisesRegex(ValueError, 'all four'):
+        with self.assertRaisesRegex(ValueError, 'every crowd-map'):
             S.stage({'airpit': folder}, self.output)
 
     def test_missing_corrupt_extra_or_old_schema_staged_data_refused(self):

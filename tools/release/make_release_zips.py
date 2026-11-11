@@ -46,7 +46,7 @@ dynamicmaps folder) or more than one is a hard error, never a silent skip; so is
 listed. The rules pin the leaf names the build stages, and required_files() demands everything every released
 map must carry (bundles, key file, database entry, shader sidecar, AI sidecar, banner, acoustic graph, gate sound
 manifest, spectator package, first loading screen); only flares and the overview map are optional per map, and a map listed in
-CROWDLESS_MAP_KEYS (Iceberg) has no spectator package at all (the rule and the required file are dropped for it, and a stray one is
+CROWDLESS_MAP_KEYS (Iceberg only since Autoservice got its crowd, 2026-11-11) has no spectator package at all (the rule and the required file are dropped for it, and a stray one is
 an unclassified file). Water is the mirror image: a map listed in NATIVE_WATER_MAP_KEYS (Bay5, Iceberg) must carry its package (water.json and the four
 texture mip chains) and any other map has no water rule at all, so a stray one is an unclassified file. Every ZIP carries
 BepInEx/plugins/maschine-ArenaMapPort/parts/<id>.json, a schema-1 manifest naming ALL parts (one, in the single

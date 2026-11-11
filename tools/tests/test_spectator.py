@@ -240,7 +240,7 @@ class SpectatorValidation(unittest.TestCase):
         package = S.package_path(name)
         data = json.loads(gzip.decompress((package / 'spectator.json.gz').read_bytes()))
         S.validate(data, f'arena_{name}')
-        self.assertEqual(len(data['actors']), 88 if name == 'bay5' else 99)
+        self.assertEqual(len(data['actors']), {'bay5': 88, 'autoservice': 30}.get(name, 99))
         self.assertEqual(len({a['name'].split(' (')[0] for a in data['actors']}), 15)
         self.assertTrue(all(not a['missing'] for a in data['actors']))
         self.assertLess(len(data['meshes']), sum(len(a['parts']) for a in data['actors']))

@@ -3,14 +3,17 @@
 2026-11-11 (Autoservice joined the release lists, PENDING: NOT built, NOT staged as bundles, NOT released; PLAN-AUTOSERVICE item 12, record
 [progress/autoservice-release.md](progress/autoservice-release.md)): `ArenaMapRegistry.All`, `RELEASE_MAP_KEYS`, the csproj rows and the packer now expect a
 **sixth** map, `arena_autoservice` (Arena's `Arena_AutoService`, "Chop Shop"). The published 0.5.0 contract (359 files) below stays the published one. Once its
-bundles exist (U1, item 13) and are staged (item 14), dist holds **383 files** (359 plus 24) and the multi-part plan reads core 230, equator 24, bay5 30, airpit 22,
-bowl 26, iceberg 27, **autoservice 24**: `bundles/arena_autoservice_{scenes,navmesh,preset}.bundle` (3, AMPB, encrypted), `keys/arena_autoservice.json` (1; the
+bundles exist (U1, item 13) and are staged (item 14), dist holds **396 files** (359 plus 24 plus the crowd's 13, see the paragraph below) and the multi-part plan reads
+core 242, equator 24, bay5 30, airpit 22, bowl 26, iceberg 27, **autoservice 25**: `bundles/arena_autoservice_{scenes,navmesh,preset}.bundle` (3, AMPB, encrypted), `keys/arena_autoservice.json` (1; the
 first staging creates the content key with `-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_autoservice`), `acoustics/arena_autoservice/`
 (`spatial-audio.json`, `source.audiobakedata`, `sharedassets112.assets_29.wav`: 3), `gate-sounds/arena_autoservice/` (`gate-sounds.json` and four WAVs: 5),
 `flares/arena_autoservice/` (`flares.json` and two raw textures: 3, eight active gas-lamp flares), `ai/autoservice.ai.json` (1), `loadscreens/arena_autoservice_1..5.jpg`
-(5), `material-shaders.arena_autoservice.json` (1), `db/arena_autoservice/base.json` (1) and `banners/arena_autoservice.jpg` (1). It has no spectator package (the
-second crowdless map: `validate_map_descriptors.CROWDLESS_MAP_KEYS`), no water and no DynamicMaps overview (Phase C "not yet" lists: it is in none of
-`OVERVIEW_MAP_NAMES` and `WATER_MAP_KEYS`, and in `FLARE_MAP_KEYS`). The core part does not change.
+(5), `material-shaders.arena_autoservice.json` (1), `db/arena_autoservice/base.json` (1) and `banners/arena_autoservice.jpg` (1). It has no water and no DynamicMaps overview (Phase C "not yet" lists: it is in none of
+`OVERVIEW_MAP_NAMES` and `WATER_MAP_KEYS`, and in `FLARE_MAP_KEYS`). **Its crowd (phase C, 2026-11-11, commit of branch `phase-c/crowd`; the earlier "crowdless" reading of
+this paragraph is superseded):** Autoservice is the fifth crowd map (`extract_spectator.MAP_SCENES`, its 30 fans from `Arena_AutoService_TeamFight_DesignStuff`), so its part gains
+`spectators/arena_autoservice/spectator.json.gz` (24 plus 1 = 25 files) and the shared set grows from 123 to 135 PNGs (two cubemaps with ids of their own, 12 duplicate-content files, 249,714 B), which
+moves 12 files into the core part (230 plus 12 = 242). `CROWDLESS_MAP_KEYS` is Iceberg only. The four older graphs keep their content: only their `texture_manifest_sha256`
+changes, because `spectator-textures.json` lists 12 more files, so graphs and manifest ship together.
 
 State on the day of the promotion (a DllOnly client build and a server build from this tree, nothing built by Unity): dist holds **378 files**, the 19 inputs of the
 list above that need no bundle; the five missing ones are the three bundles, the key file and the shader sidecar, which only U1 and the first stage produce.

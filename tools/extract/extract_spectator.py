@@ -19,12 +19,15 @@ from extract_door_poses import build_clip
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE = Path('D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data')
 # The CROWD maps: the maps whose Arena design scene holds a spectator crowd. A released map that is not here is crowdless on purpose and listed in
-# validate_map_descriptors.CROWDLESS_MAP_KEYS (Iceberg, PLAN-ICEBERG; Autoservice, PLAN-AUTOSERVICE item 12): stage_spectators stages, and validate_distribution requires, exactly these.
+# validate_map_descriptors.CROWDLESS_MAP_KEYS (Iceberg, PLAN-ICEBERG): stage_spectators stages, and validate_distribution requires, exactly these.
+# Autoservice (PLAN-AUTOSERVICE phase C, 2026-11-11) is the one map whose 30 fans live in the TeamFight design scene (level136, active root SCAV_SPECTATORS);
+# its plain Arena_AutoService_DesignStuff holds none. The rigs, controller, appearances and clips are the other maps' (measured), so nothing else keys by map.
 MAP_SCENES = {
     'airpit': 'Arena_Airpit_DesignStuff',
     'equator': 'Arena_Equator_DesignStuff',
     'bay5': 'Arena_Bay5_DesignStuff',
     'bowl': 'Arena_Bowl_DesignStuff',
+    'autoservice': 'Arena_AutoService_TeamFight_DesignStuff',
 }
 CLIPS = ('ArenaFan_Idle_000_loop', 'ArenaFan_Idle_Cheer_001')
 # One optional target absent from every fan and every Transform in source level40.

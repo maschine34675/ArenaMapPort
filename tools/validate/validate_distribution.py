@@ -39,7 +39,7 @@ KEY_FILE_MAX_BYTES = 64 * 1024
 # rule). Its native sea water joined on 2026-10-31 (WATER_MAP_KEYS below). It has no spectator crowd either: that is
 # validate_map_descriptors.CROWDLESS_MAP_KEYS, checked against the crowd maps (extract_spectator.MAP_SCENES) in validate().
 # Autoservice (PLAN-AUTOSERVICE item 11/12) HAS a MultiFlare package (8 active gas-lamp flares, work/extract/multiflare/arena_autoservice), so it is in
-# FLARE_MAP_KEYS; it has no overview, no water and no crowd (CROWDLESS_MAP_KEYS).
+# FLARE_MAP_KEYS; it has no overview and no water; since 2026-11-11 it has a crowd (extract_spectator.MAP_SCENES), so it is not in CROWDLESS_MAP_KEYS.
 OVERVIEW_MAP_NAMES = ('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg')
 FLARE_MAP_KEYS = ('arena_equator', 'arena_bay5', 'arena_bowl', 'arena_autoservice')
 # The maps with a native sea-water surface (the Sea/Plane mesh of Bay5's harbor and of Iceberg's sea, NativeWaterRepairs.cs): the one list
