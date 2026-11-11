@@ -7,10 +7,7 @@ Shader "Hidden/ArenaMapPort/Cloth/ClothShader"
 {
     Properties
     {
-        _AddAlpha ("_AddAlpha", Float) = 0
-        _AlphaMultiplier ("_AlphaMultiplier", Float) = 0
         _BumpScale ("_BumpScale", Float) = 0
-        _BumpTiling ("_BumpTiling", Float) = 0
         _Color ("_Color", Color) = (1,1,1,1)
         _CutOff ("_CutOff", Float) = 0
         _Cutoff ("_Cutoff", Float) = 0
@@ -18,62 +15,39 @@ Shader "Hidden/ArenaMapPort/Cloth/ClothShader"
         _CutoutMaskUVScale ("_CutoutMaskUVScale", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0
-        _DropsSpec ("_DropsSpec", Float) = 0
         _DstBlend ("_DstBlend", Float) = 0
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
         _Factor ("_Factor", Float) = 0
-        _Fade ("_Fade", Float) = 0
         _GlossMap ("_GlossMap", 2D) = "white" {}
-        _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
-        _Glossness ("_Glossness", Float) = 0
-        _GlossyReflections ("_GlossyReflections", Float) = 0
         _MainTex ("_MainTex", 2D) = "white" {}
         _Metallic ("_Metallic", Float) = 0
         _Mode ("_Mode", Float) = 0
-        _NdotLOffset ("_NdotLOffset", Float) = 0
-        _NightRippleFakeLightOffset ("_NightRippleFakeLightOffset", Float) = 0
         _NoiseTex ("_NoiseTex", 2D) = "white" {}
         _NormalBlendThreshold ("_NormalBlendThreshold", Float) = 0
         _NormalBlendingRandomFactor ("_NormalBlendingRandomFactor", Float) = 0
-        _NormalIntensity ("_NormalIntensity", Float) = 0
         _NormalMap1 ("_NormalMap1", 2D) = "white" {}
         _NormalMap2 ("_NormalMap2", 2D) = "white" {}
-        _NormalPower ("_NormalPower", Float) = 0
         _NormalsMask ("_NormalsMask", 2D) = "white" {}
         _OcclusionStrength ("_OcclusionStrength", Float) = 0
         _Parallax ("_Parallax", Float) = 0
         _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
-        _RippleFakeLightIntensityOffset ("_RippleFakeLightIntensityOffset", Float) = 0
-        _RippleTexScale ("_RippleTexScale", Float) = 0
-        _Roughness ("_Roughness", Float) = 0
         _ScrollSpeedRandomFactor ("_ScrollSpeedRandomFactor", Float) = 0
         _ScrollXSpeed ("_ScrollXSpeed", Float) = 0
         _ScrollYSpeed ("_ScrollYSpeed", Float) = 0
-        _SkinnedMeshMaterial ("_SkinnedMeshMaterial", Float) = 0
-        _Smoothness ("_Smoothness", Float) = 0
-        _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
+        _Shininess ("_Shininess", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
         _SpecPower ("_SpecPower", Float) = 0
-        _SpecSmoothness ("_SpecSmoothness", Float) = 0
         _SpecVals ("_SpecVals", Color) = (1,1,1,1)
-        _Specular ("_Specular", Float) = 0
-        _SpecularColor ("_SpecularColor", Color) = (1,1,1,1)
-        _SpecularHighlights ("_SpecularHighlights", Float) = 0
-        _Specularness ("_Specularness", Float) = 0
         _SrcBlend ("_SrcBlend", Float) = 0
         _StencilType ("_StencilType", Float) = 0
         _Temperature ("_Temperature", Color) = (1,1,1,1)
-        _Temperature2 ("_Temperature2", Color) = (1,1,1,1)
-        _USERAIN ("_USERAIN", Float) = 0
         _UVSec ("_UVSec", Float) = 0
         _Units ("_Units", Float) = 0
         _VertexAnimationScale ("_VertexAnimationScale", Float) = 0
         _VertexAnimationSpeedMultiplier ("_VertexAnimationSpeedMultiplier", Float) = 0
         _VertexTimeOffset ("_VertexTimeOffset", Float) = 0
         _ZWrite ("_ZWrite", Float) = 0
-        _alphaCutoff ("_alphaCutoff", Float) = 0
-        _intensiv ("_intensiv", Float) = 0
     }
     SubShader
     {

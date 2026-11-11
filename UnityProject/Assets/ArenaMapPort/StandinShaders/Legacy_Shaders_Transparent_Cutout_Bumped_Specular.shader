@@ -7,43 +7,31 @@ Shader "Hidden/ArenaMapPort/Legacy Shaders/Transparent/Cutout/Bumped Specular"
 {
     Properties
     {
-        _AO ("_AO", Float) = 0
-        _AOStrength ("_AOStrength", Float) = 0
-        _BaseLight ("_BaseLight", Float) = 0
         _BumpMap ("_BumpMap", 2D) = "white" {}
         _BumpScale ("_BumpScale", Float) = 0
         _Color ("_Color", Color) = (1,1,1,1)
-        _Cull ("_Cull", Float) = 0
         _Cutoff ("_Cutoff", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0
         _DstBlend ("_DstBlend", Float) = 0
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
-        _GlossMapScale ("_GlossMapScale", Float) = 0
+        _Factor ("_Factor", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
-        _GlossyReflections ("_GlossyReflections", Float) = 0
-        _HueVariation ("_HueVariation", Color) = (1,1,1,1)
         _MainTex ("_MainTex", 2D) = "white" {}
         _Metallic ("_Metallic", Float) = 0
         _Mode ("_Mode", Float) = 0
-        _Occlusion ("_Occlusion", Float) = 0
         _OcclusionStrength ("_OcclusionStrength", Float) = 0
         _Parallax ("_Parallax", Float) = 0
-        _ShadowStrength ("_ShadowStrength", Float) = 0
+        _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
         _Shininess ("_Shininess", Float) = 0
-        _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
+        _SpecPower ("_SpecPower", Float) = 0
         _SpecVals ("_SpecVals", Color) = (1,1,1,1)
-        _SpecularHighlights ("_SpecularHighlights", Float) = 0
-        _SquashAmount ("_SquashAmount", Float) = 0
         _SrcBlend ("_SrcBlend", Float) = 0
+        _StencilType ("_StencilType", Float) = 0
         _Temperature ("_Temperature", Color) = (1,1,1,1)
-        _TranslucencyColor ("_TranslucencyColor", Color) = (1,1,1,1)
-        _TranslucencyViewDependency ("_TranslucencyViewDependency", Float) = 0
-        _TreeInstanceColor ("_TreeInstanceColor", Color) = (1,1,1,1)
-        _TreeInstanceScale ("_TreeInstanceScale", Color) = (1,1,1,1)
         _UVSec ("_UVSec", Float) = 0
-        _WindQuality ("_WindQuality", Float) = 0
+        _Units ("_Units", Float) = 0
         _ZWrite ("_ZWrite", Float) = 0
     }
     SubShader

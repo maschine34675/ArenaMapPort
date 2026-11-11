@@ -7,25 +7,52 @@ Shader "Hidden/ArenaMapPort/Unlit/Transparent Colored"
 {
     Properties
     {
+        PixelSnap ("PixelSnap", Float) = 0
+        _AddAlpha ("_AddAlpha", Float) = 0
+        _BlinkMinAlpha ("_BlinkMinAlpha", Float) = 0
+        _BlinkSpeed ("_BlinkSpeed", Float) = 0
         _BumpScale ("_BumpScale", Float) = 0
         _Color ("_Color", Color) = (1,1,1,1)
         _Cutoff ("_Cutoff", Float) = 0
+        _DefVals ("_DefVals", Color) = (1,1,1,1)
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0
+        _Distance ("_Distance", Float) = 0
         _DstBlend ("_DstBlend", Float) = 0
+        _DstMode ("_DstMode", Float) = 0
         _Emission ("_Emission", Color) = (1,1,1,1)
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
         _Fade ("_Fade", Float) = 0
+        _FogDencity ("_FogDencity", Float) = 0
+        _FresAdd ("_FresAdd", Float) = 0
+        _FresPow ("_FresPow", Float) = 0
+        _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
+        _GlossyReflections ("_GlossyReflections", Float) = 0
+        _InvFade ("_InvFade", Float) = 0
+        _LightMultyplier ("_LightMultyplier", Float) = 0
         _MainTex ("_MainTex", 2D) = "white" {}
         _Metallic ("_Metallic", Float) = 0
         _Mode ("_Mode", Float) = 0
+        _NoiseTexF ("_NoiseTexF", Float) = 0
+        _NotVisibleColor ("_NotVisibleColor", Color) = (1,1,1,1)
         _OcclusionStrength ("_OcclusionStrength", Float) = 0
         _Parallax ("_Parallax", Float) = 0
         _Roughness ("_Roughness", Float) = 0
+        _SSRPow ("_SSRPow", Float) = 0
+        _ShadowTexF ("_ShadowTexF", Float) = 0
         _Shininess ("_Shininess", Float) = 0
+        _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
         _SnowShift ("_SnowShift", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
+        _SpecPower ("_SpecPower", Float) = 0
+        _SpecVals ("_SpecVals", Color) = (1,1,1,1)
+        _Specular ("_Specular", Float) = 0
+        _SpecularHighlights ("_SpecularHighlights", Float) = 0
         _SrcBlend ("_SrcBlend", Float) = 0
+        _SrcMode ("_SrcMode", Float) = 0
+        _StencilType ("_StencilType", Float) = 0
+        _Temperature ("_Temperature", Color) = (1,1,1,1)
+        _TintColor ("_TintColor", Color) = (1,1,1,1)
         _UVSec ("_UVSec", Float) = 0
         _ZWrite ("_ZWrite", Float) = 0
     }

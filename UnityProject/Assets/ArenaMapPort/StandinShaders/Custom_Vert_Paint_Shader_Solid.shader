@@ -38,9 +38,6 @@ Shader "Hidden/ArenaMapPort/Custom/Vert Paint Shader Solid"
         _FresnelSpecular1 ("_FresnelSpecular1", Float) = 0
         _FresnelSpecular2 ("_FresnelSpecular2", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
-        _Glossiness0 ("_Glossiness0", Float) = 0
-        _Glossiness1 ("_Glossiness1", Float) = 0
-        _Glossiness2 ("_Glossiness2", Float) = 0
         _Glossness ("_Glossness", Float) = 0
         _Heights ("_Heights", 2D) = "white" {}
         _MainTex0 ("_MainTex0", 2D) = "white" {}
