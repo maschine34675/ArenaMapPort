@@ -2371,3 +2371,109 @@ collider is higher than the curtain's foot (it opens the doorway a little early)
   the installed 0.6.2.0.48473); `validate_map_descriptors.py`: OK.
 * `validate_map_descriptors.PENDING_MIRROR_KEYS = ("arena_autoservice",)`: a staged map's door and monitor sidecars are validated in themselves
   but not mirrored by the registry, and the barrier rule waits for `opened_barriers` while the descriptor sidecar has none. The tuple is removed at the promotion.
+
+## 2026-11-11 - The doorway probe samples near the floor; a probe without navmesh is inconclusive (all maps)
+
+Status: unit-tested, host-run on GPU-2 on all six maps with gates (build `a3b6ca3`, branch `fix/spawngate-floor-probe` off `feature/autoservice`
+`dc9184e`; client DLL only, SHA-256 `c644129c...`, deployed with `deploy-to-spt.ps1 -DllOnly -DllTarget Client` after its dry run).
+
+**Cause** (found on Chop Shop, [autoservice-release.md](autoservice-release.md) "Item 15, first host iteration"): `SpawnGates.ProbeSegment` put
+its two points 1.5 m either side of the gate across the thin axis at the height of the CENTRE of the gate's closed movement-collider bounds,
+and `ProbePath` snapped them with `NavMesh.SamplePosition` within `ProbeSampleRadius` 1.5 m. On a gate taller than about 3 m the centre lies
+more than 1.5 m above the floor, the sample failed, `ProbePath` returned null and `EnsureBaseline` stored `null == PathComplete` = false: the
+doorway counted as "already disconnected on the map's own navmesh (not judged)". The sealing itself was never affected, only this Debug verdict.
+
+**Change.** `SpawnGateModel` (Unity-free, linked into the tests) owns the probe geometry and the baseline rule:
+
+- `ProbeHeight(minY, maxY)` = `minY + min(ProbeLift, height / 2)`, `ProbeLift` 0.5 m: half a metre above the bottom of the closed bounds (a
+  closed gate's bottom is its doorway's floor line), the middle of a gate lower than 1 m. `ProbePoints(...)` keeps the thin-axis logic
+  (`ThinAxis`, `ProbeReach` 1.5 m either side of the centre) and returns both points at that height; `SpawnGates.ProbeSegment` calls it, so the
+  path probe and the parked-body occupancy test still share one segment.
+- `ProbeBaseline` {Connected, Disconnected, Inconclusive} and `BaselineOf(int? status)`: a complete path is Connected, a Partial or Invalid one
+  Disconnected (Equator's door (3), as before), **a null probe Inconclusive**. `BaselineJudged` is true for Connected only, so a doorway at which
+  the baseline found no navmesh is not judged either, but it is counted and named as inconclusive, never as disconnected.
+- The carve line adds `N doorway(s) without navmesh near a probe point on the map's own navmesh (inconclusive, not judged)` beside the
+  disconnected count; the probe report names each such part, and a probe that finds no navmesh names the point(s) that failed
+  (`no navmesh within 1.5 m of (x, y, z)`). Levels are unchanged: every verdict Debug, a contradiction (`navmesh probe: a gate is NOT ...`)
+  still a Warning.
+- Tests: `SpawnGateModelTests` (probe height, the 4.7 m shutter within sample reach of its floor where the old centre was not, both thin axes,
+  inverted bounds, `BaselineOf` for null / 0 / 1 / 2, `BaselineJudged`) and a source pin of the wiring
+  (`TheDoorwayProbeSamplesNearTheFloorAndANullBaselineIsInconclusive`). `dotnet test -c Release`: 3,285 tests, 3,284 passed in the full run;
+  the one failure, `CrowdReactionModelTests.ReactAndDrainAllocateNothing` (an allocation bound), passed three times alone and is not touched by
+  this change.
+
+**Host run (GPU-2, 2026-11-11 13:52-14:05, one EFT process, instance `c73dc6ce`, 16/16 plugins identical; `Spawns/SpawnGateHold` = true set with
+`uibridge_config_set persist=false`, the .cfg kept false, back to false after the raids; `SpawnGateHoldSeconds` 30 = default; PMC, bots None,
+`gpu-run raid --mode pmc --map <tile> --bots none`).** Per map the hold probe (`navmesh installed` + `navmesh probe ... sealed`) and the probe
+0.5 s after the timed release:
+
+| Map (raid start) | Held: judged / verdict | After the release | Not judged | Before this change |
+|---|---|---|---|---|
+| Chop Shop (13:52) | 4: `gate`, the equator shutter, both techlight shutters, all `PathPartial` | 4 `PathComplete` | 19 parts without a movement collider | 1 judged, 3 "disconnected" |
+| Equator (13:54) | 8 booth leaves `PathPartial` | 8 `PathComplete` | door (3): `2 doorway(s) already disconnected` (unchanged) | the same |
+| Bay5 (13:56) | 7: rollers (2) and (4), `One_man_Door`, the four depot leaves, all `PathPartial` | 7 `PathComplete` | none | 0 judged, 8 "disconnected" (2026-10-24) |
+| Air Pit (13:57) | 19: 3 bus doors, 16 passport leaves `PathPartial` | 19 `PathComplete` | 23 parts without a movement collider | 19 (the same) |
+| Bowl (13:59) | 2: `BTR_82_closed`, `Gates_Army_01` `PathPartial`; 1 inconclusive (the ambulance) | 3 `PathComplete` (BTR, army gate, ambulance) | the respawn gate leaf: disconnected on the map's own mesh | 1 judged, 2 inconclusive, 1 disconnected |
+| Iceberg (14:01) | 6: five `sanatorium_resp_gate_A`, `Sanatorium_CheckPoint_Gate` `PathPartial`; 5 inconclusive (`_B`) | 1 `PathComplete` (CheckPoint); the five A doorways "occupied by a parked body" | see below | not recorded |
+
+Quotes:
+
+- Chop Shop: `[SpawnGates] navmesh installed: 5 carver(s) over 5 movement collider(s) of 23 gate part(s) (5 carver(s) in place, 0 held-gate
+  part(s))` (no "disconnected" clause any more); `navmesh probe: every probed gate sealed (4 probed)   'gate' at (-344.1, -1.5, 477.5):
+  (-345.6, -3.8, 477.5) -> (-342.6, -3.8, 477.5) = PathPartial   'roller_shutters_01_COLLIDER' at (-344.6, -3.0, 506.8): ... = PathPartial
+  'roller_shutters_techlight_01_COLLIDER' at (-402.3, -1.5, 501.2): (-403.8, -3.7, 501.2) -> (-400.8, -3.8, 501.2) = PathPartial
+  'roller_shutters_techlight_01_COLLIDER' at (-402.3, -1.5, 477.5): ... = PathPartial`; release at 13:53:36 (`released (developer test hold, 30.0 s
+  after the raid timer started): ... 5 carver(s) removed, drove 23 part(s) to the open pose in 4.0 s (scale 0.50), 2 park carver(s) in place, 4
+  switch(es) set to the open state`), then `every probed gate open (4 probed)`, each `PathComplete, 2 corners`. The probe points now snap
+  0.1-0.2 m down (y -3.7/-3.8), where the old centre points were 2.3 m up.
+- Equator: `navmesh installed: 10 carver(s) over 10 movement collider(s) of 14 gate part(s) ...; 2 doorway(s) already disconnected on the map's
+  own navmesh (not judged)`, `every probed gate sealed (8 probed)`; after the release `every probed gate open (8 probed)` with `2 doorway(s)
+  disconnected on the map's own navmesh not judged`. Door (3) is still a real Partial path on the map's own mesh, now told apart from a null.
+- Bay5: `navmesh installed: 10 carver(s) over 10 movement collider(s) of 7 gate part(s)`, `every probed gate sealed (7 probed)`
+  (`'Bay5_Warehouse_Gate_Door_01 (2)' at (143.0, -1.1, 40.0): (143.0, -3.3, 38.5) -> (143.0, -2.9, 41.5) = PathPartial`, ... `'Gates_Depot_Door_R'
+  at (69.1, -1.8, -5.0): (67.6, -3.8, -5.0) -> (70.6, -3.9, -5.0) = PathPartial`), after the release `every probed gate open (7 probed)`. This
+  corrects the 2026-10-24 limitation above ("a roller's registered part is its ROOT ... a depot leaf's position is its hinge"): the probe
+  always used the closed collider bounds, and the reason it judged none of Bay5's doorways was the same centre height.
+- Air Pit: `navmesh installed: 28 carver(s) over 28 movement collider(s) of 42 gate part(s) (28 carver(s) in place, 36 held-gate part(s))`,
+  `every probed gate sealed (19 probed)`, after the release (`18 gate part(s) switched off, 28 carver(s) removed, drove 24 part(s) ... in 1.5 s`)
+  `every probed gate open (19 probed)`.
+- Bowl: `navmesh installed: 28 carver(s) over 28 movement collider(s) of 4 gate part(s) ...; 1 doorway(s) already disconnected on the map's own
+  navmesh (not judged)`; `every probed gate sealed (2 probed, 1 inconclusive)   'BTR_82_closed' at (51.2, 1.4, -21.5): (51.2, 0.1, -24.1) ->
+  (51.2, 0.1, -18.9) = PathPartial   'Gates_Army_01' ... = PathPartial   'Bowl_Respawn_Ambulance_Animated Group' at (-42.2, 1.2, -69.8): no navmesh
+  within 1.5 m of (-43.7, 0.5, -69.8) and (-40.7, 0.5, -69.8)`; after the release `every probed gate open (3 probed)` (the ambulance (-43.7, 0.1,
+  -69.8) -> (-40.7, 0.1, -69.8) `PathComplete, 2 corners`). The BTR is newly judged. The ambulance's baseline was Connected; while it is held,
+  both probe points (1.5 m from its centre) lie in the area its carvers cut and nothing of the mesh is within 1.5 m, so the held verdict stays
+  inconclusive, as on 2026-10-18 (a wide body, not the height). The one disconnected doorway is the respawn gate leaf, as on 2026-10-18; it is
+  now a real Partial path on the map's own mesh, not a null.
+- Iceberg: `navmesh installed: 11 carver(s) over 11 movement collider(s) of 11 gate part(s) (11 carver(s) in place, 0 held-gate part(s)); 5
+  doorway(s) without navmesh near a probe point on the map's own navmesh (inconclusive, not judged)`; `every probed gate sealed (6 probed, 5
+  inconclusive)` (`'sanatorium_resp_gate_A' at (82.3, 2.9, -93.7): (80.8, 2.0, -93.7) -> (83.8, 2.3, -93.7) = PathPartial` and four more,
+  `'Sanatorium_CheckPoint_Gate' at (-38.9, 4.9, -75.7): (-38.9, 3.2, -77.2) -> (-38.9, 3.2, -74.2) = PathPartial`, `'sanatorium_resp_gate_B'
+  at (82.4, 4.1, -93.7): no navmesh near a probe point on the map's own navmesh, not judged` x5). Release at 14:02:03 (`11 carver(s) removed,
+  drove 11 part(s) to the open pose in 2.5 s (scale 0.50), 5 park carver(s) in place`), then `every probed gate open (1 probed, 5
+  inconclusive)`: CheckPoint `PathComplete`, the five A doorways `the probe segment runs through a parked body, not judged`.
+  - Why B is inconclusive (read on the host with `uibridge_inspect`): `sanatorium_resp_gate` is a vertical lift gate in three panels, and its
+    rows' local z is world up. The open pose lifts A by 2.748 and B by 1.376; at the open pose `sanatorium_resp_gate_A_COLLIDER` and
+    `_B_COLLIDER` both read y 4.646..5.886, the frame `sanatorium_resp_gate_COLLIDER` y 2.176..5.864. Closed, A therefore spans y 1.90..3.14
+    (from the floor) and B y 3.27..4.51: B is the panel ABOVE A, its bottom 1.09 m over the floor, its probe 1.59 m over it. B has no doorway of
+    its own; A, judged and sealed, closes the same opening. Inconclusive is the right verdict for B.
+  - Why the A doorways are "occupied" after the release: the five park carvers are B's (`parked 'sanatorium_resp_gate_B': 1 node(s) at the open
+    pose (clip DotAnimator), 1 park carver(s) (released)` x5; A: `0 park carver(s) (released); 1 collider(s) above the 1.8 m walking band
+    skipped`). A part's floor line is its own lowest closed collider (`MeasureClosed`), which for the upper panel B is 3.27, so its lifted panel
+    at 4.65 counts as standing in its walking band, and `ParkedBodyOnProbe` tests the segment against the carver boxes in plan view only. Dry
+    runs through the five opened doorways (`uibridge_teleport dryRun from=` each west probe point to its east one) were all complete: (80.8,
+    2.0, -93.7) -> (83.8, 2.3, -93.7) 3.0 m, 2 corners; (80.8, 2.0, -86.1) -> (83.8, 2.2, -86.1) 3.0 m, 2 corners; (-37.6, 3.2, z) -> (-34.6,
+    3.2-3.3, z) for z -85.9, -81.8 and -77.7: 3.1 m, 4 corners each. The doorways are open for bots; only the probe's occupancy test does not
+    judge them.
+
+**Findings.** No newly judged doorway is passable while held: every judged doorway on the six maps is `PathPartial` during the hold and
+`PathComplete` after the release (Bowl's ambulance while held and Iceberg's five A doorways after the release are not judged, see above), and no
+`a gate is NOT` Warning was logged. 0 ArenaMapPort warnings or errors in all six raids (Unity's own `refrigerator_drink` LODGroup warnings on Equator,
+and one `Unity Log` error `Coroutine couldn't be started because the the game object 'MenuScreen' is inactive!` in EFT's menu while leaving
+Chop Shop). The hideout opened once
+afterwards (screen `Hideout`, only Unity's own LODGroup and `Can not play a disabled audio source` lines) and closed with BACK.
+
+**Still open (not changed here):** (1) a wide body (Bowl's ambulance) has its probe points inside its own carve while held: a reach of half its
+thickness plus the carve margin and the agent radius would judge it; (2) Iceberg's upper lift panel B parks a carver 2.5 m above the floor
+because its floor line is its own bottom: a floor line per barrier (the lowest closed collider of all its parts) would drop that carver and let
+the post-release probe judge the A doorways; (3) `ParkedBodyOnProbe` is a plan-view test and ignores a carver's height.

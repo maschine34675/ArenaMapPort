@@ -536,3 +536,11 @@ verdict. Fix (all maps, so with its own host check): probe near the bottom of th
 Still open: whether the equator shutter's
 collider leading its LODs is visible from the east shop; the tribune decks (islands in the bundle, climbable by a player?); rain F8; a
 raid with ArenaMode; and the user's look and listen (gate sounds, the ambient start mix, the roar beds at -26 dBFS, lamps).
+
+## 2026-11-11 - Item 15: the doorway probe fix (all maps)
+
+The probe cause named in the first host iteration is fixed in `a3b6ca3` (branch `fix/spawngate-floor-probe`): the probe points sit 0.5 m above
+the bottom of a gate's closed bounds (`SpawnGateModel.ProbePoints`), and a probe that finds no navmesh is inconclusive, never "disconnected"
+(`SpawnGateModel.BaselineOf`). On GPU-2 the same day Chop Shop's hold judges all four doorways (`every probed gate sealed (4 probed)`, the big
+gate, the equator shutter and both techlight shutters `PathPartial`; `every probed gate open (4 probed)` after the release, all `PathComplete`).
+The six-map host record is in [door-poses.md](door-poses.md) "2026-11-11 - The doorway probe samples near the floor".
