@@ -593,3 +593,5 @@ staggered; load total=2081 ms (wait=0, hash=61, parse=1663, textures=2033, ...)`
 (so the 12 bodiless hats and mustaches and the layer-8 colliders are gone). Fans read at y 4.38-4.50 on the north gallery (z about 510.9) and
 y 2.04 on the west ledge. Screenshot from the yard (-384, -3.8, 494): fans visible on the container roof behind the sandbags and on the east
 gallery; from straight below the gallery parapets hide them, which is Arena's placement. Not listened to.
+
+Python gate on the merged state (`79a1bb5`, PowerShell, `PYTHONUTF8=1`): `python -m unittest discover -s tools/tests -p "test_*.py"` ran 3,121 tests, OK (68 skipped).
