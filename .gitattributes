@@ -1,0 +1,2 @@
+# test_score_monitors.py demands LF bytes in these sidecars; core.autocrlf=true would check them out CRLF.
+tools/maps/*.monitors.json text eol=lf

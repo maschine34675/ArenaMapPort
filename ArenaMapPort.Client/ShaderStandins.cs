@@ -122,7 +122,7 @@ namespace ArenaMapPort.Client
                 "AirPitShaderStandins says. Takes effect on the next raid, in both directions, without restarting EFT.");
             _fogSheetOpacity = settings.Bind("MaterialFixes", "AirPitFogSheetOpacity", ShaderStandinPolicy.FogSheetOpacityDefault,
                 new ConfigDescription(
-                    "AirPit only, AirPitFogSheets = StandIn. Multiplies the alpha of the generated fog-sheet texture " +
+                    "AirPit and Autoservice (every map that uses the generated fog texture), AirPitFogSheets = StandIn. Multiplies the alpha of the generated fog-sheet texture " +
                     "(peak alpha = colour alpha x authored OpacityIntensity x 2 x this value). 0 = invisible, " +
                     "4 = four times the default. Live. No effect when EFT's own copy of the fog-sheet shader is " +
                     "loaded (the usual case on 0.16.9.5: the log says 'resolved to EFT's own loaded shader' and the " +
