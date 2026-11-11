@@ -30,7 +30,8 @@ public class FixedRaidTimeWeatherTests
         Assert.False(ArenaMapRegistry.AirPit.UsesFixedStartTimes);
         // Bowl follows the same policy (docs/PLAN-BOWL.md, 2026-10-18): no Directional light in its imported scenes. So does Iceberg
         // (docs/PLAN-ICEBERG.md, 2026-10-30): Arena's dusk sun, sky and fog sit in the excluded Scripts scene.
-        var serverTimeMaps = new[] { ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg };
+        // Autoservice too (user, 2026-11-08, "serverzeit ok"; PLAN-AUTOSERVICE item 8): the Sun sits in the excluded Scripts scene.
+        var serverTimeMaps = new[] { ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg, ArenaMapRegistry.AutoService };
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             var name = map.Key["arena_".Length..] + ".json";

@@ -1221,7 +1221,29 @@ namespace ArenaMapPort.Shared
             LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
             IconX: 407,
             IconY: 471,
-            DbBaseJsonPath: "arena_autoservice/base.json");
+            DbBaseJsonPath: "arena_autoservice/base.json",
+            // Bake inputs (PLAN-AUTOSERVICE item 8, docs/progress/autoservice-release.md, 2026-11-11; tools/tests/test_autoservice_bake_inputs.py
+            // pins the numbers). The four gates of Arena_AutoService_TeamFight_DesignStuff's DOORS are unit-level barriers, the paths the rows of
+            // tools/maps/autoservice.doors.json name: the big metal gate and the Equator roller of the east pocket, the two techlight rollers of the
+            // west pocket. The posed leaves are dropped by the bake; the roller frames (two posts and a header each) and the big gate's header rail
+            // stay standing and leave every doorway open. All four are start gates: a mode plugin's hold keeps them closed; nothing stays closed
+            // after the release (HeldGates empty). Mirrors tools/maps/autoservice.json opened_barriers/start_gates.
+            OpenedBarriers: new[] { "DOORS/big_gate_metal", "DOORS/equator_roller_shutters_01", "DOORS/roller_shutters_techlight_01", "DOORS/roller_shutters_techlight_01 (1)" },
+            StartGates: new[] { "DOORS/big_gate_metal", "DOORS/equator_roller_shutters_01", "DOORS/roller_shutters_techlight_01", "DOORS/roller_shutters_techlight_01 (1)" },
+            // The 372 layer-29 cubes of Arena_AutoService_LevelBorder span x -413.15..-332.55, z 465.67..512.99 (the box adds 1.5 to 2.0 m); Arena's
+            // mesh lies inside them (x -412.4..-333.7, z 466.6..511.9, y -3.82..-0.43). y -5..2: 1.2 m below Arena's lowest floor, and Arena's highest
+            // floor -0.43 plus the 1.7 m agent is 1.27; the ground component of the model is the same for every ceiling from 1.5 to 14, so the ceiling
+            // only decides how many unreachable islands (tribune decks, roofs, cube tops) the bake carries. Arena's own mask 9/11/13/18/30 plus 29
+            // for the kept cubes (layers 0, 8, 12 and 22 stay out); the second Arena island (z 521.3..527.7) lies outside the box on purpose.
+            BakeBounds: new[] { -415.0f, -331.0f, -5.0f, 2.0f, 464.0f, 515.0f },
+            NavMeshBakeLayers: new[] { 9, 11, 13, 18, 29, 30 },
+            KeepLevelBorders: true,
+            // Puddle footsteps: the rain-driven "puddle" decal (42 puddle2 quads, the material id of Equator, Air Pit, Bowl and Iceberg; Concrete is
+            // 74 percent of the samples under them, Soil 0.9, so no extra surface). The wet mold decal atlas (aa54d9752ed43430) sits on four inactive
+            // Heating_register renderers and is not listed. Mirrors tools/maps/autoservice.json puddle_water_material_names.
+            PuddleWaterMaterialNames: new[] { "0877f2335044042e" },
+            // Native advancing server time (user, 2026-11-08): no Directional light exists in the imported scenes, the WeatherRig supplies it.
+            UsesServerTime: true);
 
         // Source scene selection: tools/extract/plans/bowl.json. Identity is permanent.
         public static readonly ArenaMapDescriptor Bowl = new(

@@ -808,5 +808,31 @@ class EndToEndTests(unittest.TestCase):
         self.assertFalse(nd.coverage_of(far, r["_pts"], r["_grid"]).any())
 
 
+class ArenaSourceTableTests(unittest.TestCase):
+    """The per-map oracle rows (ARENA_SOURCES). Autoservice's row was measured on 2026-11-11 (docs/progress/autoservice-release.md, item 8);
+    test_autoservice_bake_inputs.py checks it against the installed Arena and the map's plan."""
+
+    def test_every_row_has_a_distinct_map_key_and_ai_scene_and_a_native_package(self):
+        rows = nd.ARENA_SOURCES
+        self.assertEqual(sorted(rows), ["airpit", "autoservice", "bowl", "iceberg"])
+        self.assertEqual(len({r.key for r in rows.values()}), len(rows))
+        for stem, row in rows.items():
+            self.assertEqual(row.key, "arena_" + stem)
+            self.assertEqual(row.path_id, 2)
+            self.assertRegex(row.package, r"^work/extract/" + stem + r"-native-v\d+$")
+            self.assertEqual(row.assets, f"sharedassets{row.ai_scene_index}.assets")
+
+    def test_autoservice_is_the_measured_row(self):
+        row = nd.ARENA_SOURCES["autoservice"]
+        self.assertEqual((row.key, row.assets, row.path_id, row.layer_mask), ("arena_autoservice", "sharedassets63.assets", 2, 0x40042A00))
+        self.assertEqual((row.ai_scene_index, row.ai_scene_name, row.package), (63, "Arena_AutoService_AI", "work/extract/autoservice-native-v2"))
+
+    def test_the_other_rows_are_unchanged(self):
+        self.assertEqual(nd.ARENA_SOURCES["bowl"].layer_mask, 0x40040A00)
+        self.assertEqual((nd.ARENA_SOURCES["iceberg"].assets, nd.ARENA_SOURCES["iceberg"].ai_scene_index), ("sharedassets377.assets", 377))
+        self.assertEqual((nd.ARENA_SOURCES["airpit"].assets, nd.ARENA_SOURCES["airpit"].package),
+                         ("sharedassets33.assets", "work/extract/airpit-native-v8"))
+
+
 if __name__ == "__main__":
     unittest.main()

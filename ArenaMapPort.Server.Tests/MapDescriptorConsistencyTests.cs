@@ -109,7 +109,16 @@ public class MapDescriptorConsistencyTests
             "DOORS/GATES_B/sanatorium_resp_gate",
             "DOORS/GATES_B/Sanatorium_CheckPoint_Gate",
         }, ArenaMapRegistry.Iceberg.OpenedBarriers);
-        var walked = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg };
+        // Autoservice (PLAN-AUTOSERVICE item 8, 2026-11-11; Catalog only until item 12): the four gate units of its DOORS, the paths the rows of
+        // tools/maps/autoservice.doors.json name.
+        Assert.Equal(new[]
+        {
+            "DOORS/big_gate_metal",
+            "DOORS/equator_roller_shutters_01",
+            "DOORS/roller_shutters_techlight_01",
+            "DOORS/roller_shutters_techlight_01 (1)",
+        }, ArenaMapRegistry.AutoService.OpenedBarriers);
+        var walked = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg, ArenaMapRegistry.AutoService };
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             Assert.NotNull(map.OpenedBarriers);
@@ -225,13 +234,27 @@ public class MapDescriptorConsistencyTests
             Assert.True(iceberg.BakeBounds[2 * axis] < iceberg.BakeBounds[2 * axis + 1]);
         Assert.DoesNotContain(iceberg.NavMeshBakeExclusions, p => iceberg.OpenedBarriers.Any(b => p == b || p.StartsWith(b + "/")));
 
-        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ReferenceEquals(m, airPit) && !ReferenceEquals(m, bowl) && !ReferenceEquals(m, iceberg)))
+        // Autoservice (PLAN-AUTOSERVICE item 8, 2026-11-11): the 372 border cubes span x -413.15..-332.55, z 465.67..512.99 (the box adds 1.5 to 2.0 m);
+        // y -5..2 is 1.2 m below Arena's lowest floor (-3.82) and above its highest (-0.43) plus the agent; Arena's own mask 9/11/13/18/30 plus 29; no
+        // exclusion (test_autoservice_bake_inputs pins the numbers and the oracle runs behind them).
+        var autoService = ArenaMapRegistry.AutoService;
+        Assert.Empty(autoService.NavMeshBakeExclusions);
+        Assert.Equal(new[] { -415.0f, -331.0f, -5.0f, 2.0f, 464.0f, 515.0f }, autoService.BakeBounds);
+        Assert.Equal(new[] { 9, 11, 13, 18, 29, 30 }, autoService.NavMeshBakeLayers);
+        Assert.True(autoService.KeepLevelBorders);
+        Assert.Equal(4, autoService.OpenedBarriers.Length);
+        Assert.All(autoService.OpenedBarriers, path => Assert.True(IsHierarchyPath(path), path));
+        for (var axis = 0; axis < 3; axis++)
+            Assert.True(autoService.BakeBounds[2 * axis] < autoService.BakeBounds[2 * axis + 1]);
+        Assert.DoesNotContain(autoService.NavMeshBakeExclusions, p => autoService.OpenedBarriers.Any(b => p == b || p.StartsWith(b + "/")));
+
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ReferenceEquals(m, airPit) && !ReferenceEquals(m, bowl) && !ReferenceEquals(m, iceberg) && !ReferenceEquals(m, autoService)))
         {
             Assert.Empty(map.NavMeshBakeExclusions);
             Assert.Empty(map.BakeBounds);
             Assert.Empty(map.NavMeshBakeLayers);
         }
-        foreach (var map in new[] { airPit, bowl, iceberg })
+        foreach (var map in new[] { airPit, bowl, iceberg, autoService })
         {
             Assert.All(map.NavMeshBakeLayers, layer => Assert.InRange(layer, 0, 31));
             Assert.DoesNotContain(4, map.NavMeshBakeLayers); // Water is never collected
@@ -286,7 +309,7 @@ public class MapDescriptorConsistencyTests
             using var document = JsonDocument.Parse(File.ReadAllText(path!));
             bool sidecar = document.RootElement.TryGetProperty("keep_level_borders", out var keep) && keep.GetBoolean();
             Assert.Equal(sidecar, map.KeepLevelBorders);
-            Assert.Equal(map == ArenaMapRegistry.Bowl || map == ArenaMapRegistry.Iceberg, map.KeepLevelBorders);
+            Assert.Equal(map == ArenaMapRegistry.Bowl || map == ArenaMapRegistry.Iceberg || map == ArenaMapRegistry.AutoService, map.KeepLevelBorders);
             if (map.KeepLevelBorders)
                 Assert.True(map.NavMeshBakeLayers.Length == 0 || map.NavMeshBakeLayers.Contains(29));
         }
@@ -319,12 +342,17 @@ public class MapDescriptorConsistencyTests
         Assert.Equal(icebergGates, iceberg.StartGates);
         Assert.Empty(iceberg.HeldGates);
         Assert.All(iceberg.OpenedBarriers, p => Assert.Equal(ArenaGateRole.Start, iceberg.GateRoleOf(p)));
+        // Autoservice (PLAN-AUTOSERVICE item 8): the four gate units of its DOORS are all start gates; nothing stays closed after the release.
+        var autoService = ArenaMapRegistry.AutoService;
+        Assert.Equal(autoService.OpenedBarriers, autoService.StartGates);
+        Assert.Empty(autoService.HeldGates);
+        Assert.All(autoService.OpenedBarriers, p => Assert.Equal(ArenaGateRole.Start, autoService.GateRoleOf(p)));
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             Assert.All(map.StartGates, p => Assert.Contains(p, map.OpenedBarriers));
             Assert.All(map.HeldGates, p => Assert.Contains(p, map.OpenedBarriers));
             Assert.Empty(map.StartGates.Intersect(map.HeldGates));
-            if (ReferenceEquals(map, airPit) || ReferenceEquals(map, bowl) || ReferenceEquals(map, iceberg)) continue;
+            if (ReferenceEquals(map, airPit) || ReferenceEquals(map, bowl) || ReferenceEquals(map, iceberg) || ReferenceEquals(map, autoService)) continue;
             Assert.Empty(map.StartGates);
             Assert.Empty(map.HeldGates);
             Assert.All(map.OpenedBarriers, p => Assert.Equal(ArenaGateRole.Start, map.GateRoleOf(p)));
