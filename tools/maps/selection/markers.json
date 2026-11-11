@@ -80,7 +80,13 @@
         604.517
       ],
       "icon_x": 407,
-      "icon_y": 471
+      "icon_y": 471,
+      "display": {
+        "icon_x": 870,
+        "icon_y": 428,
+        "reason": "On EFT's own region map (the PMC flow, GPU-2 1920x1080, 2026-11-11) the toggle 'ARENA: CHOP SHOP' at the measured 407/471 covered the CUSTOMS label (Chop Shop dot at x 594, y 424; Customs dot at x 706, y 432). 870/428 puts the dot at about x 960, y 458 (0.79 px per IconX unit, 0.796 px per IconY unit from the measured points), east of Customs: its label box clears CUSTOMS by about 108 px, INTERCHANGE by about 20 px and EQUATOR by about 41 px, and the anchor keeps the 124 units from Equator's that the released pins keep from each other (at least 120).",
+        "decision": "user, 2026-11-11: the Chop Shop marker has to move (it overlapped Customs)"
+      }
     },
     {
       "name": "Dorms",

@@ -71,12 +71,57 @@ public sealed class SelectionMapPositionTests
     }
 
     [Fact]
-    public void OnlyIcebergIsDisplayedAwayFromItsMeasurementAndClearOfArenaModesPanel()
+    public void OnlyIcebergAndChopShopAreDisplayedAwayFromTheirMeasurement()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(RepoFile("tools", "maps", "selection", "markers.json")));
         var moved = document.RootElement.GetProperty("markers").EnumerateArray().Where(m => m.TryGetProperty("display", out _)).ToArray();
-        var iceberg = Assert.Single(moved);
-        Assert.Equal("arena_iceberg", iceberg.GetProperty("catalog_key").GetString());
+        Assert.Equal(new[] { "arena_autoservice", "arena_iceberg" },
+            moved.Select(m => m.GetProperty("catalog_key").GetString()).OrderBy(k => k, StringComparer.Ordinal));
+        foreach (var marker in moved)
+        {
+            var display = marker.GetProperty("display");
+            Assert.False(string.IsNullOrWhiteSpace(display.GetProperty("reason").GetString()));
+            Assert.False(string.IsNullOrWhiteSpace(display.GetProperty("decision").GetString()));
+        }
+    }
+
+    [Fact]
+    public void ChopShopIsDisplayedClearOfTheCustomsInterchangeAndEquatorLabels()
+    {
+        // GPU-2, PMC flow on EFT's own region map, 1920x1080, 2026-11-11: dots measured at Chop Shop (594, 424) for the anchor
+        // 407/471, Iceberg (441, 315) for 215/608 and Equator (894, 384) for 788/521, so a dot moves 0.79 px per IconX unit and
+        // 0.796 px per IconY unit (y grows downwards). A toggle's box runs from 10 px left of its dot to its label's end; the label
+        // 'ARENA: CHOP SHOP' ends 236 px right of the dot and the box is 33 px high around the dot.
+        using var document = JsonDocument.Parse(File.ReadAllText(RepoFile("tools", "maps", "selection", "markers.json")));
+        var chopShop = document.RootElement.GetProperty("markers").EnumerateArray()
+            .Single(m => m.GetProperty("catalog_key").ValueKind == JsonValueKind.String && m.GetProperty("catalog_key").GetString() == "arena_autoservice");
+        var display = chopShop.GetProperty("display");
+        Assert.Equal((display.GetProperty("icon_x").GetInt32(), display.GetProperty("icon_y").GetInt32()),
+            (ArenaMapRegistry.AutoService.IconX, ArenaMapRegistry.AutoService.IconY));
+        double dotX = 594 + (ArenaMapRegistry.AutoService.IconX - 407) * .790;
+        double dotY = 424 - (ArenaMapRegistry.AutoService.IconY - 471) * .796;
+        var box = (left: dotX - 10, top: dotY - 17, right: dotX + 246, bottom: dotY + 16);
+        // The labels the measured position collided with or now sits beside, read from the same screenshot.
+        var labels = new[]
+        {
+            ("CUSTOMS", (left: 696.0, top: 415.0, right: 842.0, bottom: 448.0)),
+            ("INTERCHANGE", (left: 783.0, top: 494.0, right: 981.0, bottom: 527.0)),
+            ("ARENA: EQUATOR", (left: 884.0, top: 367.0, right: 1115.0, bottom: 400.0)),
+        };
+        foreach (var (name, label) in labels)
+        {
+            double gapX = Math.Max(label.left - box.right, box.left - label.right);
+            double gapY = Math.Max(label.top - box.bottom, box.top - label.bottom);
+            Assert.True(Math.Max(gapX, gapY) >= 12, $"{name}: gap {Math.Max(gapX, gapY):F0} px");
+        }
+    }
+
+    [Fact]
+    public void IcebergIsDisplayedClearOfArenaModesPanel()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(RepoFile("tools", "maps", "selection", "markers.json")));
+        var iceberg = document.RootElement.GetProperty("markers").EnumerateArray()
+            .Single(m => m.GetProperty("catalog_key").ValueKind == JsonValueKind.String && m.GetProperty("catalog_key").GetString() == "arena_iceberg");
         var display = iceberg.GetProperty("display");
         Assert.False(string.IsNullOrWhiteSpace(display.GetProperty("reason").GetString()));
         Assert.False(string.IsNullOrWhiteSpace(display.GetProperty("decision").GetString()));
