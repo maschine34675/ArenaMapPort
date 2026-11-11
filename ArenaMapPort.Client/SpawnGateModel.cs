@@ -34,8 +34,27 @@ namespace ArenaMapPort.Client
         /// <summary>Search radius when snapping a probe point to the NavMesh (metres).</summary>
         internal const float ProbeSampleRadius = 1.5f;
 
+        /// <summary>Height of the probe points above the bottom of a gate's closed bounds (metres), at most half the gate's
+        /// height. Until 2026-11-11 the points sat at the CENTRE of the bounds: 2.3 m above the floor for Autoservice's 4.7 m
+        /// big gate and roller shutters, beyond <see cref="ProbeSampleRadius"/>, so their doorways had no probe at all and
+        /// counted as disconnected (GPU-2 2026-11-11, docs/progress/autoservice-release.md "Item 15, first host iteration").</summary>
+        internal const float ProbeLift = 0.5f;
+
         /// <summary>Unity's NavMeshPathStatus.PathComplete as an int, so this file stays free of Unity types.</summary>
         internal const int PathComplete = 0;
+
+        /// <summary>What the probe across a doorway found on the map's own NavMesh, before the first carve.</summary>
+        internal enum ProbeBaseline
+        {
+            /// <summary>A complete path: the doorway is open on the map's mesh, so a hold and a release can be judged.</summary>
+            Connected,
+            /// <summary>A Partial or Invalid path: the mesh itself separates the two sides (Equator's door (3), which Arena
+            /// fences off), so the doorway is left out of the verdicts.</summary>
+            Disconnected,
+            /// <summary>No NavMesh near a probe point: nothing is known about the doorway; it is not judged either, and it is
+            /// reported as inconclusive, never as disconnected.</summary>
+            Inconclusive,
+        }
 
         /// <summary>+1 for the left leaf (slides towards +x into its frame pocket), -1 for the right leaf, 0 for any
         /// other gate part (those switch off without a motion: AirPit's bus doors). Used for a leaf that has no pose row.</summary>
@@ -79,6 +98,46 @@ namespace ArenaMapPort.Client
 
         /// <summary>The horizontal axis a gate is thin on, which the probe path has to cross: 0 for x, 2 for z.</summary>
         internal static int ThinAxis(float sizeX, float sizeZ) => sizeX <= sizeZ ? 0 : 2;
+
+        /// <summary>The height of the probe points for a gate whose closed bounds run from <paramref name="minY"/> to
+        /// <paramref name="maxY"/>: <see cref="ProbeLift"/> above the bottom, or the middle of a gate lower than twice that.
+        /// The bottom of a closed gate is its doorway's floor line, so the NavMesh lies within reach below the point however
+        /// tall the gate is.</summary>
+        internal static float ProbeHeight(float minY, float maxY)
+        {
+            if (maxY < minY) throw new ArgumentException("inverted bounds");
+            return minY + Math.Min(ProbeLift, (maxY - minY) * 0.5f);
+        }
+
+        /// <summary>The two probe points across a gate from its closed world-space AABB: <see cref="ProbeReach"/> either side
+        /// of the centre along the thin horizontal axis (<see cref="ThinAxis"/>), at <see cref="ProbeHeight"/>. The segment
+        /// between them is the doorway the path probe crosses and the occupancy test reads.</summary>
+        internal static void ProbePoints(float minX, float minY, float minZ, float maxX, float maxY, float maxZ,
+            out float ax, out float ay, out float az, out float bx, out float by, out float bz)
+        {
+            if (maxX < minX || maxY < minY || maxZ < minZ) throw new ArgumentException("inverted bounds");
+            float cx = (minX + maxX) * 0.5f, cz = (minZ + maxZ) * 0.5f;
+            float y = ProbeHeight(minY, maxY);
+            bool alongX = ThinAxis(maxX - minX, maxZ - minZ) == 0;
+            ax = alongX ? cx - ProbeReach : cx;
+            bx = alongX ? cx + ProbeReach : cx;
+            az = alongX ? cz : cz - ProbeReach;
+            bz = alongX ? cz : cz + ProbeReach;
+            ay = by = y;
+        }
+
+        /// <summary>The baseline of a doorway from its probe on the map's own NavMesh: <paramref name="pathStatus"/> is the
+        /// path status as an int, or null when a probe point had no NavMesh within <see cref="ProbeSampleRadius"/>. A null
+        /// probe says nothing about the doorway and is <see cref="ProbeBaseline.Inconclusive"/>, never Disconnected (until
+        /// 2026-11-11 it was stored as "not connected" and every tall gate was reported as disconnected on its own mesh).</summary>
+        internal static ProbeBaseline BaselineOf(int? pathStatus) =>
+            pathStatus == null ? ProbeBaseline.Inconclusive
+            : pathStatus.Value == PathComplete ? ProbeBaseline.Connected
+            : ProbeBaseline.Disconnected;
+
+        /// <summary>Only a doorway that is open on the map's own NavMesh is judged by the sealed and open probes: a sealed
+        /// verdict on a doorway that was never connected, or on one whose probe found no mesh, would prove nothing.</summary>
+        internal static bool BaselineJudged(ProbeBaseline baseline) => baseline == ProbeBaseline.Connected;
 
         /// <summary>An enclosure's verdict from its probed doorways (the parts under one barrier root or door assembly):
         /// while held, an enclosure contradicts the hold only when none of its probed doorways is sealed (the carve took

@@ -176,8 +176,9 @@ namespace ArenaMapPort.Client
         // World bounds of each part's movement colliders, taken while the part is active (an inactive part has none);
         // the probe after a release reads them.
         static readonly Dictionary<Transform, Bounds> _bounds = new Dictionary<Transform, Bounds>();
-        // Baseline per part, probed before the first carve: false = the doorway is disconnected on the map's own NavMesh.
-        static readonly Dictionary<Transform, bool> _baseline = new Dictionary<Transform, bool>();
+        // Baseline per part, probed before the first carve on the map's own NavMesh (SpawnGateModel.BaselineOf): only a
+        // Connected doorway is judged; Disconnected (Equator's door (3)) and Inconclusive (no mesh near a probe point) are not.
+        static readonly Dictionary<Transform, SpawnGateModel.ProbeBaseline> _baseline = new Dictionary<Transform, SpawnGateModel.ProbeBaseline>();
         static readonly List<GameObject> _carvers = new List<GameObject>();
         // The hold carvers of each part, so a part that finishes its drive early loses only its own.
         static readonly Dictionary<Transform, List<GameObject>> _carversOf = new Dictionary<Transform, List<GameObject>>();
@@ -795,13 +796,15 @@ namespace ArenaMapPort.Client
             return go;
         }
 
-        // Baseline per part, probed before the first carve: false = the doorway is disconnected on the map's own NavMesh.
+        // Baseline per part, probed before the first carve: Connected, Disconnected on the map's own NavMesh, or Inconclusive
+        // when a probe point has no NavMesh within reach (a null probe is never counted as disconnected).
         static void EnsureBaseline()
         {
             foreach (var pair in _bounds)
             {
-                if (!_baseline.ContainsKey(pair.Key))
-                    _baseline[pair.Key] = ProbePath(pair.Value, out _) == NavMeshPathStatus.PathComplete;
+                if (_baseline.ContainsKey(pair.Key)) continue;
+                var status = ProbePath(pair.Value, out _);
+                _baseline[pair.Key] = SpawnGateModel.BaselineOf(status.HasValue ? (int?)(int)status.Value : null);
             }
         }
 
@@ -913,11 +916,16 @@ namespace ArenaMapPort.Client
                 own.Add(go);
                 colliders++;
             }
-            int disconnected = 0;
-            foreach (var pair in _baseline) if (!pair.Value) disconnected++;
+            int disconnected = 0, unknown = 0;
+            foreach (var pair in _baseline)
+            {
+                if (pair.Value == SpawnGateModel.ProbeBaseline.Disconnected) disconnected++;
+                else if (pair.Value == SpawnGateModel.ProbeBaseline.Inconclusive) unknown++;
+            }
             Plugin.Log.LogDebug($"{Tag} {why}: {colliders} carver(s) over {colliders} movement collider(s) of {_parts.Count} gate part(s) " +
                                 $"({_carvers.Count} carver(s) in place, {_heldGateParts.Count} held-gate part(s))" +
-                                (disconnected > 0 ? $"; {disconnected} doorway(s) already disconnected on the map's own navmesh (not judged)" : ""));
+                                (disconnected > 0 ? $"; {disconnected} doorway(s) already disconnected on the map's own navmesh (not judged)" : "") +
+                                (unknown > 0 ? $"; {unknown} doorway(s) without navmesh near a probe point on the map's own navmesh (inconclusive, not judged)" : ""));
             if (colliders == 0)
             {
                 if (_carvers.Count == 0)
@@ -1002,7 +1010,14 @@ namespace ArenaMapPort.Client
                 // A part at its open pose is no closed gate (Register keeps the CLOSED bounds of a posed part, so a parked bus
                 // assembly has a doorway here): the sealed probe does not judge it, whatever the park carvers did to the path.
                 if (!DoorPoseModel.ProbeJudgesPart(expectSealed, IsParkedOrDriving(part))) { parkedOpen++; continue; }
-                if (_baseline.TryGetValue(part, out bool connected) && !connected) { disconnected++; continue; }
+                if (_baseline.TryGetValue(part, out var baseline) && !SpawnGateModel.BaselineJudged(baseline))
+                {
+                    if (baseline == SpawnGateModel.ProbeBaseline.Disconnected) { disconnected++; continue; }
+                    // No NavMesh near a probe point before the first carve: nothing to compare a verdict against.
+                    inconclusive++;
+                    sb.Append($"\n  '{part.name}' at {bounds.center:F1}: no navmesh near a probe point on the map's own navmesh, not judged");
+                    continue;
+                }
                 // Arena parks the BTR, the ambulance and the swung leaves at the doorway they open; a probe segment that
                 // runs through such a body (a park carver) says nothing about the gate, so it is not judged "open".
                 if (!expectSealed && ParkedBodyOnProbe(bounds))
@@ -1039,22 +1054,28 @@ namespace ArenaMapPort.Client
             return sb.ToString();
         }
 
-        // The two probe points across a gate's thin axis, 1.5 m either side of the centre of its (closed) bounds.
+        // The two probe points across a gate's thin axis, 1.5 m either side of the centre of its (closed) bounds, 0.5 m above
+        // the bounds' bottom (SpawnGateModel.ProbePoints): near the doorway's floor, however tall the gate.
         static void ProbeSegment(Bounds bounds, out Vector3 a, out Vector3 b)
         {
-            var axis = SpawnGateModel.ThinAxis(bounds.size.x, bounds.size.z) == 0 ? Vector3.right : Vector3.forward;
-            a = bounds.center - axis * SpawnGateModel.ProbeReach;
-            b = bounds.center + axis * SpawnGateModel.ProbeReach;
+            var min = bounds.min;
+            var max = bounds.max;
+            SpawnGateModel.ProbePoints(min.x, min.y, min.z, max.x, max.y, max.z,
+                out float ax, out float ay, out float az, out float bx, out float by, out float bz);
+            a = new Vector3(ax, ay, az);
+            b = new Vector3(bx, by, bz);
         }
 
         // One NavMesh path across a gate's thin axis; null when a probe point has no NavMesh within reach.
         static NavMeshPathStatus? ProbePath(Bounds bounds, out string detail)
         {
             ProbeSegment(bounds, out var a, out var b);
-            if (!NavMesh.SamplePosition(a, out var ha, SpawnGateModel.ProbeSampleRadius, NavMesh.AllAreas) ||
-                !NavMesh.SamplePosition(b, out var hb, SpawnGateModel.ProbeSampleRadius, NavMesh.AllAreas))
+            bool hitA = NavMesh.SamplePosition(a, out var ha, SpawnGateModel.ProbeSampleRadius, NavMesh.AllAreas);
+            bool hitB = NavMesh.SamplePosition(b, out var hb, SpawnGateModel.ProbeSampleRadius, NavMesh.AllAreas);
+            if (!hitA || !hitB)
             {
-                detail = $"no navmesh within {SpawnGateModel.ProbeSampleRadius:F1} m of a probe point";
+                detail = $"no navmesh within {SpawnGateModel.ProbeSampleRadius:F1} m of " +
+                         (hitA ? $"{b:F1}" : hitB ? $"{a:F1}" : $"{a:F1} and {b:F1}");
                 return null;
             }
             var path = new NavMeshPath();

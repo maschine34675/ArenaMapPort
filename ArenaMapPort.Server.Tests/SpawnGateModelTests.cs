@@ -95,6 +95,80 @@ public sealed class SpawnGateModelTests
     }
 
     [Theory]
+    [InlineData(0f, 4.7f, 0.5f)]      // Autoservice's big gate / techlight shutters: 0.5 m above the floor, not 2.35 m
+    [InlineData(-3.9f, 0.5f, -3.4f)]  // a Bay5 depot gate standing below y 0
+    [InlineData(0.05f, 2.10f, 0.55f)] // an Equator leaf
+    [InlineData(0f, 0.6f, 0.3f)]      // lower than twice the lift: the middle
+    [InlineData(1f, 1f, 1f)]          // flat bounds: the bottom itself
+    public void TheProbeHeightIsTheLiftAboveTheBottomOrTheMiddleOfALowGate(float minY, float maxY, float expected)
+    {
+        Assert.Equal(expected, SpawnGateModel.ProbeHeight(minY, maxY), 3);
+    }
+
+    [Fact]
+    public void TheProbeHeightRejectsInvertedBounds()
+    {
+        Assert.Throws<ArgumentException>(() => SpawnGateModel.ProbeHeight(1f, 0f));
+        Assert.Throws<ArgumentException>(() => SpawnGateModel.ProbePoints(0f, 1f, 0f, 1f, 0f, 1f,
+            out _, out _, out _, out _, out _, out _));
+    }
+
+    [Fact]
+    public void ATallGateIsProbedWithinSampleReachOfItsFloor()
+    {
+        // The GPU-2 picture of 2026-11-11 (docs/progress/autoservice-release.md "Item 15, first host iteration"): a 4.7 m
+        // roller shutter, 5 m wide in x and 0.2 m thick in z, floor at y -3.75. The old probe sat at the centre, 2.35 m above
+        // the floor, beyond the 1.5 m sample radius: no navmesh, and the doorway counted as disconnected.
+        float minY = -3.75f, maxY = 0.95f;
+        float centreAboveFloor = (minY + maxY) * 0.5f - minY;
+        Assert.True(centreAboveFloor > SpawnGateModel.ProbeSampleRadius, "the old centre probe could not reach the floor");
+        SpawnGateModel.ProbePoints(-405.3f, minY, 499.4f, -400.3f, maxY, 499.6f,
+            out float ax, out float ay, out float az, out float bx, out float by, out float bz);
+        Assert.True(ay - minY <= SpawnGateModel.ProbeSampleRadius && by - minY <= SpawnGateModel.ProbeSampleRadius);
+        Assert.Equal(minY + SpawnGateModel.ProbeLift, ay, 3);
+        Assert.Equal(ay, by, 3);
+        // thin in z: the points cross the doorway along z, 1.5 m either side of the centre, x at the centre
+        Assert.Equal(-402.8f, ax, 3);
+        Assert.Equal(-402.8f, bx, 3);
+        Assert.Equal(499.5f - SpawnGateModel.ProbeReach, az, 3);
+        Assert.Equal(499.5f + SpawnGateModel.ProbeReach, bz, 3);
+    }
+
+    [Fact]
+    public void AGateThinInXIsCrossedAlongX()
+    {
+        // An Equator leaf turned 90 degrees: 0.03 m thick in x, 1.38 m wide in z, floor at y 0.05.
+        SpawnGateModel.ProbePoints(4.52f, 0.05f, 40.0f, 4.55f, 2.10f, 41.38f,
+            out float ax, out float ay, out float az, out float bx, out float by, out float bz);
+        Assert.Equal(4.535f - SpawnGateModel.ProbeReach, ax, 3);
+        Assert.Equal(4.535f + SpawnGateModel.ProbeReach, bx, 3);
+        Assert.Equal(40.69f, az, 3);
+        Assert.Equal(40.69f, bz, 3);
+        Assert.Equal(0.55f, ay, 3);
+        Assert.Equal(0.55f, by, 3);
+    }
+
+    // The baseline enum is internal; the theories carry its names (a public test method cannot take an internal type).
+    [Theory]
+    [InlineData(null, "Inconclusive")] // no navmesh near a probe point: unknown, never disconnected
+    [InlineData(0, "Connected")]       // PathComplete
+    [InlineData(1, "Disconnected")]    // PathPartial: Equator's door (3), fenced off on its own mesh
+    [InlineData(2, "Disconnected")]    // PathInvalid
+    public void ANullBaselineProbeIsInconclusiveNotDisconnected(int? status, string expected)
+    {
+        Assert.Equal(expected, SpawnGateModel.BaselineOf(status).ToString());
+    }
+
+    [Theory]
+    [InlineData("Connected", true)]
+    [InlineData("Disconnected", false)]
+    [InlineData("Inconclusive", false)]
+    public void OnlyADoorwayConnectedOnTheMapsOwnMeshIsJudged(string baseline, bool judged)
+    {
+        Assert.Equal(judged, SpawnGateModel.BaselineJudged(Enum.Parse<SpawnGateModel.ProbeBaseline>(baseline)));
+    }
+
+    [Theory]
     [InlineData(true, 6, 3, false)]   // AirPit's bus pocket: outer row sealed, inner row authored open
     [InlineData(true, 6, 6, false)]
     [InlineData(true, 6, 0, true)]    // the carve took nowhere
@@ -181,6 +255,38 @@ public sealed class SpawnGatesWiringTests
         Assert.True(lamps > 0 && lastBefore > 0 && lastBefore < lamps, "the three offers of the gate steps precede OpenLamps");
         Assert.Single(Regex.Matches(code.Substring(lamps), @"SpawnGates\.Offer\("));
         Assert.DoesNotContain("SetActive(false)", code.Substring(lamps, code.IndexOf("static IEnumerable<GameObject> OwnedSceneRoots()", lamps, StringComparison.Ordinal) - lamps));
+    }
+
+    [Fact]
+    public void TheDoorwayProbeSamplesNearTheFloorAndANullBaselineIsInconclusive()
+    {
+        // 2026-11-11: the probe points come from SpawnGateModel.ProbePoints (near the bottom of the closed bounds), and a
+        // baseline probe that found no navmesh is Inconclusive (counted and reported apart), not "disconnected".
+        var gates = Text("ArenaMapPort.Client/SpawnGates.cs");
+        int segmentAt = gates.IndexOf("static void ProbeSegment(Bounds bounds, out Vector3 a, out Vector3 b)", StringComparison.Ordinal);
+        int pathAt = gates.IndexOf("static NavMeshPathStatus? ProbePath(Bounds bounds, out string detail)", StringComparison.Ordinal);
+        Assert.True(segmentAt > 0 && pathAt > segmentAt);
+        var segment = gates.Substring(segmentAt, pathAt - segmentAt);
+        Assert.Contains("SpawnGateModel.ProbePoints(min.x, min.y, min.z, max.x, max.y, max.z,", segment);
+        Assert.DoesNotContain("bounds.center", segment);
+        int baselineAt = gates.IndexOf("static void EnsureBaseline()", StringComparison.Ordinal);
+        var baseline = gates.Substring(baselineAt, gates.IndexOf("static bool ParkedBodyOnProbe(Bounds bounds)", baselineAt, StringComparison.Ordinal) - baselineAt);
+        Assert.Contains("SpawnGateModel.BaselineOf(status.HasValue ? (int?)(int)status.Value : null)", baseline);
+        Assert.DoesNotContain("== NavMeshPathStatus.PathComplete", baseline);
+        Assert.Contains("Dictionary<Transform, SpawnGateModel.ProbeBaseline> _baseline", gates);
+        // ProbeOnce: a Disconnected baseline counts as disconnected, an Inconclusive one as inconclusive, both are not judged
+        int onceAt = gates.IndexOf("static string ProbeOnce(bool expectSealed", StringComparison.Ordinal);
+        var once = gates.Substring(onceAt, segmentAt - onceAt);
+        Assert.Contains("_baseline.TryGetValue(part, out var baseline) && !SpawnGateModel.BaselineJudged(baseline)", once);
+        Assert.Contains("if (baseline == SpawnGateModel.ProbeBaseline.Disconnected) { disconnected++; continue; }", once);
+        Assert.Contains("inconclusive++;", once);
+        // the carve line reports the two apart
+        Assert.Contains("doorway(s) already disconnected on the map's own navmesh (not judged)", gates);
+        Assert.Contains("doorway(s) without navmesh near a probe point on the map's own navmesh (inconclusive, not judged)", gates);
+        // the verdict lines keep their levels: a contradiction is a Warning, everything else Debug
+        Assert.Contains("Plugin.Log.LogWarning($\"{Tag} navmesh probe: a gate is NOT {state} \" +", gates);
+        Assert.Contains("Plugin.Log.LogDebug($\"{Tag} navmesh probe: no gate could be probed", gates);
+        Assert.Contains("Plugin.Log.LogDebug($\"{Tag} navmesh probe: every probed gate {state}", gates);
     }
 
     [Fact]
