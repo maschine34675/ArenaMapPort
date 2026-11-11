@@ -35,7 +35,7 @@ the largest `ok` entry whose removal does not exceed (1 - scale) * event_s and c
 CLI:
     python tools/extract/extract_gate_sounds.py rows  [--map arena_bowl] [--arena auto] [--check]
     python tools/extract/extract_gate_sounds.py clips [--map arena_bowl] [--arena auto] [--output work/extract/gate-sounds]
-Without --map every map of MAPS (the four released maps and Iceberg, which joined the released set on 2026-10-30). A clip's fit entry
+Without --map every map of MAPS (the four released maps, Iceberg, which joined the released set on 2026-10-30, and Autoservice, which is Catalog-only until its promotion). A clip's fit entry
 is fit["clips"][name], or fit["map_clips"][map_key][name] where one map plays a clip another map shares at a different authored pitch (Iceberg
 plays Equator's slide clip at 1.15). `rows --check` compares with the tracked sidecars and writes nothing. The output is byte-stable.
 """
@@ -93,6 +93,10 @@ MAPS = {
     # belongs to the root of the nearest assembly and never to one of its two leaves (they lie 0.06 m apart horizontally, one above the other,
     # and the emitters stand 2.5 m above them). Both are this map's only; no other map changes.
     "arena_iceberg": {"stem": "iceberg", "scenes": ("sound",), "join_margin_m": 2.5, "join_root": True},
+    # Autoservice (2026-11-11, PLAN-AUTOSERVICE item 7): the four players under ARENA_GATES_SOUND in the Sound scene (level112) stand on
+    # their gate roots. The default rules (2.0 m, 4.0 m margin) join them: the gates are 27 m or more apart, and every part of a gate
+    # (six colliders and meshes, or the big gate's one `gate` node) belongs to the root's one sound (part null). Nothing optional is needed.
+    "arena_autoservice": {"stem": "autoservice", "scenes": ("sound",)},
 }
 
 # fit search (the 2026-10-25 prototype, numbers unchanged)

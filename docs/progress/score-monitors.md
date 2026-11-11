@@ -700,3 +700,25 @@ with Arena's). The hideout opened once at 17:22.
 What remains is on the ArenaMode side: its agent has to adopt the binder and the Team Deathmatch mapping (the code blocks under "The ArenaMode
 binder" and "The Team Deathmatch mapping" above; ArenaMode is never edited from this repo), then part B runs. Until then the screens show
 nothing without the developer demo.
+
+## 2026-11-11 - Autoservice (PLAN-AUTOSERVICE item 7): four holders in the DesignStuff scene
+
+`tools/maps/autoservice.monitors.json` (4 rows, all active, all with a face) from `extract_score_monitors.py --map arena_autoservice` (MAPS row:
+stem `autoservice`, package `autoservice-native-v2`). Catalog-only: `ArenaMapRegistry.AutoService.ScoreMonitors` arrives with the promotion (item 12);
+until then `validate_map_descriptors.PENDING_MIRROR_KEYS` lets the sidecar exist unmirrored (validated in itself).
+
+* **Scenes read (key-sources order of the descriptor):** `Arena_AutoService` (62), `Arena_AutoService_DesignStuff` (65), `Arena_AutoService_TeamFight_DesignStuff`
+  (136) and `Arena_AutoService_Light` (66). Only level 65 holds holders (4; 0 in the other three, counted by the real-data test). The four props
+  are `TV (1)/Arena_Home_theater (1)`, `(2)`, `(3)` and `(5)`.
+* **Rows (measured, world positions of the canvas centres):** timers (type word 0, `MonitorTimer`, prop scale 3.0, 3.127 x 1.884 m) at (-400.9498, 8.1449,
+  489.424), readable from +X (yaw 90), on the west pocket wall, and at (-345.8202, 8.1699, 489.18), readable from -X (yaw 270), on the east pocket wall;
+  alive boards (word 2, `MonitorAlivePlayers`, scale 2.1527, 2.244 x 1.352 m) at (-381.4771, 4.8499, 468.8919), yaw 2.2, and (-367.771, 4.7428, 509.5993),
+  yaw 180.4, on the two long walls. These are the plan's numbers (to rounding). Both words are the confirmed ones (0 and 2); no score word (1 or 6),
+  no word 7 / 10 / 13 occurs.
+* All four props are active in the scene data and in the package (`4 prop(s) found once in autoservice-native-v2 with the same activity`), so
+  all four get a screen from `ScoreMonitors` (the client draws faces for words 0, 1, 2 and 6). ShootOut's score and playerboard TVs are not imported.
+* Not checked in-game: the readable side (yaw), the face size on the prop and the screens' visibility from the pockets are offline numbers.
+
+Checks: `python -m unittest tools.tests.test_score_monitors`: Ran 87 tests, 1 failure that is not new: `SidecarTests.test_the_sidecar_text_is_what_the_cli_writes`
+reads the tracked released sidecars as bytes and refuses a CR, and a git worktree checks them out with CRLF (`core.autocrlf=true`); in the main checkout (LF on disk)
+the test is unaffected, and it does not look at Autoservice's file. The five older sidecars regenerate with only the recorded `arena_version` different.

@@ -70,6 +70,15 @@ checked: the borrower really has no DotAnimator); mode "scene" (AirPit's bus doo
 a motion: the open pose of a node is the lender's current local transform of the same-named node. Per-map scan roots, barrier
 depth and borrowed gates are in DOT_SOURCES.
 
+Autoservice (2026-11-11, PLAN-AUTOSERVICE item 7) is the one map in BOTH tables, so `extract()` runs both paths and merges their rows into one
+sidecar (`extract_combined`; the clip rows first, then the lamp rows; both paths must read the same scene of the same Arena build and may not
+claim one node twice). Its four gates are Mecanim clips like Bowl's, with three differences the MAP_SOURCES row carries: the Animator sits ON
+the barrier root (`root_animators`: the moved children become parts, the rows' part is each child's name and the node ""), the controllers
+live in sharedassets70.assets, the ShootOut scene's file, and not in the scene's own (`clip_levels`: loaded beside it so the external PPtr
+resolves), and Arena spells the closed clips `*_clossed` (`is_closed_clip_name`). One reviewed override (`accepted_closed_offsets`) accepts
+the 0.978 m the scene's colliders of equator_roller_shutters_01 stand below the clip's closed pose and writes the SCENE pose (the comment at the
+row has the reasons). Its four lamps (`DOORS/LIGHT_1..4`) are DotAnimator switch rows under one lamp-group barrier `DOORS`.
+
 Sidecar schema 2 adds to every pose: "source" (clip / dotanimator / borrowed), "ease" (smoothstep = the client's stand-in for
 Bowl's clips, linear, inOutQuint, curve), "curve" (null, or Hermite keys [time, value, inSlope, outSlope] on a 0..1 timeline,
 used when ease is "curve") and "at" (null, or the WORLD position of the barrier root instance, which tells repeated hierarchy
@@ -88,6 +97,8 @@ CLI:
         --output tools/maps/airpit.doors.json --csharp
     python tools/extract/extract_door_poses.py --map arena_iceberg --package work/extract/iceberg-native-v2 \\
         --output tools/maps/iceberg.doors.json --csharp
+    python tools/extract/extract_door_poses.py --map arena_autoservice --package work/extract/autoservice-native-v2 \\
+        --output tools/maps/autoservice.doors.json --csharp
 `--csharp` also prints the `new ArenaDoorPose(...)` literals for ArenaMapRegistry.<Map>.DoorPoses; the output is
 byte-stable. The verification summary goes to stdout; a failed check goes to stderr with exit code 1 and no file written.
 """
@@ -122,6 +133,40 @@ AT_TOLERANCE = 0.05       # m, two barrier roots closer than this are the same i
 # controller without clips (their open pose is the static back row, mode "scene"; docs/progress/door-poses.md, "AirPit").
 MAP_SOURCES = {
     "arena_bowl": {"scene": "Arena_Bowl_TeamFight_DesignStuff", "descriptor": REPO / "tools" / "maps" / "bowl.json"},
+    # Autoservice (2026-11-11, plan item 7): four Mecanim gates AND four DotAnimator lamps, so the map is in both tables and
+    # extract() merges the two paths (extract_combined). `barriers` are the gate unit paths (the descriptor sidecar gets its
+    # opened_barriers in item 8 and must then agree), `root_animators` = the Animator sits on the barrier root (part ""),
+    # `clip_levels` = shared files to load beside the scene's own: its controllers are in sharedassets70.assets (the ShootOut
+    # scene, level 70), an external PPtr of level 136.
+    "arena_autoservice": {
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "descriptor": REPO / "tools" / "maps" / "autoservice.json",
+        "barriers": ["DOORS/big_gate_metal", "DOORS/equator_roller_shutters_01",
+                     "DOORS/roller_shutters_techlight_01", "DOORS/roller_shutters_techlight_01 (1)"],
+        "root_animators": True,
+        "clip_levels": [70],
+        # REVIEWED OVERRIDE (2026-11-11, plan item 7, risk 3): Arena's scene is inconsistent on equator_roller_shutters_01. The
+        # three nodes below stand at local z 0 in BOTH scenes that hold the gate (level 136 and the identical ShootOut copy in
+        # level 70; all four controllers start in their `*_clossed` state with Write Defaults on, measured), while the clip's
+        # closed pose, and the three visual LODs of the scene, are at z 0.978-0.981 (0.835 m higher in the world). Arena's own
+        # Animator would therefore lift collider, ballistic collider and shadow by 0.978 on its first update (inferred, not
+        # watched in a running Arena). The port parks and re-closes the SCENE pose (the sidecar's closed pose IS the scene's):
+        #   - the client compares every node with the row's closed pose and drops the whole part to a switch-off on a mismatch
+        #     (SpawnGates PoseMatchesScene), so a clip-closed row would make these parts vanish instead of move;
+        #   - the scene collider reaches the floor, so a HELD gate seals the opening completely, where the clip's pose would
+        #     leave a 0.835 m crawl gap under the curtain;
+        #   - the bake never sees either pose: every one of the six moved nodes is a posed part and is dropped as an opened
+        #     barrier's leaf (the unposed frame colliders stay), so NavMesh coverage is the same whichever closed pose is meant.
+        # All six end at the same open pose (local z 3.008, world y -1.78), so the open state is not in question. The value is
+        # pinned (ACCEPTED_OFFSET_TOL 5 mm): a different measured offset, or an entry no node uses, stops the tool.
+        "accepted_closed_offsets": {
+            "DOORS/equator_roller_shutters_01": {
+                "roller_shutters_01_COLLIDER": 0.978,
+                "roller_shutters_01_BALLISTIC_metalthin": 0.978,
+                "roller_shutters_01_SHADOW_LOD0": 0.978,
+            },
+        },
+    },
 }
 
 # DotAnimator source (see the module doc). Per map:
@@ -194,6 +239,18 @@ DOT_SOURCES = {
         # the gate), so a gate's own DotAnimator has part "" and the repeated paths are told apart by `at` (a depth-2 scan stops with
         # "occurs twice", the survey of 2026-10-30). Eleven DotAnimators, linear drives of 2.0 to 5.0 s, no switch and no borrowed gate.
         "scans": [{"root": "DOORS", "depth": 3, "at": True}],
+    },
+    # Autoservice (2026-11-11): the DotAnimators below DOORS are the four lamp groups LIGHT_1..4 only (the four gates are Mecanim
+    # clips, MAP_SOURCES above; extract() merges both paths). Each LIGHT_n holds ONE kind-3 element that switches its single
+    # RED or GREEN child. A switch row must name a node BELOW its part (validate_map_descriptors door_switch_errors), so the
+    # barrier is DOORS itself (depth 1), the part LIGHT_n and the node RED / GREEN: one LAMP GROUP barrier "DOORS" (every row a
+    # switch row, not an opened_barriers entry) whose parts are the four LIGHT_n. Decoded 2026-11-11: LIGHT_1 and LIGHT_3 switch
+    # GREEN inactive -> active, LIGHT_2 and LIGHT_4 switch RED active -> inactive (the AirPit pattern). The gate units
+    # DOORS/<gate> below it are separate barriers with their own rows; the group has no row for them.
+    "arena_autoservice": {
+        "scene": "Arena_AutoService_TeamFight_DesignStuff",
+        "descriptor": REPO / "tools" / "maps" / "autoservice.json",
+        "scans": [{"root": "DOORS", "depth": 1, "at": False, "switches": True}],
     },
 }
 DOT_SCRIPT = "CommonAssets.Scripts.Game.Modes.Data.DotAnimator"
@@ -321,8 +378,11 @@ def tidy(values: Iterable[float], decimals: int = DECIMALS) -> list[float]:
     return [round(v, decimals) + 0.0 for v in values]
 
 
+CLOSED_CLIP_SUFFIXES = ("closed", "clossed")      # Arena's own typo "clossed" (Autoservice's four gate clips, 2026-11-11)
+
+
 def is_closed_clip_name(name: str) -> bool:
-    return name.lower().endswith("closed")
+    return name.lower().endswith(CLOSED_CLIP_SUFFIXES)
 
 
 def pick_open_clip(names: list[str]) -> str:
@@ -694,14 +754,24 @@ def continuous_euler(channel: Channel, stop: float, start_euler, per_second: int
     return previous
 
 
-def solve_node(scene_pos, scene_quat, scene_scale, channels: dict, closed_channels: dict, label: str, stop: float):
+ACCEPTED_OFFSET_TOL = 0.005   # m, how closely a measured clip/scene offset must equal a reviewed ACCEPTED_CLOSED_OFFSETS value
+
+
+def solve_node(scene_pos, scene_quat, scene_scale, channels: dict, closed_channels: dict, label: str, stop: float,
+               accepted_offset: float | None = None):
     """Closed/open pose of one node from its open-clip channels (kind -> Channel), the matching `*_closed` clip
     channels and the scene transform. Returns (pose dict, issues list of (level, text), scale_changed bool); level is
-    "warn" for a clip/scene offset beyond the strict tolerance and "error" beyond the hard one."""
+    "warn" for a clip/scene offset beyond the strict tolerance and "error" beyond the hard one. `accepted_offset` (a
+    reviewed value from a MAP_SOURCES row, metres) turns the closed-POSITION offset of this one node into a warning when the
+    measured offset equals it within ACCEPTED_OFFSET_TOL, and leaves it an error (strict/hard rules as usual) otherwise."""
     issues = []
 
     def judge(kind, delta, strict, hard, unit, detail):
-        if delta > hard:
+        if (accepted_offset is not None and kind == "closed position" and delta > strict
+                and abs(delta - accepted_offset) <= ACCEPTED_OFFSET_TOL):
+            issues.append(("warn", f"{label}: {kind} {detail} differs from the scene by {delta:.3f} {unit}; accepted by the reviewed "
+                                   f"override ({accepted_offset} m): the pose written is the SCENE's"))
+        elif delta > hard:
             issues.append(("error", f"{label}: {kind} {detail} differs from the scene by {delta:.3f} {unit} (hard limit {hard})"))
         elif delta > strict:
             issues.append(("warn", f"{label}: {kind} {detail} differs from the scene by {delta:.3f} {unit} (strict {strict})"))
@@ -931,14 +1001,21 @@ def scene_level_index(map_key: str, scene: str) -> int:
 class ArenaScene:
     """The GameObject/Transform hierarchy of one level file with its Animators (read-only through UnityPy)."""
 
-    def __init__(self, data_dir: Path, level: int):
+    extra_shared_names: tuple = ()      # the further sharedassets files of this scene (__init__ sets them), none by default
+
+    def __init__(self, data_dir: Path, level: int, extra_shared: Iterable[int] = ()):
+        """`extra_shared` names further sharedassets<N>.assets files to load beside the level's own: Autoservice's level 136
+        points its four Animators at controllers that live in sharedassets70.assets (the ShootOut scene's file), an external
+        PPtr that only resolves when that file is in the same environment."""
         import UnityPy
         level_file = data_dir / f"level{level}"
         shared_file = data_dir / f"sharedassets{level}.assets"
-        for path in (level_file, shared_file):
+        extra_files = [data_dir / f"sharedassets{n}.assets" for n in extra_shared]
+        for path in (level_file, shared_file, *extra_files):
             if not path.is_file():
                 raise DoorPoseError(f"missing {path}")
-        self.env = UnityPy.load(str(level_file), str(shared_file))
+        self.extra_shared_names = [p.name for p in extra_files]
+        self.env = UnityPy.load(str(level_file), str(shared_file), *(str(p) for p in extra_files))
         self.files: dict[str, dict] = {}
         for obj in self.env.objects:
             self.files.setdefault(Path(obj.assets_file.name).name, {})[obj.path_id] = obj
@@ -1103,27 +1180,31 @@ class Gate:
     transitions: list
 
 
-def split_gate_path(animator_path: str, barriers: list[str]) -> tuple[str, str, str] | None:
+def split_gate_path(animator_path: str, barriers: list[str], allow_root: bool = False) -> tuple[str, str, str] | None:
     """(barrier, part, sub) of an Animator path, or None when it lies outside every opened barrier or is the barrier
-    itself. The barrier is the longest listed prefix."""
+    itself. The barrier is the longest listed prefix. With `allow_root` (a MAP_SOURCES row that says so: Autoservice's four
+    gates carry their Animator on the barrier root, so the root itself moves) an Animator ON a barrier is that barrier's
+    gate with part "" and sub ""."""
     best = None
     for barrier in barriers:
         if animator_path.startswith(barrier + "/") and (best is None or len(barrier) > len(best)):
             best = barrier
     if best is None:
+        if allow_root and animator_path in barriers:
+            return animator_path, "", ""
         return None
     rest = animator_path[len(best) + 1:].split("/")
     return best, rest[0], "/".join(rest[1:])
 
 
-def read_gates(scene: ArenaScene, barriers: list[str]) -> tuple[list[Gate], list[str]]:
+def read_gates(scene: ArenaScene, barriers: list[str], allow_root: bool = False) -> tuple[list[Gate], list[str]]:
     """The gate animators below the opened barriers, and the paths of the Animators ignored."""
     gates, ignored = [], []
     for animator in sorted(scene.animators, key=lambda o: o.path_id):
         tt = animator.read_typetree()
         tpid = scene.go2tr[tt["m_GameObject"]["m_PathID"]]
         path = scene.path(tpid)
-        split = split_gate_path(path, barriers)
+        split = split_gate_path(path, barriers, allow_root)
         if split is None:
             ignored.append(path)
             continue
@@ -1146,14 +1227,17 @@ def read_gates(scene: ArenaScene, barriers: list[str]) -> tuple[list[Gate], list
 
 
 def find_clip(scene: ArenaScene, controller_name: str, clip_name: str) -> dict:
-    for obj in scene.files[scene.shared_name].values():
-        if obj.type.name == "AnimatorController":
-            ctt = obj.read_typetree()
-            if ctt["m_Name"] == controller_name:
-                for pptr in ctt["m_AnimationClips"]:
-                    tt = scene.deref(obj, pptr).read_typetree()
-                    if tt["m_Name"] == clip_name:
-                        return tt
+    """The clip of a controller by name: the level's own shared assets first (every map until Autoservice), then the extra
+    shared files the scene loaded (the first file that holds the controller wins, as before)."""
+    for shared_name in [scene.shared_name, *scene.extra_shared_names]:
+        for obj in scene.files[shared_name].values():
+            if obj.type.name == "AnimatorController":
+                ctt = obj.read_typetree()
+                if ctt["m_Name"] == controller_name:
+                    for pptr in ctt["m_AnimationClips"]:
+                        tt = scene.deref(obj, pptr).read_typetree()
+                        if tt["m_Name"] == clip_name:
+                            return tt
     raise DoorPoseError(f"clip {clip_name} of controller {controller_name} not found")
 
 
@@ -1174,7 +1258,13 @@ class GateResult:
     worst_residual: float = 0.0
 
 
-def solve_gate(scene: ArenaScene, gate: Gate) -> GateResult:
+def solve_gate(scene: ArenaScene, gate: Gate, accepted_offsets: dict | None = None) -> GateResult:
+    """The poses of one gate. `accepted_offsets` ({node path below the part: reviewed closed-position offset in metres}, from a
+    MAP_SOURCES row) names the nodes whose scene position is accepted despite a larger clip/scene gap; an entry that no node
+    used stops the tool (a stale override must not stay unnoticed). A gate whose Animator sits on the barrier root (part "")
+    reports each moved child as a PART (its first path segment) with the rest as the node, the shape every other row has."""
+    accepted_offsets = dict(accepted_offsets or {})
+    used_offsets: set = set()
     animator_tpid = None
     # locate the Animator's transform by its path
     for tpid in scene.tr:
@@ -1221,19 +1311,28 @@ def solve_gate(scene: ArenaScene, gate: Gate) -> GateResult:
             raise DoorPoseError(f"{open_clip.name}: hash {path_hash} is ambiguous: {[h[0] for h in hits]}")
         rel, tpid = hits[0]
         node = "/".join(p for p in (gate.sub, rel) if p)
+        part = gate.part
+        if not part and node:
+            part, _, node = node.partition("/")       # Animator on the barrier root: the first segment is the part
+        offset = accepted_offsets.get("/".join(x for x in (part, node) if x))
+        if offset is not None:
+            used_offsets.add("/".join(x for x in (part, node) if x))
         pos, quat, scale = scene.local(tpid)
         solved, issues, scale_changed = solve_node(pos, quat, scale, by_node[path_hash], closed_by_node.get(path_hash, {}),
-                                                   f"{gate.part}/{node}" if node else gate.part, open_clip.stop)
+                                                   f"{part}/{node}" if node else part, open_clip.stop, offset)
         result.issues.extend(issues)
         if scale_changed:
-            result.scale_changed.append(node or gate.part)
+            result.scale_changed.append(node or part)
         if solved["moved"]:
-            result.kept.append(NodePose(gate.barrier, gate.part, node, open_clip.name, open_clip.stop,
+            result.kept.append(NodePose(gate.barrier, part, node, open_clip.name, open_clip.stop,
                                         solved["closed_position"], solved["closed_euler"],
                                         solved["open_position"], solved["open_euler"]))
-            result.windows[node] = motion_window(by_node[path_hash].values(), open_clip.stop)
+            result.windows[(part, node)] = motion_window(by_node[path_hash].values(), open_clip.stop)
         else:
-            result.dropped.append(node or gate.part)
+            result.dropped.append(node or part)
+    unused = sorted(set(accepted_offsets) - used_offsets)
+    if unused:
+        raise DoorPoseError(f"{gate.barrier}: the reviewed closed-offset override names node(s) the clip does not move: {unused}")
     return result
 
 
@@ -1320,6 +1419,8 @@ def check_package(package: Path, scene_name: str, poses: list[NodePose], scene: 
 def extract(map_key: str, arena: str, package: Path | None) -> tuple[str, dict, list[str]]:
     """(sidecar text, source block, verification summary lines): the Mecanim clip path for Bowl, the DotAnimator path for
     Equator and Bay5."""
+    if map_key in DOT_SOURCES and map_key in MAP_SOURCES:
+        return extract_combined(map_key, arena, package)
     if map_key in DOT_SOURCES:
         return extract_dot(map_key, arena, package)
     if map_key in MAP_SOURCES:
@@ -1327,15 +1428,43 @@ def extract(map_key: str, arena: str, package: Path | None) -> tuple[str, dict, 
     raise DoorPoseError(f"no door-pose source for {map_key}; known: {sorted(set(MAP_SOURCES) | set(DOT_SOURCES))}")
 
 
+def extract_combined(map_key: str, arena: str, package: Path | None) -> tuple[str, dict, list[str]]:
+    """A map in BOTH tables (Autoservice, 2026-11-11: four Mecanim gates and four DotAnimator lamps): both extractors run
+    unchanged and their rows go into ONE sidecar, the motion rows of the clips first, then the DotAnimator rows. Both must read
+    the same scene of the same Arena build, and no node may be claimed twice. A map in one table only never gets here, so the
+    sidecars of Equator, Bay5, AirPit, Iceberg and Bowl are produced by exactly the code they were before."""
+    clip_text, clip_source, clip_summary = extract_clips(map_key, arena, package)
+    dot_text, dot_source, dot_summary = extract_dot(map_key, arena, package)
+    for field_name in ("scene", "level", "assets", "arena_version"):
+        if clip_source[field_name] != dot_source[field_name]:
+            raise DoorPoseError(f"the clip path and the DotAnimator path read different {field_name}: "
+                                f"{clip_source[field_name]!r} / {dot_source[field_name]!r}")
+    if "extra_scenes" in dot_source:
+        raise DoorPoseError("a combined map cannot carry DotAnimator extra_scenes (the sidecar has one source block)")
+    rows = json.loads(clip_text)["poses"] + json.loads(dot_text)["poses"]
+    identities = [(r["barrier"], r["part"], r["node"], tuple(r["at"]) if r.get("at") else None) for r in rows]
+    if len(set(identities)) != len(identities):
+        raise DoorPoseError("the clip rows and the DotAnimator rows claim the same node")
+    summary = [f"== clip path ({len(json.loads(clip_text)['poses'])} rows)", *clip_summary,
+               f"== DotAnimator path ({len(json.loads(dot_text)['poses'])} rows)", *dot_summary,
+               f"== merged sidecar: {len(rows)} rows"]
+    return render_sidecar(map_key, clip_source, rows), clip_source, summary
+
+
 def extract_clips(map_key: str, arena: str, package: Path | None) -> tuple[str, dict, list[str]]:
     """Bowl: the end poses of the Mecanim gate clips below the map's opened barriers."""
     src = MAP_SOURCES[map_key]
+    # `barriers` in the row (Autoservice) names the gate unit paths until the descriptor sidecar carries them (plan item 8); a
+    # sidecar that already lists opened_barriers must agree (checked below), every other map reads the sidecar.
     descriptor = json.loads(src["descriptor"].read_text(encoding="utf-8"))
-    barriers = list(descriptor["opened_barriers"])
+    barriers = list(src.get("barriers") or descriptor["opened_barriers"])
+    if src.get("barriers") and descriptor.get("opened_barriers") and list(descriptor["opened_barriers"]) != barriers:
+        raise DoorPoseError(f"{src['descriptor'].name} opened_barriers {descriptor['opened_barriers']} differ from the "
+                            f"MAP_SOURCES barriers {barriers}")
     data_dir, version = find_arena(arena)
     level = scene_level_index(map_key, src["scene"])
-    scene = ArenaScene(data_dir, level)
-    gates, ignored = read_gates(scene, barriers)
+    scene = ArenaScene(data_dir, level, src.get("clip_levels", ()))
+    gates, ignored = read_gates(scene, barriers, bool(src.get("root_animators")))
     if not gates:
         raise DoorPoseError(f"no gate animator below {barriers} in level{level}")
     summary = [f"scene {src['scene']} = level{level} + sharedassets{level}.assets, Arena {version or '(version unknown)'}, "
@@ -1343,11 +1472,11 @@ def extract_clips(map_key: str, arena: str, package: Path | None) -> tuple[str, 
     all_poses: list[NodePose] = []
     issues: list[tuple] = []
     for gate in sorted(gates, key=lambda g: (barriers.index(g.barrier), g.part, g.sub)):
-        res = solve_gate(scene, gate)
+        res = solve_gate(scene, gate, src.get("accepted_closed_offsets", {}).get(gate.barrier))
         issues.extend(res.issues)
         all_poses.extend(res.kept)
         summary.append(
-            f"gate {gate.barrier}/{gate.part}  animator '{gate.animator_path}'  controller {gate.controller}  "
+            f"gate {gate.barrier + '/' + gate.part if gate.part else gate.barrier}  animator '{gate.animator_path}'  controller {gate.controller}  "
             f"clips {gate.clip_names} -> open '{gate.open_clip}' ({res.clip.stop:.3f} s)")
         summary.append(
             f"    nodes animated {res.nodes} (curves: {res.animated_curves} animated, {res.constant_curves} constant), "
@@ -1355,7 +1484,7 @@ def extract_clips(map_key: str, arena: str, package: Path | None) -> tuple[str, 
             f"transition into open clip {'yes' if gate.transitions else 'NOT SEEN'}")
         summary.append(f"    decode self-check: {res.spans} key spans, each cubic reaches the next key (worst error {res.worst_residual:.1e})")
         for p in res.kept:
-            start, end = res.windows.get(p.node, (0.0, 0.0))
+            start, end = res.windows.get((p.part, p.node), (0.0, 0.0))
             summary.append(f"    + {p.part}/{p.node or '.'}: pos {tidy(p.closed_position)} -> {tidy(p.open_position)}, "
                            f"euler {tidy(p.closed_euler)} -> {tidy(p.open_euler)}, moves {start:.2f}-{end:.2f} s")
         if res.dropped:
@@ -1377,6 +1506,8 @@ def extract_clips(map_key: str, arena: str, package: Path | None) -> tuple[str, 
     ordered = sorted(all_poses, key=lambda p: (barriers.index(p.barrier), p.part, p.node != "", p.node))
     source = {"scene": src["scene"], "level": level, "assets": f"sharedassets{level}.assets",
               "arena_version": version or "unknown"}
+    if src.get("clip_levels"):
+        source["extra_assets"] = [f"sharedassets{n}.assets" for n in src["clip_levels"]]
     summary.append(f"poses {len(ordered)}: " + ", ".join(sorted({f'{p.barrier}/{p.part}' for p in ordered})))
     return render_sidecar(map_key, source, [sidecar_pose(p) for p in ordered]), source, summary
 

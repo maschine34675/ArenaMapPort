@@ -2307,3 +2307,67 @@ This closes the first open risk of the lamp section: a `CullingLightObject` that
 visible and at the map's multiplier. No still of a lit sign was taken, so how the lamps look (a mild green halo of 0.5 m and 1.14 m
 reach, Arena's wash is not ported) is for the user's look pass. Bay5's two moved spawn rows: the `uibridge_teleport dryRun` probes to
 (55.2, -3.875, 53.0) and (118.3, -3.875, 44.4) and an ArenaMode team spawn on the north-west marker were not run.
+
+## 2026-11-11 - Autoservice (PLAN-AUTOSERVICE item 7): four Mecanim gates and four lamp switches, one sidecar
+
+`tools/maps/autoservice.doors.json` (schema 2, 23 rows: 19 clip rows + 4 switch rows), written by `extract_door_poses.py --map arena_autoservice
+--package work/extract/autoservice-native-v2 --csharp` (Arena 0.6.2.0.48473; the run is byte-stable, with or without the package). Autoservice is
+Catalog-only: nothing here is in `ArenaMapRegistry` yet, `DoorPoses`, `OpenedBarriers` and `StartGates` arrive with the promotion (item 12) and
+the descriptor sidecar's `opened_barriers` with item 8. The tool's other five maps regenerate unchanged (see "Checks").
+
+### What Arena does (measured)
+
+* Four gates under `DOORS` in `Arena_AutoService_TeamFight_DesignStuff` (level 136): `big_gate_metal`, `equator_roller_shutters_01`,
+  `roller_shutters_techlight_01` and `roller_shutters_techlight_01 (1)`. Each carries an `Animator` on the gate root itself (so the root does not
+  move; its children do), an `EntityAnimator` and an `ArenaDoorsHandlerAI`. 34 Animators in the level, 30 of them the `SCAV_SPECTATORS` fans.
+* The four controllers are in **`sharedassets70.assets`** (the ShootOut scene's shared file), not in level 136's: an external PPtr (file id 2).
+  `ArenaScene(data, 136, extra_shared=[70])` loads the file beside the scene's own. The ShootOut level 70 holds the identical four gates (every
+  descendant's local transform equal within 1e-4, the same controller path ids), so level 70 itself is not read; it only proves the copies agree.
+* Arena's spelling of the closed clips is `*_clossed`; `is_closed_clip_name` accepts it. Every controller has two states and its **default state is
+  the `clossed` one** (write defaults on in both), so Arena's Animator starts in the closed clip.
+* Drives (world displacement of the moved node, composed through the parents): big gate +4.403 m along world +z in 8.0 s (one moved node, `gate`,
+  local y 3.08 -> -2.7); equator shutter +2.560 m in 4.5 s (the collider, ballistic collider and shadow; the visual LODs travel 1.725 m because they
+  start 0.835 m higher), techlight shutters +4.109 m in 6.733 s. Gate progress at 25 / 50 / 75 / 90 % of the clip: techlight 0.156 / 0.5 / 0.844 /
+  0.972 (exactly the port's smoothstep), equator shutter 0.118 / 0.609 / 0.991 / 0.999 and big gate 0.08 / 0.44 / 0.919 / 1.008 (these two ease out
+  late; the port plays smoothstep for every clip, so their motion differs a little from Arena's in the middle).
+* Rows are per node, not per gate: big gate 1, equator shutter 6, each techlight shutter 6 (BALLISTIC, COLLIDER, LOD0..2, SHADOW_LOD0), 19 in all. The
+  plan's "4 motion rows" counted gates; the data has 19. The frames (`roller_shutters_frame_*`), the big gate's `colider`, `gate_rail`,
+  `gate_rail_lod` and `shadow` are not animated and stay standing.
+* The four lamps `DOORS/LIGHT_1..4` are DotAnimators with one switch element each: LIGHT_1 and LIGHT_3 set `GREEN` inactive -> active, LIGHT_2
+  and LIGHT_4 set `RED` active -> inactive (the AirPit pattern).
+
+### The 0.978 m of `equator_roller_shutters_01` (risk 3, decided)
+
+In BOTH scenes that hold the gate, the shutter's `roller_shutters_01_COLLIDER`, `_BALLISTIC_metalthin` and `_SHADOW_LOD0` stand at local z 0 while the
+clip's closed pose (and the three visual LODs of the scene) is at z 0.978-0.981, i.e. the collider is 0.835 m below the curtain in the world. The tool
+stopped at its hard limit (0.1 m). Decision: **the sidecar's closed pose is the scene's** for those three nodes (z 0), pinned in the MAP_SOURCES row
+(`accepted_closed_offsets`, 0.978 +- 5 mm per named node; an entry that no node uses, or another offset, stops the tool). Reasons:
+
+1. The client compares each node's scene pose with the row's closed pose and drops the whole part to the switch-off on a mismatch
+   (`SpawnGates` `PoseMatchesScene`, 5 cm / 2 degrees), so a clip-closed row would make those parts disappear instead of move (read in the code).
+2. The scene collider reaches the floor: a held gate seals its opening completely, where Arena's clip pose would leave a 0.835 m gap under the curtain
+   (inferred: Arena's Animator would write the closed clip on its first update, default state + write defaults measured, not watched in a run).
+3. The bake never sees either pose: all six moved nodes are posed parts and are dropped from the bake as an opened barrier's leaves; the unposed
+   frame colliders stay. NavMesh coverage does not depend on the choice.
+
+All six nodes end at the same open pose (local z 3.008, world y -1.78), so the open state is not in question. The end of the drive differs from Arena
+in one respect: the collider travels 3.008 local (2.56 m) in 4.5 s while the LODs travel 2.027 (1.725 m), so for the first part of a drive the
+collider is higher than the curtain's foot (it opens the doorway a little early). Listed as a limit, not a defect of the data.
+
+### Mapping to the descriptor (item 8 / item 12 read this)
+
+* Barrier paths (the rows name them, `opened_barriers` / `start_gates` must match them character for character): `DOORS/big_gate_metal`,
+  `DOORS/equator_roller_shutters_01`, `DOORS/roller_shutters_techlight_01`, `DOORS/roller_shutters_techlight_01 (1)`; `held_gates` none.
+  `extract_clips` reads these from the MAP_SOURCES row until the sidecar `autoservice.json` carries `opened_barriers`, and refuses a difference once it does.
+* The lamp rows are barrier `DOORS`, part `LIGHT_n`, node `GREEN` / `RED`: a switch row must name a node below its part, so the group is `DOORS`
+  itself (depth 1). It is a LAMP GROUP (every row a switch row, not an `opened_barriers` entry) that happens to be the parent of the four gate
+  barriers; the group has no row for them. Check on the host that the client's part registry does not register the gate roots under `DOORS`.
+* `extract()` dispatches on the two tables: a map in both runs both paths (`extract_combined`); the five other maps run exactly the path they ran.
+
+### Checks (build VM, 2026-11-11)
+
+* `python -m unittest tools.tests.test_door_poses`: Ran 226 tests, OK (27 new: 8 synthetic, 11 on the tracked sidecar, 8 against the installed Arena).
+* The five released maps' doors sidecars regenerate **byte-identically** (the only difference is the recorded `arena_version`, 0.6.1.0.48206 vs
+  the installed 0.6.2.0.48473); `validate_map_descriptors.py`: OK.
+* `validate_map_descriptors.PENDING_MIRROR_KEYS = ("arena_autoservice",)`: a staged map's door and monitor sidecars are validated in themselves
+  but not mirrored by the registry, and the barrier rule waits for `opened_barriers` while the descriptor sidecar has none. The tuple is removed at the promotion.

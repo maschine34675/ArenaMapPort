@@ -583,6 +583,12 @@ DOOR_SOURCES = ("clip", "dotanimator", "borrowed")
 DOOR_EASES = ("smoothstep", "linear", "inOutQuint", "curve")
 DOOR_AT_TOLERANCE = 0.05   # m: the client matches a barrier root instance to `at` within this (ArenaDoorPose.AtTolerance)
 DOOR_CLOSED_TOLERANCE = 0.05   # m: rows that repeat a part name are told apart by the closed position within this
+# Catalog-only maps whose door / monitor sidecars are staged AHEAD of the lock-step promotion (Autoservice, plan item 7 -> item 12).
+# Such a sidecar is validated in itself (schema, rows, sources, the gate-sound join) but is not yet mirrored by the registry's DoorPoses /
+# ScoreMonitors (the C# literals arrive at the promotion), and the door barrier rule waits for the descriptor's opened_barriers (plan item 8)
+# while it has none. Both waivers apply only while the registry list is EMPTY; the promotion removes the map from this tuple, and main()
+# refuses a map here that is already a released one.
+PENDING_MIRROR_KEYS = ("arena_autoservice",)
                                # (ArenaDoorPose.ClosedPositionTolerance, DoorPoseModel.SelectRowsForNode)
 # Pose barriers that are NOT opened_barriers entries. Equator's booth doors are opened by BoothDoorRepairs.OpenDoors by the NAME of
 # their leaves, not as barriers; their poses name the assembly root (SPAWN_DOORS/Door_Sliding_Respawn[ (n)], and the fifth door
@@ -682,6 +688,7 @@ def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[s
     if not isinstance(poses, list) or not poses:
         return errors + [f"{name}: poses must be a non-empty array"]
     barriers = map_json.get("opened_barriers", [])
+    pending = map_json.get("key") in PENDING_MIRROR_KEYS and not registry_poses
     lamp_groups = door_lamp_groups(map_json, poses)
     exception = DOOR_BARRIER_EXCEPTIONS.get(map_json.get("key"))
     # BakeNavMesh.ResolveOpenedBarriers: a path WITH rows drops only its moved parts, a path WITHOUT rows keeps the legacy rule (every
@@ -714,6 +721,7 @@ def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[s
         elif not pose["part"] and pose["node"]:
             errors.append(f"{label}: a node needs a part (part \"\" means the barrier root itself moves)")
         if isinstance(pose["barrier"], str) and pose["barrier"] not in barriers and pose["barrier"] not in lamp_groups \
+                and not (pending and not barriers) \
                 and not (exception is not None and exception.fullmatch(pose["barrier"])):
             errors.append(f"{label}: barrier {pose['barrier']!r} is not an opened_barriers entry"
                           + (" or a booth assembly root" if exception is not None else "")
@@ -770,7 +778,7 @@ def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[s
     for barrier, flags in by_barrier.items():
         if len(flags) > 1:
             errors.append(f"{name}: barrier {barrier!r} has poses with and without 'at'; use it on all of them or none")
-    if errors:
+    if errors or pending:
         return errors
     if len(poses) != len(registry_poses):
         errors.append(f"{name} has {len(poses)} poses, the registry's DoorPoses {len(registry_poses)}")
@@ -1007,7 +1015,7 @@ def score_monitor_errors(map_json: dict, monitors_path: Path, registry_rows) -> 
             if scene_name == row["scene"] and path == row["path"] and math.dist(at, row["at"]) <= SCORE_MONITOR_AT_TOLERANCE:
                 errors.append(f"{label}: duplicate row for {row['scene']} {row['path']} at {row['at']}")
         identities.append((row["scene"], row["path"], row["at"]))
-    if errors:
+    if errors or (map_json.get("key") in PENDING_MIRROR_KEYS and not registry_rows):
         return errors
     if len(rows) != len(registry_rows):
         errors.append(f"{name} has {len(rows)} monitors, the registry's ScoreMonitors {len(registry_rows)}")
@@ -1214,6 +1222,8 @@ def main() -> int:
     ref_scope = {"ArenaEquatorLocation": equator_consts}
 
     entries = registry_entries(descriptor_text)
+    errors.extend(f"PENDING_MIRROR_KEYS lists {key}, which is a released map: its sidecars are mirrored by the registry now, remove it"
+                  for key in PENDING_MIRROR_KEYS if key in RELEASE_MAP_KEYS)
     errors.extend(registry_membership_errors(descriptor_text, entries))
     errors.extend(registry_identity_errors(entries, ref_scope))
     registry_by_key = {resolve(entry.get("Key"), ref_scope): (name, entry) for name, entry in entries.items()}
