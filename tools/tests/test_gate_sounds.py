@@ -32,7 +32,8 @@ import validate_map_descriptors as VD  # noqa: E402
 
 MAPS = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl")
 ICEBERG = "arena_iceberg"     # joined the released set on 2026-10-30 (PLAN-ICEBERG item 12): its rows, clips and fits are per map, so it has its own classes below and the four-map loops stay as they are
-STEM = {key: key.removeprefix("arena_") for key in MAPS + (ICEBERG,)}
+AUTOSERVICE = "arena_autoservice"     # Catalog-only until its promotion (PLAN-AUTOSERVICE item 12): own classes at the end of this file
+STEM = {key: key.removeprefix("arena_") for key in MAPS + (ICEBERG, AUTOSERVICE)}
 # ARENAMAPPORT_GATE_SOUNDS_DIR points the package tests at another work/extract/gate-sounds (a worktree has no ignored work/ folder)
 PACKAGE = Path(os.environ.get("ARENAMAPPORT_GATE_SOUNDS_DIR", REPO / "work" / "extract" / "gate-sounds"))
 ARENA = G.doors.DEFAULT_DATA
@@ -692,7 +693,7 @@ class IcebergFitTests(unittest.TestCase):
         self.assertEqual({n: (s["event_s"], s["body"]) for n, s in entries.items()},
                          {"arena_san_gates_blue": (2.55, [1.0, 2.4]), "arena_san_gates_red": (5.15, [0.8, 5.0]),
                           "arena_equator_old_slide_doors": (2.61, [0.4, 2.45])})
-        self.assertEqual(sorted(fit["map_clips"]), [ICEBERG])
+        self.assertEqual(sorted(fit["map_clips"]), sorted([ICEBERG, AUTOSERVICE]))    # Autoservice's four clips are its own (2026-11-11)
 
     def test_the_shared_clip_keeps_equators_entry_for_equator(self):
         fit = G.load_fit()
@@ -953,6 +954,225 @@ class IcebergPackageTests(unittest.TestCase):
                 self.assertNotEqual(wav, shipped)
                 self.assertEqual(shipped, G.write_wav(G.resample_speed(samples, G.clip_fit(fit, ICEBERG, entry["id"])["bake_pitch"]), rate))
                 self.assertEqual(len(shipped), 44 + 4 * int(len(samples) / 1.15))
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Autoservice (2026-11-11, PLAN-AUTOSERVICE item 7): four players under ARENA_GATES_SOUND (level 112), one per gate root, authored pitch 1.0,
+# mixer ArenaGates. Catalog-only until item 12, so the four-map and Iceberg loops above stay as they are.
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+AUTOSERVICE_BIG = "DOORS/big_gate_metal"
+AUTOSERVICE_SHUTTER = "DOORS/equator_roller_shutters_01"
+AUTOSERVICE_TECH = "DOORS/roller_shutters_techlight_01"
+AUTOSERVICE_TECH1 = "DOORS/roller_shutters_techlight_01 (1)"
+AUTOSERVICE_CLIPS = {AUTOSERVICE_BIG: "Arena_autoservice_gates_outdoor_left", AUTOSERVICE_SHUTTER: "Arena_autoservice_gates_outdoor_right",
+                     AUTOSERVICE_TECH: "Arena_autoservice_gates_indoor_left", AUTOSERVICE_TECH1: "Arena_autoservice_gates_indoor_right"}
+AUTOSERVICE_EMITTERS = {AUTOSERVICE_BIG: [-344.09, -3.74, 479.86], AUTOSERVICE_SHUTTER: [-344.604, -4.34, 506.833],
+                        AUTOSERVICE_TECH: [-402.26, -3.78, 501.22], AUTOSERVICE_TECH1: [-402.26, -3.78, 477.51]}
+AUTOSERVICE_SECONDS = {"Arena_autoservice_gates_outdoor_left": 10.4254, "Arena_autoservice_gates_outdoor_right": 4.6785,
+                       "Arena_autoservice_gates_indoor_left": 8.0096, "Arena_autoservice_gates_indoor_right": 7.897}
+HAVE_AUTOSERVICE_PACKAGE = (PACKAGE / AUTOSERVICE / G.MANIFEST_NAME).is_file()
+
+
+class AutoserviceRowSidecarTests(unittest.TestCase):
+    """tools/maps/autoservice.gatesounds.json (tracked): what it says, and that every gate part of the port has exactly one sound."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = sidecar(AUTOSERVICE)
+        cls.rows = cls.doc["rows"]
+
+    def test_four_rows_four_clips_and_the_mixer_block_of_the_other_maps(self):
+        self.assertEqual((self.doc["schema_version"], self.doc["key"]), (1, AUTOSERVICE))
+        self.assertEqual(len(self.rows), 4)
+        self.assertEqual({c["id"] for c in self.doc["clips"]}, set(AUTOSERVICE_CLIPS.values()))
+        self.assertEqual({r["barrier"]: r["clip"] for r in self.rows}, AUTOSERVICE_CLIPS)
+        self.assertEqual(self.doc["mixer"], sidecar("arena_equator")["mixer"])                      # one mixer block on every map
+        self.assertEqual(self.doc["skipped"], [])
+        self.assertEqual(self.doc["source"]["gate_scene"], {"scene": "Arena_AutoService_TeamFight_DesignStuff", "level": 136})
+        self.assertEqual(self.doc["source"]["sound_scene"], {"level": 112})
+        for clip in self.doc["clips"]:
+            self.assertEqual((clip["asset"], clip["resource"]["file"], clip["format"], clip["channels"], clip["sample_rate"]),
+                             ("sharedassets112.assets", "sharedassets112.resource", "Vorbis", 2, 44100), clip["id"])
+            self.assertEqual(clip["seconds"], AUTOSERVICE_SECONDS[clip["id"]])
+
+    def test_every_player_sits_on_its_gate_root_and_belongs_to_the_whole_assembly(self):
+        for row in self.rows:
+            with self.subTest(barrier=row["barrier"]):
+                self.assertEqual((row["part"], row["at"], row["closed_position"]), (None, None, None))       # every part of the barrier
+                self.assertEqual(row["emitter"], AUTOSERVICE_EMITTERS[row["barrier"]])
+                self.assertEqual(row["match_distance"], 0.0)
+                self.assertEqual(row["origin"], "level112 ARENA_GATES_SOUND/" + row["barrier"].split("/", 1)[1])
+        # the roots of the two techlight shutters and the two pocket gates are far apart (27 m or more), so the default join margin held
+        roots = list(AUTOSERVICE_EMITTERS.values())
+        self.assertGreater(min(math.dist(a, b) for i, a in enumerate(roots) for b in roots[i + 1:]), 20.0)
+
+    def test_the_gain_the_distances_and_the_pitch_are_one_table(self):
+        for row in self.rows:
+            with self.subTest(barrier=row["barrier"]):
+                self.assertEqual((row["mixer"], row["mixer_db"], row["source_mixer"]), ("ArenaGates", -15.0, None))
+                self.assertEqual((row["source_volume"], row["player_volume"]), (1.0, 1.0))
+                self.assertAlmostEqual(gain_db(row), -15.0, places=1)
+                self.assertEqual((row["authored_pitch"], row["pitch"]), (1.0, 1.0))                          # no pitch bake on this map
+                self.assertEqual(row["min_distance"], 0.45)
+                self.assertEqual(row["max_distance"], 35.0 if row["barrier"] == AUTOSERVICE_BIG else 30.0)
+
+    def test_every_row_resolves_and_no_gate_part_has_two_sounds_and_every_moving_part_has_one(self):
+        poses = doors(AUTOSERVICE)["poses"]
+        units = part_units(AUTOSERVICE)
+        self.assertEqual(len(units), 19)                                   # 1 + 6 + 6 + 6 moving parts; the four lamps are switch rows
+        hits = {u: [r for r in self.rows if G.row_applies(r, u[0], u[1], u[2], u[3])] for u in units}
+        for unit, found in hits.items():
+            self.assertEqual(len(found), 1, f"{unit} has {len(found)} sounds")
+        for row in self.rows:
+            self.assertTrue(G.row_resolves(row, poses), row["origin"])
+            self.assertTrue(any(row in found for found in hits.values()))
+        self.assertEqual({u[0] for u in units}, set(AUTOSERVICE_CLIPS))
+
+    def test_the_validator_accepts_the_sidecar_against_the_descriptor_and_the_door_rows(self):
+        descriptor = json.loads((REPO / "tools" / "maps" / "autoservice.json").read_text(encoding="utf-8"))
+        self.assertEqual(VD.gate_sound_errors(descriptor, REPO / "tools" / "maps" / "autoservice.gatesounds.json",
+                                              REPO / "tools" / "maps" / "autoservice.doors.json"), [])
+        with patch.object(sys, "argv", ["validate_map_descriptors.py"]), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(VD.main(), 0)
+
+    def test_the_text_is_what_the_cli_writes_and_holds_no_hash(self):
+        text = (REPO / "tools" / "maps" / "autoservice.gatesounds.json").read_bytes().decode("utf-8").replace("\r\n", "\n")
+        self.assertEqual(text, G.render_rows_sidecar(self.doc))
+        self.assertNotRegex(text, r"[0-9a-f]{40,}")
+
+    def test_the_maps_row_needs_no_option_and_the_fit_entries_are_this_maps_own(self):
+        self.assertEqual(G.MAPS[AUTOSERVICE], {"stem": "autoservice", "scenes": ("sound",)})            # the default margin and the nearest-place rule
+        fit = G.load_fit()
+        self.assertEqual(sorted(fit["map_clips"][AUTOSERVICE]), sorted(AUTOSERVICE_CLIPS.values()))
+        self.assertFalse(set(AUTOSERVICE_CLIPS.values()) & set(fit["clips"]))                           # the shared table is the four released maps'
+        expected = {"Arena_autoservice_gates_outdoor_left": (6.88, [0.9, 6.6]), "Arena_autoservice_gates_outdoor_right": (3.05, [0.9, 2.85]),
+                    "Arena_autoservice_gates_indoor_left": (6.4, [0.9, 6.15]), "Arena_autoservice_gates_indoor_right": (6.28, [0.9, 6.0])}
+        for name, (event, body) in expected.items():
+            spec = G.clip_fit(fit, AUTOSERVICE, name)
+            self.assertEqual((spec["mode"], spec["event_s"], spec["body"]), ("body_cut", event, body), name)
+            self.assertNotIn("bake_pitch", spec)
+            self.assertIsNone(G.clip_fit(fit, "arena_bowl", name))                                      # no other map sees them
+        self.assertEqual(sorted(fit["map_clips"]), sorted([ICEBERG, AUTOSERVICE]))
+
+    def test_the_crowdless_map_with_no_pitch_bake_ships_the_clips_as_arena_decodes_them(self):
+        # the bake exists to keep a key-source clip from shipping byte for byte; these clips live in sharedassets112, which is no key source
+        files = G.key_source_files()
+        self.assertFalse({"sharedassets112.resource", "sharedassets112.assets"} & files)
+        for clip in self.doc["clips"]:
+            self.assertNotIn(Path(clip["resource"]["file"]).name, files)
+        table = json.loads(G.KEY_SOURCES.read_text(encoding="utf-8"))["maps"][AUTOSERVICE]
+        self.assertEqual(sorted({Path(f).name for entry in table for f in entry["files"]}),
+                         ["sharedassets62.assets.resS", "sharedassets62.resource", "sharedassets66.assets.resS"])
+
+
+@unittest.skipUnless(HAVE_ARENA, "Arena is not installed")
+class RealAutoserviceRowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if not (ARENA / "level112").is_file() or not (ARENA / "level136").is_file():
+            raise unittest.SkipTest("Arena is not installed")
+        cls.version = G.doors.arena_version(ARENA)
+        cls.mixers = G.MixerBook(ARENA)
+
+    def test_the_tracked_sidecar_is_what_the_installed_arena_gives(self):
+        doc = G.extract_rows(AUTOSERVICE, ARENA, self.version, self.mixers)
+        tracked = (REPO / "tools" / "maps" / "autoservice.gatesounds.json").read_bytes().decode("utf-8").replace("\r\n", "\n")
+        self.assertEqual(as_read_from(G.render_rows_sidecar(doc), self.version, tracked), tracked)
+
+    def test_the_four_players_are_one_hundred_bytes_and_name_the_gates_group(self):
+        scene = G.doors.ArenaScene(ARENA, 112)
+        emitters = [e for e in G.read_emitters(scene, 112) if e.path.startswith("ARENA_GATES_SOUND/")]
+        self.assertEqual(sorted(e.path for e in emitters), sorted("ARENA_GATES_SOUND/" + b.split("/", 1)[1] for b in AUTOSERVICE_CLIPS))
+        for emitter in emitters:
+            group = self.mixers.group(emitter.player["mixer"][1])
+            self.assertEqual((group["name"], group["db"]), ("ArenaGates", -15.0))
+            self.assertEqual((emitter.player["pitch"], emitter.player["volume"]), (1.0, 1.0))
+            self.assertAlmostEqual(emitter.player["min"], 0.45, places=5)                                  # a float32 in the file
+        # nothing else of the Sound scene is an EntitySoundPlayer: the four are the whole set
+        self.assertEqual(len(G.read_emitters(scene, 112)), 4)
+
+    def test_the_default_join_rules_are_enough(self):
+        # no option is set; the nearest competitor of any emitter is the next gate root, 27 m or more away
+        doc = G.extract_rows(AUTOSERVICE, ARENA, self.version, self.mixers)
+        self.assertEqual([r["match_distance"] for r in doc["rows"]], [0.0] * 4)
+
+
+@unittest.skipUnless(HAVE_AUTOSERVICE_PACKAGE, "work/extract/gate-sounds/arena_autoservice is not extracted (tools/extract/extract_gate_sounds.py clips --map arena_autoservice)")
+class AutoservicePackageTests(unittest.TestCase):
+    """Autoservice's ignored package as the extractor left it: manifest, WAVs, seam tables, the key-source rule (skips without it)."""
+
+    FRAMES = {"Arena_autoservice_gates_outdoor_left": 459758, "Arena_autoservice_gates_outdoor_right": 206322,
+              "Arena_autoservice_gates_indoor_left": 353222, "Arena_autoservice_gates_indoor_right": 348257}
+    # the seam the runtime picks at SpawnGateDriveScale 0.5: the largest ok removal not above (1 - 0.5) * event_s, and where the end event lands
+    PICKS_AT_HALF = {"Arena_autoservice_gates_outdoor_left": (3.395, 3.485), "Arena_autoservice_gates_outdoor_right": (1.503, 1.547),
+                     "Arena_autoservice_gates_indoor_left": (3.104, 3.296), "Arena_autoservice_gates_indoor_right": (3.102, 3.178)}
+    SEAMS_OK = {"Arena_autoservice_gates_outdoor_left": (54, 55), "Arena_autoservice_gates_outdoor_right": (16, 17),
+                "Arena_autoservice_gates_indoor_left": (49, 50), "Arena_autoservice_gates_indoor_right": (49, 49)}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manifest = json.loads((PACKAGE / AUTOSERVICE / G.MANIFEST_NAME).read_text(encoding="utf-8"))
+
+    def test_manifest_rows_are_the_tracked_rows_and_every_wav_is_intact(self):
+        manifest = self.manifest
+        self.assertEqual((manifest["schema_version"], manifest["map_key"]), (1, AUTOSERVICE))
+        self.assertEqual(manifest["rows"], sidecar(AUTOSERVICE)["rows"])
+        self.assertEqual(manifest["mixer"], sidecar(AUTOSERVICE)["mixer"])
+        self.assertEqual(sorted(p.name for p in (PACKAGE / AUTOSERVICE).iterdir()), sorted([G.MANIFEST_NAME] + [c["file"] for c in manifest["clips"]]))
+        self.assertEqual({c["id"] for c in manifest["clips"]}, set(AUTOSERVICE_CLIPS.values()))
+        for clip in manifest["clips"]:
+            with self.subTest(clip=clip["id"]):
+                blob = (PACKAGE / AUTOSERVICE / clip["file"]).read_bytes()
+                self.assertEqual((clip["bytes"], clip["sha256"]), (len(blob), hashlib.sha256(blob).hexdigest()))
+                self.assertEqual((clip["channels"], clip["sampleRate"], clip["frames"]), (2, 44100, self.FRAMES[clip["id"]]))
+                self.assertEqual(len(blob), 44 + 4 * clip["frames"])
+                self.assertEqual((clip["pitch_baked"], clip["baked_pitch"]), (False, 1.0))
+                self.assertEqual(set(clip["source"]), {"asset", "path_id", "format", "resource"})
+
+    def test_seam_tables_are_consistent_and_the_runtime_picks_are_the_reviewed_ones(self):
+        for clip in self.manifest["clips"]:
+            fit = clip["fit"]
+            with self.subTest(clip=clip["id"]):
+                self.assertEqual(fit["mode"], "body_cut")
+                self.assertEqual((fit["xfade_s"], fit["xfade_f"]), (0.06, 2646))
+                self.assertEqual((sum(1 for s in fit["seams"] if s["ok"]), len(fit["seams"])), self.SEAMS_OK[clip["id"]])
+                lo, hi = fit["body_f"]
+                for seam in fit["seams"]:
+                    self.assertAlmostEqual((seam["c1f"] - seam["c0f"]) / 44100, seam["remove_s"], delta=0.001)
+                    self.assertGreaterEqual(seam["c0f"] - fit["xfade_f"], lo)
+                    self.assertLessEqual(seam["c1f"], hi + int(0.005 * 44100))
+                half = [s for s in fit["seams"] if s["ok"] and s["remove_s"] <= 0.5 * fit["event_s"] + 1e-9]
+                pick = max(half, key=lambda s: s["remove_s"])
+                removal, lands = self.PICKS_AT_HALF[clip["id"]]
+                self.assertEqual(pick["remove_s"], removal)
+                self.assertAlmostEqual(fit["event_s"] - pick["remove_s"], lands, places=3)
+        # every end event lands within 0.1 s of the ideal 0.5 x event at the default drive scale (the other maps: 0.01 to 0.2 s late)
+        late = {c["id"]: round(self.PICKS_AT_HALF[c["id"]][1] - 0.5 * c["fit"]["event_s"], 3) for c in self.manifest["clips"]}
+        self.assertTrue(all(0.0 <= v < 0.1 for v in late.values()), late)
+
+    def test_no_shipped_sample_run_occurs_in_a_key_source_file_of_autoservice(self):
+        if not (ARENA / "level136").is_file():
+            self.skipTest("Arena is not installed")
+        table = json.loads(G.KEY_SOURCES.read_text(encoding="utf-8"))["maps"][AUTOSERVICE]
+        files = sorted({ARENA / Path(f).name for entry in table for f in entry["files"]})
+        self.assertEqual([f.name for f in files], ["sharedassets62.assets.resS", "sharedassets62.resource", "sharedassets66.assets.resS"])
+        for clip in self.manifest["clips"]:
+            self.assertNotIn(Path(clip["source"]["resource"]["file"]).name, {f.name for f in files})      # the clips live in 112: no key source
+            pcm = wav_pcm(PACKAGE / AUTOSERVICE / clip["file"])
+            for path in files:
+                with self.subTest(clip=clip["id"], file=path.name):
+                    self.assertFalse(contains_pcm(path, pcm), f"{clip['id']} occurs in {path.name}")
+
+    @unittest.skipUnless(HAVE_ARENA, "Arena is not installed")
+    def test_every_shipped_clip_is_the_decode_of_arenas_clip(self):
+        decode = G.arena_decoder(ARENA)
+        for entry in sidecar(AUTOSERVICE)["clips"]:
+            with self.subTest(clip=entry["id"]):
+                wav, metadata = decode(entry)
+                self.assertEqual(metadata["m_Name"], entry["id"])
+                self.assertEqual(metadata["m_Resource"]["m_Source"], entry["resource"]["file"])
+                self.assertEqual((PACKAGE / AUTOSERVICE / (entry["id"] + ".wav")).read_bytes(), wav)       # unbaked: as the decoder wrote it
 
 
 if __name__ == "__main__":

@@ -2559,5 +2559,418 @@ class RealIcebergTests(unittest.TestCase):
             self.assertTrue(any(line.startswith("package check: 11 pose(s) exist in iceberg-native-v2") for line in self.summary))
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# Autoservice (2026-11-11, PLAN-AUTOSERVICE item 7): four Mecanim gates whose Animators sit on the barrier roots and whose controllers
+# live in sharedassets70.assets, an equator shutter whose scene colliders disagree with the clip, and four DotAnimator lamps. One sidecar,
+# two extraction paths (extract_combined).
+# ---------------------------------------------------------------------------------------------------------------
+
+AUTOSERVICE_SCENE = "Arena_AutoService_TeamFight_DesignStuff"
+AUTOSERVICE_GATES = ("DOORS/big_gate_metal", "DOORS/equator_roller_shutters_01",
+                     "DOORS/roller_shutters_techlight_01", "DOORS/roller_shutters_techlight_01 (1)")
+AUTOSERVICE_SHUTTER = "DOORS/equator_roller_shutters_01"
+AUTOSERVICE_OVERRIDE_NODES = ("roller_shutters_01_BALLISTIC_metalthin", "roller_shutters_01_COLLIDER", "roller_shutters_01_SHADOW_LOD0")
+
+
+class FakeShared:
+    """A stand-in for a UnityPy object: a type name and a typetree."""
+
+    def __init__(self, kind, typetree):
+        self.type = types.SimpleNamespace(name=kind)
+        self._typetree = typetree
+
+    def read_typetree(self):
+        return self._typetree
+
+
+class AutoserviceSyntheticTests(unittest.TestCase):
+    def test_arenas_spelling_clossed_is_a_closed_clip_name(self):
+        self.assertTrue(E.is_closed_clip_name("1_big_gate_metal_animation_clossed"))
+        self.assertTrue(E.is_closed_clip_name("Gate_CLOSSED"))
+        self.assertTrue(E.is_closed_clip_name("Gate_closed"))
+        self.assertFalse(E.is_closed_clip_name("1_big_gate_metal_animation"))
+        self.assertEqual(E.pick_open_clip(["2_roller_shutters_techlight_01_animation_clossed", "2_roller_shutters_techlight_01_animation"]),
+                         "2_roller_shutters_techlight_01_animation")
+        with self.assertRaises(E.DoorPoseError):                       # both clips closed: still no open clip
+            E.pick_open_clip(["a_clossed", "b_closed"])
+
+    def test_an_animator_on_the_barrier_root_is_a_gate_only_when_the_row_says_so(self):
+        barriers = list(AUTOSERVICE_GATES)
+        self.assertIsNone(E.split_gate_path("DOORS/big_gate_metal", barriers))                          # the default: the root itself is no gate
+        self.assertEqual(E.split_gate_path("DOORS/big_gate_metal", barriers, True), ("DOORS/big_gate_metal", "", ""))
+        self.assertEqual(E.split_gate_path("DOORS/roller_shutters_techlight_01 (1)", barriers, True),
+                         ("DOORS/roller_shutters_techlight_01 (1)", "", ""))
+        # the numbered twin is its own barrier: "roller_shutters_techlight_01" is not a prefix of "... (1)" at a path boundary
+        self.assertEqual(E.split_gate_path("DOORS/roller_shutters_techlight_01/Leaf", barriers, True),
+                         ("DOORS/roller_shutters_techlight_01", "Leaf", ""))
+        self.assertIsNone(E.split_gate_path("DOORS/LIGHT_1", barriers, True))                           # a lamp, not a gate
+        self.assertIsNone(E.split_gate_path("SCAV_SPECTATORS/Arena_NewFans_01", barriers, True))
+
+    def test_the_other_maps_keep_the_old_rule_for_a_root_animator(self):
+        for key, row in E.MAP_SOURCES.items():
+            if key != "arena_autoservice":
+                self.assertFalse(row.get("root_animators"), key)
+                self.assertFalse(row.get("clip_levels"), key)
+                self.assertFalse(row.get("accepted_closed_offsets"), key)
+
+    def test_find_clip_looks_in_the_scenes_own_shared_file_first_and_then_in_the_extra_ones(self):
+        own_clip = FakeShared("AnimationClip", {"m_Name": "Own_open"})
+        far_clip = FakeShared("AnimationClip", {"m_Name": "Far_open"})
+        own = FakeShared("AnimatorController", {"m_Name": "ctl", "m_AnimationClips": [own_clip]})
+        far = FakeShared("AnimatorController", {"m_Name": "far_ctl", "m_AnimationClips": [far_clip]})
+        scene = types.SimpleNamespace(
+            shared_name="sharedassets136.assets", extra_shared_names=["sharedassets70.assets"],
+            files={"sharedassets136.assets": {1: own}, "sharedassets70.assets": {1: far, 2: FakeShared("AnimationClip", {})}},
+            deref=lambda obj, pptr: pptr)
+        self.assertEqual(E.find_clip(scene, "ctl", "Own_open"), {"m_Name": "Own_open"})
+        self.assertEqual(E.find_clip(scene, "far_ctl", "Far_open"), {"m_Name": "Far_open"})
+        with self.assertRaises(E.DoorPoseError):
+            E.find_clip(scene, "far_ctl", "Own_open")
+        scene.extra_shared_names = []                                  # without the extra file the controller is not found
+        with self.assertRaises(E.DoorPoseError):
+            E.find_clip(scene, "far_ctl", "Far_open")
+        self.assertEqual(E.ArenaScene.extra_shared_names, ())          # the class default every other scene keeps
+
+    def channels(self, start, end):
+        keys = [[(NEG_INF, 0, 0, 0, s), (0.0, 0, 0, 0, s), (2.0, 0, 0, 0, e)] for s, e in zip(start, end)]
+        return {E.BIND_POSITION: E.Channel(1, E.BIND_POSITION, [E.Curve(keys=k) for k in keys])}
+
+    def test_a_reviewed_closed_offset_is_a_warning_and_the_scene_pose_is_written(self):
+        open_ch = self.channels((0.0, 0.0, 0.978), (0.0, 0.0, 3.008))
+        closed = self.channels((0.0, 0.0, 0.978), (0.0, 0.0, 0.978))
+        solved, issues, _ = E.solve_node((0.0, 0.0, 0.0), (0, 0, 0, 1), (1, 1, 1), open_ch, closed, "n", 2.0, accepted_offset=0.978)
+        self.assertEqual([level for level, _ in issues], ["warn"])
+        self.assertIn("accepted by the reviewed override", issues[0][1])
+        self.assertEqual(solved["closed_position"], [0.0, 0.0, 0.0])           # the SCENE's pose, never the clip's
+        self.assertEqual(solved["open_position"], [0.0, 0.0, 3.008])
+        # without the override the same data stops the tool, and a different offset is no match for the pinned one
+        _, issues, _ = E.solve_node((0.0, 0.0, 0.0), (0, 0, 0, 1), (1, 1, 1), open_ch, closed, "n", 2.0)
+        self.assertEqual([level for level, _ in issues], ["error"])
+        _, issues, _ = E.solve_node((0.0, 0.0, 0.0), (0, 0, 0, 1), (1, 1, 1), open_ch, closed, "n", 2.0, accepted_offset=0.5)
+        self.assertEqual([level for level, _ in issues], ["error"])
+        _, issues, _ = E.solve_node((0.0, 0.0, 0.0), (0, 0, 0, 1), (1, 1, 1), open_ch, closed, "n", 2.0, accepted_offset=0.978 + 0.02)
+        self.assertEqual([level for level, _ in issues], ["error"])             # 2 cm beyond the pinned value: outside ACCEPTED_OFFSET_TOL
+        # a node that agrees with its clip needs no override and stays silent
+        agree = self.channels((0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+        _, issues, _ = E.solve_node((0.0, 0.0, 0.0), (0, 0, 0, 1), (1, 1, 1), agree, agree, "n", 2.0, accepted_offset=0.978)
+        self.assertEqual(issues, [])
+
+    def test_the_override_row_is_pinned_to_three_named_nodes_of_the_equator_shutter(self):
+        row = E.MAP_SOURCES["arena_autoservice"]
+        self.assertEqual(row["accepted_closed_offsets"], {AUTOSERVICE_SHUTTER: {name: 0.978 for name in AUTOSERVICE_OVERRIDE_NODES}})
+        self.assertEqual(row["barriers"], list(AUTOSERVICE_GATES))
+        self.assertEqual((row["clip_levels"], row["root_animators"], row["scene"]), ([70], True, AUTOSERVICE_SCENE))
+        self.assertLess(E.ACCEPTED_OFFSET_TOL, 0.01)
+
+    def fake_text(self, key, rows, source=None):
+        return E.render_sidecar(key, source or {"scene": "S", "level": 1, "assets": "sharedassets1.assets", "arena_version": "x"}, rows)
+
+    def row(self, barrier, part, node="", switch=None):
+        pose = E.NodePose(barrier, part, node, "DotAnimator" if switch else "clip_x", 1.0, [0, 0, 0], [0, 0, 0],
+                          [0, 0, 1], [0, 0, 0], True, E.SOURCE_DOT if switch else E.SOURCE_CLIP,
+                          E.EASE_LINEAR if switch else E.EASE_SMOOTHSTEP, None, None, "S", switch)
+        return E.sidecar_pose(pose)
+
+    def test_extract_runs_both_paths_for_exactly_the_maps_that_are_in_both_tables(self):
+        from unittest import mock
+        self.assertEqual(set(E.MAP_SOURCES) & set(E.DOT_SOURCES), {"arena_autoservice"})
+        clip = self.row("DOORS/g", "leaf")
+        lamp = self.row("DOORS", "LIGHT_1", "GREEN", (False, True))
+        with mock.patch.object(E, "extract_clips", return_value=(self.fake_text("k", [clip]), {"scene": "S", "level": 1, "assets": "sharedassets1.assets",
+                                                                                                 "arena_version": "x", "extra_assets": ["sharedassets9.assets"]}, ["clips"])) as c, \
+                mock.patch.object(E, "extract_dot", return_value=(self.fake_text("k", [lamp]), {"scene": "S", "level": 1, "assets": "sharedassets1.assets",
+                                                                                                 "arena_version": "x"}, ["dots"])) as d:
+            text, source, summary = E.extract("arena_autoservice", "auto", None)
+            self.assertEqual((c.call_count, d.call_count), (1, 1))
+        doc = json.loads(text)
+        self.assertEqual([p["part"] for p in doc["poses"]], ["leaf", "LIGHT_1"])                    # the clip rows first, then the lamps
+        self.assertEqual(doc["source"]["extra_assets"], ["sharedassets9.assets"])
+        self.assertEqual(doc["key"], "arena_autoservice")                                          # the merged sidecar carries the map's key
+        self.assertIn("== clip path (1 rows)", summary)
+        self.assertIn("== DotAnimator path (1 rows)", summary)
+        self.assertIn("switch", doc["poses"][1])
+        self.assertIn("switch rows", doc["_comment"])                                              # the comment grows with the switch rows
+        # a map in one table only still runs one path
+        for key, expect in (("arena_bowl", "extract_clips"), ("arena_equator", "extract_dot")):
+            with mock.patch.object(E, "extract_clips", return_value=("c", {}, [])) as c, mock.patch.object(E, "extract_dot", return_value=("d", {}, [])) as d, \
+                    mock.patch.object(E, "extract_combined") as both:
+                E.extract(key, "auto", None)
+                self.assertEqual((c.call_count, d.call_count, both.call_count), (1, 0, 0) if expect == "extract_clips" else (0, 1, 0), key)
+
+    def test_the_two_paths_must_agree_on_the_scene_and_never_claim_a_node_twice(self):
+        from unittest import mock
+        source = {"scene": "S", "level": 1, "assets": "sharedassets1.assets", "arena_version": "x"}
+        clip = self.row("DOORS/g", "leaf")
+        for other_source, rows, why in (({**source, "level": 2}, [self.row("DOORS", "LIGHT_1", "GREEN", (False, True))], "level"),
+                                        ({**source, "arena_version": "y"}, [self.row("DOORS", "LIGHT_1", "GREEN", (False, True))], "arena_version"),
+                                        ({**source, "extra_scenes": [{"scene": "T", "level": 3, "assets": "sharedassets3.assets"}]},
+                                         [self.row("DOORS", "LIGHT_1", "GREEN", (False, True))], "extra_scenes"),
+                                        (source, [self.row("DOORS/g", "leaf")], "same node")):
+            with self.subTest(why), mock.patch.object(E, "extract_clips", return_value=(self.fake_text("k", [clip]), source, [])), \
+                    mock.patch.object(E, "extract_dot", return_value=(self.fake_text("k", rows), other_source, [])):
+                with self.assertRaises(E.DoorPoseError):
+                    E.extract("arena_autoservice", "auto", None)
+
+
+def autoservice_descriptor():
+    return json.loads((REPO / "tools" / "maps" / "autoservice.json").read_text(encoding="utf-8"))
+
+
+class AutoserviceSidecarTests(unittest.TestCase):
+    """The tracked tools/maps/autoservice.doors.json (no Arena, no package)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = sidecar_doc("autoservice")
+        cls.poses = cls.doc["poses"]
+        cls.motion = [p for p in cls.poses if "switch" not in p]
+        cls.lamps = [p for p in cls.poses if "switch" in p]
+
+    def rows_of(self, barrier):
+        return [p for p in self.motion if p["barrier"] == barrier]
+
+    def test_header(self):
+        self.assertEqual((self.doc["schema_version"], self.doc["key"]), (2, "arena_autoservice"))
+        source = self.doc["source"]
+        self.assertEqual((source["scene"], source["level"], source["assets"]), (AUTOSERVICE_SCENE, 136, "sharedassets136.assets"))
+        self.assertEqual(source["extra_assets"], ["sharedassets70.assets"])             # the controllers' file, the ShootOut scene's
+        self.assertTrue(source["arena_version"].startswith("0.6."))
+        self.assertNotIn("extra_scenes", source)
+        self.assertTrue(self.doc["_comment"].startswith("Generated by tools/extract/extract_door_poses.py"))
+        self.assertIn(source["scene"], autoservice_descriptor()["all_scene_names"])
+
+    def test_nineteen_clip_rows_then_four_lamp_switches(self):
+        self.assertEqual((len(self.poses), len(self.motion), len(self.lamps)), (23, 19, 4))
+        self.assertEqual(self.poses[:19], self.motion)                                  # the clip path's rows come first
+        for p in self.poses:
+            self.assertEqual(tuple(p), E_KEYS + (("switch",) if "switch" in p else ()))
+        self.assertEqual({p["source"] for p in self.motion}, {"clip"})
+        self.assertEqual({(p["ease"], p["curve"], p["at"]) for p in self.motion}, {("smoothstep", None, None)})
+        self.assertEqual([b for b in dict.fromkeys(p["barrier"] for p in self.motion)], list(AUTOSERVICE_GATES))
+
+    def test_the_gate_drives_are_arenas_own_durations_and_part_nodes(self):
+        big = self.rows_of(AUTOSERVICE_GATES[0])
+        self.assertEqual([(p["part"], p["node"], p["clip"], p["seconds"]) for p in big], [("gate", "", "1_big_gate_metal_animation", 8.0)])
+        self.assertEqual((big[0]["closed"], big[0]["open"]), ({"position": [0.0, 3.08, 2.96], "euler": [0.0, 0.0, 0.0]},
+                                                             {"position": [0.0, -2.7, 2.96], "euler": [0.0, 0.0, 0.0]}))
+        shutter = self.rows_of(AUTOSERVICE_SHUTTER)
+        self.assertEqual(sorted(p["part"] for p in shutter), sorted(["roller_shutters_01_BALLISTIC_metalthin", "roller_shutters_01_COLLIDER",
+                                                                      "roller_shutters_01_LOD0", "roller_shutters_01_LOD1", "roller_shutters_01_LOD2",
+                                                                      "roller_shutters_01_SHADOW_LOD0"]))
+        self.assertEqual({(p["node"], p["seconds"], p["clip"]) for p in shutter}, {("", 4.5, "1_equator_roller_shutters_01_animation")})
+        self.assertEqual({tuple(p["open"]["position"]) for p in shutter}, {(0.0, 0.0, 3.008)})            # all six end at one open pose
+        for barrier in AUTOSERVICE_GATES[2:]:
+            rows = self.rows_of(barrier)
+            self.assertEqual(len(rows), 6)
+            self.assertEqual({(p["node"], p["seconds"], p["clip"]) for p in rows}, {("", 6.733, "2_roller_shutters_techlight_01_animation")})
+            self.assertEqual({(tuple(p["closed"]["position"]), tuple(p["open"]["position"])) for p in rows}, {((0.0, 0.0, 0.0), (0.0, 0.0, 2.713))})
+        self.assertEqual(self.rows_of(AUTOSERVICE_GATES[2]), [dict(p, barrier=AUTOSERVICE_GATES[2]) for p in self.rows_of(AUTOSERVICE_GATES[3])])
+
+    def test_the_equator_shutters_closed_pose_is_the_scenes_not_the_clips(self):
+        # the reviewed override: collider, ballistic collider and shadow stay at the scene's local z 0 (the clip's closed pose is 0.978);
+        # the three visual LODs stand at 0.981 in the scene and in the clip. The client compares every node with the row's closed pose
+        # (DoorPoseModel.PoseMatchPosition 5 cm), so a clip-closed row would drop these parts to the switch-off.
+        closed_z = {p["part"]: p["closed"]["position"][2] for p in self.rows_of(AUTOSERVICE_SHUTTER)}
+        for name in AUTOSERVICE_OVERRIDE_NODES:
+            self.assertEqual(closed_z[name], 0.0, name)
+        for name in ("roller_shutters_01_LOD0", "roller_shutters_01_LOD1", "roller_shutters_01_LOD2"):
+            self.assertEqual(closed_z[name], 0.981, name)
+
+    def test_the_four_lamps_flip_green_on_and_red_off_under_one_lamp_group_barrier(self):
+        self.assertEqual([(p["barrier"], p["part"], p["node"], p["switch"]["closed"], p["switch"]["open"]) for p in self.lamps],
+                         [("DOORS", "LIGHT_1", "GREEN", False, True), ("DOORS", "LIGHT_2", "RED", True, False),
+                          ("DOORS", "LIGHT_3", "GREEN", False, True), ("DOORS", "LIGHT_4", "RED", True, False)])
+        for p in self.lamps:
+            self.assertEqual((p["source"], p["ease"], p["clip"], p["seconds"], p["at"], p["curve"]), ("dotanimator", "linear", "DotAnimator", 0.0, None, None))
+            self.assertEqual(p["closed"], p["open"])                                  # a switch moves nothing
+        # DOORS is a lamp group: every row a switch row, and no opened_barriers entry (the gates below it are separate barriers)
+        self.assertEqual(VD.door_lamp_groups({"opened_barriers": list(AUTOSERVICE_GATES)}, self.poses), {"DOORS"})
+
+    def test_no_row_names_a_frame_part_and_every_motion_part_is_unique_within_its_gate(self):
+        for p in self.poses:
+            self.assertNotIn("frame", p["part"].lower())
+            self.assertTrue(p["part"])
+        identities = [(p["barrier"], p["part"], p["node"]) for p in self.poses]
+        self.assertEqual(len(identities), len(set(identities)))
+
+    def test_the_text_is_what_the_cli_writes(self):
+        text = (REPO / "tools" / "maps" / "autoservice.doors.json").read_text(encoding="utf-8")        # text mode: CRLF reads as LF
+        self.assertEqual(text, json.dumps(self.doc, indent=2, ensure_ascii=False) + "\n")
+        self.assertEqual(text, E.render_sidecar(self.doc["key"], self.doc["source"], self.poses))
+        self.assertIn("switch", self.doc["_comment"])
+
+    def test_the_csharp_the_registry_must_carry_renders_and_parses_back_to_the_sidecar(self):
+        self.assertEqual(E.render_csharp(self.poses).count("new ArenaDoorPose("), 23)
+        for pose in self.poses:
+            text = E.render_csharp([pose], indent="").replace("\n", " ")
+            self.assertEqual(VD.parse_door_pose_literal(text.rstrip(",")), pose)
+
+    def test_the_extractor_row_and_the_sidecar_name_the_same_four_gates(self):
+        self.assertEqual(list(dict.fromkeys(p["barrier"] for p in self.motion)), E.MAP_SOURCES["arena_autoservice"]["barriers"])
+        descriptor = autoservice_descriptor()
+        # item 8 puts the four unit paths into the descriptor sidecar (opened_barriers = start_gates, held_gates none); once it has,
+        # the extractor row must agree with it (extract_clips refuses a difference) - until then the key is simply absent
+        if "opened_barriers" in descriptor:
+            self.assertEqual(descriptor["opened_barriers"], list(AUTOSERVICE_GATES))
+            self.assertEqual(descriptor.get("start_gates"), list(AUTOSERVICE_GATES))
+            self.assertEqual(descriptor.get("held_gates", []), [])
+
+    def test_the_validator_accepts_the_sidecar_as_a_pending_map_and_judges_the_barriers_once_the_descriptor_has_them(self):
+        descriptor = autoservice_descriptor()
+        path = REPO / "tools" / "maps" / "autoservice.doors.json"
+        self.assertIn("arena_autoservice", VD.PENDING_MIRROR_KEYS)
+        self.assertEqual(VD.door_pose_errors(descriptor, path, None), [])                    # as committed (with or without opened_barriers)
+        with_barriers = dict(descriptor, opened_barriers=list(AUTOSERVICE_GATES), start_gates=list(AUTOSERVICE_GATES), held_gates=[])
+        self.assertEqual(VD.door_pose_errors(with_barriers, path, None), [])
+        missing = dict(descriptor, opened_barriers=list(AUTOSERVICE_GATES[:2]))
+        errors = VD.door_pose_errors(missing, path, None)
+        self.assertEqual(len(errors), 12)                                                    # the twelve techlight rows lose their barrier
+        self.assertTrue(all("is not an opened_barriers entry" in e and "techlight" in e for e in errors), errors)
+        # the waivers are for the pending map only: the same file under another key is judged and mirrored like any other map
+        other = dict(descriptor, key="arena_equator")
+        self.assertTrue(VD.door_pose_errors(other, path, None))
+        # once the registry carries the rows, the mirror is compared even for the pending key (a wrong count is reported)
+        self.assertTrue(any("registry's DoorPoses" in e for e in VD.door_pose_errors(with_barriers, path, [dict(self.poses[0])])))
+
+    def test_the_pending_list_holds_only_maps_that_are_not_released(self):
+        self.assertFalse(set(VD.PENDING_MIRROR_KEYS) & set(VD.RELEASE_MAP_KEYS))
+
+
+class RealAutoserviceTests(unittest.TestCase):
+    """Autoservice's sidecar against the installed Arena (skipped without it): the tracked file is what the extractor yields, and the data
+    facts the override and the plan's numbers rest on."""
+
+    @classmethod
+    def setUpClass(cls):
+        for name in ("level136", "sharedassets136.assets", "level70", "sharedassets70.assets"):
+            if not (ARENA_DATA / name).is_file():
+                raise unittest.SkipTest("Arena is not installed")
+        try:
+            import UnityPy  # noqa: F401
+        except ImportError:
+            raise unittest.SkipTest("UnityPy is not installed")
+        package = Path(os.environ.get("ARENAMAPPORT_EXTRACT_ROOT", REPO / "work" / "extract")) / "autoservice-native-v2"
+        cls.package = package if (package / "scenes" / f"{AUTOSERVICE_SCENE}.json").is_file() else None
+        cls.text, cls.source, cls.summary = E.extract("arena_autoservice", "auto", cls.package)
+        cls.scene = E.ArenaScene(ARENA_DATA, 136, [70])
+        cls.row = E.MAP_SOURCES["arena_autoservice"]
+
+    def gate_result(self, barrier, accepted=None):
+        gates, _ = E.read_gates(self.scene, self.row["barriers"], True)
+        gate = [g for g in gates if g.barrier == barrier][0]
+        return gate, E.solve_gate(self.scene, gate, accepted)
+
+    def test_the_tracked_sidecar_is_what_the_installed_arena_yields(self):
+        tracked = sidecar_doc("autoservice")
+        fresh = json.loads(self.text)
+        self.assertEqual(fresh["poses"], tracked["poses"])
+        strip = lambda s: {k: v for k, v in s.items() if k != "arena_version"}
+        self.assertEqual(strip(fresh["source"]), strip(tracked["source"]))
+        self.assertEqual(fresh["_comment"], tracked["_comment"])
+        self.assertEqual(self.text, E.extract("arena_autoservice", "auto", None)[0])           # byte-stable with or without the package
+        self.assertNotIn("\r", self.text)
+
+    def test_the_summary_counts_the_four_gates_the_lamps_and_the_accepted_offsets(self):
+        self.assertTrue(any(line.endswith("34 animators (4 below opened barriers)") for line in self.summary), self.summary[:3])
+        self.assertEqual(sum(1 for line in self.summary if line.startswith("gate ")), 4)
+        self.assertEqual(sum(1 for line in self.summary if "transition into open clip yes" in line), 4)
+        self.assertEqual(sum(1 for line in self.summary if "decode self-check:" in line and "key spans" in line), 4)
+        self.assertEqual(sum(1 for line in self.summary if line.startswith("WARN ") and "accepted by the reviewed override" in line), 3)
+        self.assertEqual(sum(1 for line in self.summary if line.startswith("WARN ")), 3)                  # nothing else is off
+        scan = [line for line in self.summary if line.startswith("scan DOORS")][0]
+        self.assertIn("4 DotAnimator(s), 4 element(s), 4 pose(s) (4 switch row(s)), 0 inactive, 0 switch element(s) skipped", scan)
+        self.assertEqual(self.summary[-2:], ["poses 4: 4 dotanimator", "== merged sidecar: 23 rows"])
+        if self.package is not None:
+            self.assertTrue(any(line.startswith("package check: 19 node(s) exist once in autoservice-native-v2") for line in self.summary))
+            self.assertTrue(any(line.startswith("package check: 4 pose(s) exist in autoservice-native-v2") for line in self.summary))
+
+    def test_the_world_drives_are_the_plans_numbers(self):
+        # world displacement of the moved node between its closed and its open local pose, composed through the parent chain
+        expected = {AUTOSERVICE_GATES[0]: ((0.0, 0.0, 4.403), 8.0), AUTOSERVICE_SHUTTER: ((0.0, 2.560, 0.0), 4.5),
+                    AUTOSERVICE_GATES[2]: ((0.0, 4.109, 0.0), 6.733), AUTOSERVICE_GATES[3]: ((0.0, 4.109, 0.0), 6.733)}
+        for barrier, (delta, seconds) in expected.items():
+            with self.subTest(barrier):
+                gate, result = self.gate_result(barrier, self.row.get("accepted_closed_offsets", {}).get(barrier))
+                root = self.scene.find_path(barrier)
+                self.assertEqual(len(root), 1)
+                biggest = [0.0, 0.0, 0.0]
+                for pose in result.kept:
+                    node = [t for rel, t in self.scene.descendants(root[0]) if rel == "/".join(x for x in (pose.part, pose.node) if x)][0]
+                    chain = []
+                    t = node
+                    while t:
+                        chain.append(self.scene.local(t))
+                        t = self.scene.tr[t]["m_Father"]["m_PathID"]
+                    chain.reverse()
+                    closed = list(chain); closed[-1] = (tuple(pose.closed_position), chain[-1][1], chain[-1][2])
+                    opened = list(chain); opened[-1] = (tuple(pose.open_position), chain[-1][1], chain[-1][2])
+                    drive = [b - a for a, b in zip(E.world_position_of(closed), E.world_position_of(opened))]
+                    if math.dist(drive, (0, 0, 0)) > math.dist(biggest, (0, 0, 0)):
+                        biggest = drive
+                    self.assertAlmostEqual(drive[0], 0.0, delta=0.002)                                   # no sideways drift
+                self.assertTrue(all(abs(a - b) < 0.002 for a, b in zip(biggest, delta)), (barrier, biggest, delta))
+                self.assertAlmostEqual(result.clip.stop, seconds, delta=0.001)
+
+    def test_without_the_override_exactly_the_three_scene_colliders_stop_the_tool(self):
+        _, result = self.gate_result(AUTOSERVICE_SHUTTER)
+        errors = [text for level, text in result.issues if level == "error"]
+        self.assertEqual(len(errors), 3, errors)
+        self.assertEqual(sorted(text.split(":")[0].split("/")[0] for text in errors), sorted(AUTOSERVICE_OVERRIDE_NODES))
+        self.assertTrue(all("0.978 m" in text for text in errors), errors)
+        _, accepted = self.gate_result(AUTOSERVICE_SHUTTER, self.row["accepted_closed_offsets"][AUTOSERVICE_SHUTTER])
+        self.assertEqual([level for level, _ in accepted.issues], ["warn"] * 3)
+        for barrier in (AUTOSERVICE_GATES[0], *AUTOSERVICE_GATES[2:]):
+            self.assertEqual(self.gate_result(barrier)[1].issues, [], barrier)                          # the other gates agree with their clips
+        with self.assertRaises(E.DoorPoseError):                                                       # a stale override entry is refused
+            self.gate_result(AUTOSERVICE_GATES[0], {"gate": 0.978, "no_such_node": 0.5})
+
+    def test_the_four_controllers_start_in_their_clossed_state_with_write_defaults(self):
+        # the evidence for the override: Arena's Animators begin in the closed clip, so at runtime Arena would write the clip's closed pose
+        import UnityPy
+        env = UnityPy.load(str(ARENA_DATA / "sharedassets70.assets"))
+        seen = []
+        for obj in env.objects:
+            if obj.type.name != "AnimatorController":
+                continue
+            tt = obj.read_typetree()
+            tos = dict(tt["m_TOS"])
+            machine = tt["m_Controller"]["m_StateMachineArray"][0]
+            machine = machine["data"] if "data" in machine else machine
+            states = [s["data"] if "data" in s else s for s in machine["m_StateConstantArray"]]
+            default = states[machine["m_DefaultState"]]
+            seen.append(tt["m_Name"])
+            self.assertTrue(tos[default["m_NameID"]].endswith("_clossed"), (tt["m_Name"], tos[default["m_NameID"]]))
+            self.assertTrue(all(s["m_WriteDefaultValues"] for s in states), tt["m_Name"])
+        self.assertEqual(sorted(seen), ["big_gate_metal_controller", "equator_roller_shutters_01_controller", "roller_shutters_techlight_01_controller"])
+
+    def test_the_shootout_scene_holds_the_identical_gates_and_the_same_controllers(self):
+        shoot = E.ArenaScene(ARENA_DATA, 70)
+        for barrier in AUTOSERVICE_GATES:
+            with self.subTest(barrier):
+                mine, theirs = self.scene.find_path(barrier), shoot.find_path(barrier)
+                self.assertEqual((len(mine), len(theirs)), (1, 1))
+                a = {rel: self.scene.local(t) for rel, t in [("", mine[0]), *self.scene.descendants(mine[0])]}
+                b = {rel: shoot.local(t) for rel, t in [("", theirs[0]), *shoot.descendants(theirs[0])]}
+                self.assertEqual(sorted(a), sorted(b))
+                for rel in a:
+                    if rel:                                                                            # the roots differ in the pocket frame they sit in
+                        self.assertTrue(all(abs(x - y) < 1e-4 for u, v in zip(a[rel], b[rel]) for x, y in zip(u, v)), rel)
+                ctl = [self.scene.deref(an, an.read_typetree()["m_Controller"]).path_id for an in self.scene.animators
+                       if self.scene.path(self.scene.go2tr[an.read_typetree()["m_GameObject"]["m_PathID"]]) == barrier]
+                ctl70 = [shoot.deref(an, an.read_typetree()["m_Controller"]).path_id for an in shoot.animators
+                         if shoot.path(shoot.go2tr[an.read_typetree()["m_GameObject"]["m_PathID"]]) == barrier]
+                self.assertEqual(ctl, ctl70)
+
+    def test_level_136_alone_cannot_resolve_its_controllers(self):
+        alone = E.ArenaScene(ARENA_DATA, 136)
+        with self.assertRaises(E.DoorPoseError):
+            E.read_gates(alone, self.row["barriers"], True)
+
+    def test_the_gate_clips_are_not_a_key_source_file(self):
+        # the stage-2 key table lists no file of level 136, 65 or the clip file; the sidecar copies none of them either
+        table = json.loads(E.KEY_SOURCES.read_text(encoding="utf-8"))["maps"]["arena_autoservice"]
+        files = {f for entry in table for f in entry["files"]}
+        self.assertFalse({n for n in files if n.startswith(("sharedassets70", "sharedassets136"))}, files)
+
 if __name__ == "__main__":
     unittest.main()

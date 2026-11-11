@@ -263,3 +263,33 @@ Not covered, so these stay open:
 - **The source pool.** 3 of Air Pit's 11 rows played, so 11 simultaneous sources against the pool of 16 (8 precached) are still untested.
 - No evidence from this session for a Hold that stops running sources, for `SpawnGateDrive` false, or for ArenaMode's own Hold and Release.
 - No separate frame reading for the first release. The Equator window around it read max 33.0 ms (not attributed to the sounds).
+
+## 2026-11-11 - Autoservice (PLAN-AUTOSERVICE item 7): four players, four clips, nothing optional
+
+`tools/maps/autoservice.gatesounds.json` (4 rows, 4 clips, 0 skipped) from `extract_gate_sounds.py rows --map arena_autoservice` and the package
+`work/extract/gate-sounds/arena_autoservice` (`clips --map arena_autoservice`, 4 WAVs + `gate-sounds.json`, 5,470,412 B of PCM16). Catalog-only: the
+staging rows, the packer and the distribution validator learn the map at the promotion (item 12).
+
+* **Players (measured):** `ARENA_GATES_SOUND` in the Sound scene (level 112) holds exactly four `EntitySoundPlayer`s of 100 bytes, one on each gate
+  root (distance 0.0 m to the door rows' barrier), authored pitch 1.0, source volume 1.0, player volume 1.0, min distance 0.45, max distance 35 (big gate)
+  and 30 (the other three), mixer group `ArenaGates` (-15 dB, the same path as on every map). The MAPS row needs no option: the default join (2.0 m,
+  4.0 m margin) is clear, the gate roots are 27 m or more apart. Every row has part null (every part of the barrier); the 19 moving parts of the doors
+  sidecar each belong to exactly one row.
+* **Clips (measured):** `Arena_autoservice_gates_outdoor_left` 10.4254 s (big gate), `_outdoor_right` 4.6785 s (equator shutter), `_indoor_left` 8.0096 s
+  (techlight shutter) and `_indoor_right` 7.897 s (techlight shutter (1)); Vorbis, stereo, 44.1 kHz, in `sharedassets112.assets` / `.resource`. The
+  clips ship as the decoder writes them (no pitch bake, `pitch_baked` false): sharedassets112 is **no key-source file** of any map (the key table lists
+  `sharedassets62.assets.resS`, `sharedassets62.resource` and `sharedassets66.assets.resS` for Autoservice), `prepare_clip`'s guard passed, and
+  the test searches eight 512-byte windows of every shipped WAV in those three files (none found; the positive control of the older tests still holds).
+* **Fit (`gate_sound_fit.json` `map_clips.arena_autoservice`, measured on the decoded clips with 20 ms levels):** the two indoor clips end in a bang
+  (6.40 s and 6.28 s, +14 to +16 dB within 40 ms); `outdoor_left` has a 7 dB step at 6.88 s after which the motion sound fades out by 7.0 s (no bang);
+  `outdoor_right` has a clunk from 3.05 s that is over by 3.3 s. Bodies start at 0.9 s and end 0.15 to 0.3 s before the event. All four are
+  `body_cut`; the seam tables have 49/50, 49/49, 54/55 and 16/17 clean entries. At `SpawnGateDriveScale` 0.5 the runtime picks removals of 3.104, 3.102, 3.395
+  and 1.503 s and the end events land 0.096, 0.038, 0.045 and 0.022 s after the ideal 0.5 x event (the older maps: 0.011 to 0.2 s). Not listened to.
+* **Inferred:** Arena's sounds follow the *effective* motion, not the clip length: the clips are shorter than the drives (6.9 s of sound against an 8.0 s
+  drive, 3.3 against 4.5, 6.4 against 6.73) because the gate clips ease out (the big gate has 0.92 of its way done at 75 % of its time, the equator
+  shutter 0.99). With the port's smoothstep the motion ends a little later than the sound at scale 0.5 (about 0.5 s on the big gate); no setting hides that.
+* **Mixer level:** unlike Iceberg's six, these players name the group, so the baked gain is the usual -15.0 dB (source 1.0 x player 1.0 x fader).
+
+Checks: `python -m unittest tools.tests.test_gate_sounds`: Ran 75 tests, OK (15 new). The five older maps' sidecars regenerate with only the recorded
+`arena_version` different (0.6.1.0.48206 / 0.6.2.0.48473); their 12 clip WAVs regenerate **byte-identical** into a scratch folder (the five older
+manifests differ in the same version field only; the ignored `work/extract/gate-sounds/arena_*` folders were not rewritten).

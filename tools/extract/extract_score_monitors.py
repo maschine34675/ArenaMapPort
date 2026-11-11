@@ -108,6 +108,9 @@ MAPS = {
     # PLAN-ICEBERG item 8, released set since the promotion (item 12): Sanatorium 256, 260, 258, 257, 375 and 376; only the CheckPoint design scene
     # (376) carries holders
     "arena_iceberg": {"stem": "iceberg", "package": "iceberg-native-v2"},
+    # PLAN-AUTOSERVICE item 7 (2026-11-11), Catalog-only until the promotion: the map's scenes of key-sources.json are 62, 65 (DesignStuff, the
+    # holders), 66 and 136 (TeamFight_DesignStuff, none); the accepted package is v2 (v1 + ambient audio)
+    "arena_autoservice": {"stem": "autoservice", "package": "autoservice-native-v2"},
 }
 
 
