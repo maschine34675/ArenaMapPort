@@ -498,3 +498,41 @@ in 25 s on `PatrolAssault`. Spawn in the east pocket (-337.3, 502.7), so both po
 
 Not checked yet (item 15 and the user): a hold and release (the lamp group whose RED rows go dark, the equator shutter's collider
 leading its LODs, the gate sounds), the tribune decks, rain F8, a cross-map raid, the faction split, and the listening tests.
+
+## 2026-11-11 - Item 15, first host iteration (GPU-2): hold and release, cross-map raid
+
+Same build and deploy as item 14. `Spawns/SpawnGateHold` = true and `SpawnGateHoldSeconds` = 45 were set in the running game only
+(`uibridge_config_set persist=false`, the host's .cfg kept false/30; both set back to false/30 afterwards).
+
+Raid 3, PMC, no bots, held gates (12:41): `warnings 0; errors 0`. `spawn barrier 'big_gate_metal' ...: 1 part(s) held closed (23 part(s)
+registered; developer test hold 45 s)`, the six-node shutters likewise; `[GateSounds] prepared 4/4 clip(s) of arena_autoservice for drive
+scale 0.50`; `[SpawnGates] navmesh installed: 5 carver(s) over 5 movement collider(s) of 23 gate part(s) ...; 3 doorway(s) already
+disconnected on the map's own navmesh (not judged)`. Spawn in the west pocket; during the hold `uibridge_teleport dryRun` to the capture
+point and to an east marker ended `path_partial` at (-402.8, -3.7, 499.5) and (-402.8, -3.7, 479.5), the two techlight shutters: the pocket
+is sealed for bots. Screenshot: the west roller shutter closed. Release at 12:42:43: `[GateSounds] released 19 part(s): 4 sound row(s), 2
+playing, 2 out of reach or without a free source, 0 failed` (the two techlight clips at -15 dB, 30 m, `OneShotPropagation`; the two east
+gates are about 66 m and 67 m from the listener, beyond their 30 m / 35 m reach, as designed), `one frame later: 2/2 playing`; the four lamp parts
+`1 switch(es) in the open state ... (released)` in the same frame; the equator shutter's six nodes parked 2.23 s later (4.5 s x 0.5).
+Screenshot 1 s after the release: the west shutter half-way up. After the drive all three dry runs were complete again (42.2, 80.9, 77.0 m).
+
+Raid 4, the same hold, the player teleported into the yard in front of the east gates (12:43): the extraction panel lists `EXFIL01 Chop Shop
+East Gate` and `EXFIL02 Chop Shop West Gate`; the east exit's smoke burns beside the big gate. The four `DOORS/LIGHT_n` lamps (y 4.13 at
+x -345.15) sit behind the tarp `Sniper_defence_tarps_04` on the upper floor and could not be seen from the yard; their switch rows are
+logged, not looked at. Release 12:44:43: the big gate's `gate` node parked open 4.0 s later (8.0 s x 0.5), its clip played (`volume 0.178
+(-15.0 dB), reaches 35 m`).
+
+Raid 5, Equator right after the Chop Shop raids (12:45, cross-map): `warnings 0 from mods, 4 Unity Log` (Equator's known
+`refrigerator_drink` LODGroup lines); `load arena_equator: location 4.3 s`; crowd `load total=2253 ms`; `[NavMesh] added navmesh for
+'arena_equator': 10395 vertices, 4567 triangles`; 103 fps over 10 s, the slowest frame being the known `[IndoorSurface] ... elapsedMs=1061`
+classification.
+
+The three doorways that the hold reports as "already disconnected on the map's own navmesh (not judged)" are the big gate and the two
+techlight shutters: the doorway probe (`SpawnGates.ProbePath`) samples its two points at the height of the CENTRE of the closed bounds,
+which for these 4.4-4.7 m tall gates lies about 2.3 m above the floor, beyond `SpawnGateModel.ProbeSampleRadius` (1.5 m); the null result
+of `ProbePath` then counts as "disconnected" in `EnsureBaseline`. Only the 2.8 m equator shutter (centre 0.7 m above its floor) is judged,
+`PathPartial` while held and `PathComplete` after the release. The sealing itself is right (the dry runs above); the probe is a Debug
+verdict. Fix (all maps, so with its own host check): probe near the bottom of the bounds and count a null baseline as inconclusive.
+
+Still open: whether the equator shutter's
+collider leading its LODs is visible from the east shop; the tribune decks (islands in the bundle, climbable by a player?); rain F8; a
+raid with ArenaMode; and the user's look and listen (gate sounds, the ambient start mix, the roar beds at -26 dBFS, lamps).
