@@ -3515,3 +3515,13 @@ first run after the plan change failed seven tests that pin v9 numbers (owners 7
 3022/3034 with 3047 -> 3046 sources in the real log, Main_hall `[2391, 2391, 969]` -> `[2389, 2389, 968]`, exclude entries 213 -> 214, excluded 637 -> 638,
 ballistics 38: 1566 -> 1565, the partial pins and digests; the v8 census variant 13026/3545/242/637 -> 13021/3544/242/638 with digest `84043d0f...`); after
 updating the pins the full suite passes: `Ran 3121 tests`, `OK (skipped=68)` (about 18 min).
+
+### 2026-11-11 (late): v10 restaged and host-checked on GPU-2
+
+Restaged with the existing key (`OK stage arena_airpit: 3 bundles encrypted (2 written) ... 2 wrap(s) in the file (unchanged)`), `validate_port.py
+--map airpit --distribution --package work/extract/airpit-native-v10`: `PORT_VALIDATED`, deployed with the Autoservice crowd (autoservice-release.md,
+same day). Raid on GPU-2 (22:18, PMC, no bots): `warnings 0; errors 0`, `load arena_airpit: location 6.0 s`, `[NavMesh] added navmesh for
+'arena_airpit': 11811 vertices, 5433 triangles`. At the user's spot (-4.6, 3.5, 23.6), yaw 208, pitch -13: `uibridge_inspect find
+"plywood_board_2 (46)"` finds nothing, `VARIANT/cardbox_vinyl_(ARENA) (2)` is active at (-6.346, 4.487, 21.085) with its LOD0, collider and
+ballistic children, and the screenshot shows the same view as the user's without the board. So no crate was missing: the board was a
+level38 leftover above level324's two-crate stack.

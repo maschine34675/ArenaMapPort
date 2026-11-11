@@ -305,3 +305,10 @@ inferred), each within the 25 m radius rule; the bed, roar layer and the reactio
 **Not measured.** Load time and texture memory on this map (computed only: the 30 fans use all 103 textures, so the main-thread PNG decode of about 2 s per raid does
 not shrink), placement and facing against the tribune geometry (fans stand 6-8 m above the yard floor), whether the stands are visible from the yard, the gain of the unoccluded
 murmur inside the garage hall, and everything audible. Gates: see the record in autoservice-release.md.
+
+### 2026-11-11 (late): host run on GPU-2
+
+Merged as `b7876d3`, staged (`SHARED_SPECTATOR_PACKAGE_OK 135 unique textures, 5 maps`), deployed. Chop Shop: `[Spectator] arena_autoservice: 30
+original fans, 150 renderers; ... load total=2081 ms (wait=0, hash=61, parse=1663, textures=2033, ...)`, 4 murmur and roar stands as planned, the
+original `SCAV_SPECTATORS` inactive, fans visible on the container roof and the galleries from the yard. AirPit, loading the re-hashed graph:
+`99 original fans, 495 renderers; ... load total=2159 ms (wait=1, ...)`. Details in autoservice-release.md (same date).

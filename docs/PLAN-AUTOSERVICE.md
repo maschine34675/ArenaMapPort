@@ -97,6 +97,9 @@ between Arena 0.5.4 and 0.6.2 (62, 63, 65, 66, 69, 112, 135, 136, 243 are identi
 - **Score monitors**: four `ArenaMonitorHolder`s in `DesignStuff`, all with a face on TeamFight: two timer (type 0, 3.127 x
   1.884 m, at (-345.82, 8.17, 489.18) and (-400.95, 8.14, 489.42)) and two alive-players (type 2, 2.244 x 1.352 m, at (-367.77,
   4.74, 509.60) and (-381.48, 4.85, 468.89)). ShootOut's score and playerboard TVs are not imported.
+- **Superseded on 2026-11-11 (user question "die zuschauer fehlen aber noch oder?"; the premise below was wrong): Autoservice has Arena's own crowd.**
+  The 30 fans are the same ArenaFan rigs, controller and appearances as the four crowd maps', exported by the unchanged pipeline (record,
+  2026-11-11 "Phase C"); `CROWDLESS_MAP_KEYS` is Iceberg only. The original bullet:
 - **No spectator crowd and no murmur or reaction beds (crowdless)** **(user, 2026-11-08: "crowdless passt")**. The 30 `ArenaFanEntity` of `SCAV_SPECTATORS` carry full EFT
   player-body rigs (PlayerBones, LimbIK, SkinnedMeshRenderer, ...), an incompatible layout for the stands extractor (the crowdless call rests on that layout, not on position). They stand on
   the long tribune edges (y 4.4-4.6 at z 467 and z 511, x -398..-347) plus five on a y 1.9-2.0 ledge at x about -395 beside the
@@ -326,7 +329,7 @@ Catalog-only until item 12 (the registry promotion), which is why nothing deploy
 4. **Pocket rule margin**: the pocket split passes at 2.1 against 2.0, and "north/south" are east/west.
 5. **New audio class and states**: `SeasonLoopAmbientSoundPlayer`, minDistance 0, forced mixers and an inactive chain each stop
    the strict exporter today; the Winter-only loops never play in summer.
-6. **Crowd of bodies**: the 30 player-body rigs are a different problem from the stands; crowdless is the cheap start and a
+6. **Crowd of bodies** (resolved 2026-11-11: not a different problem, the stands pipeline exports them unchanged; the crowd is in): the 30 player-body rigs are a different problem from the stands; crowdless is the cheap start and a
    later crowd is a user decision.
 7. **Official text and id**: the location id `6441004f8ab20b218807f14b` is confirmed by a lookup in `TestBackendLocaleEn` (its
    `Name` row reads "Chop Shop", as does the key `Arena_AutoService`; the four released ids carry the Name rows Equator, Bay 5, Air

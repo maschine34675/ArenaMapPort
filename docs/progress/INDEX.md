@@ -127,7 +127,8 @@ dated state in one screen; read it before this index if you only have a minute.
   2026-11-11 (mode, AI, bots and exits sidecars; 23 door rows, four gate sounds, four monitor faces; NavMesh oracle and bake inputs; banner,
   loading rotation, official description row, locale name 'Arena: Chop Shop'; spatial acoustics with the SPT-SEB check; MultiFlare, zero
   level, shader stand-in decision); items 12-14 on 2026-11-11: promotion into `ArenaMapRegistry.All` (unreleased), U1, first stage with
-  its key (verified on Arena 0.6.1, 0.6.2.48473 and 0.6.2.48598), deploy and the first GPU-2 raids (0 warnings). Plan: [../PLAN-AUTOSERVICE.md](../PLAN-AUTOSERVICE.md).
+  its key (verified on Arena 0.6.1, 0.6.2.48473 and 0.6.2.48598), deploy and the first GPU-2 raids (0 warnings); late that night, after the user's
+  feedback, Arena's own 30-fan crowd and the marker moved to 870/428, host-checked. Plan: [../PLAN-AUTOSERVICE.md](../PLAN-AUTOSERVICE.md).
 - [autoservice-source-062.md](autoservice-source-062.md) — Autoservice's Arena 0.5.4 spike package against the 0.6.2 native package v1
   (2026-11-08): no index shift, +387 objects (372 border cubes, two props), every id rehashed, the native blocks, the reviewed
   Pebbles/Rubber pair and the 28-shader census.

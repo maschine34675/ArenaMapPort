@@ -544,3 +544,52 @@ the bottom of a gate's closed bounds (`SpawnGateModel.ProbePoints`), and a probe
 (`SpawnGateModel.BaselineOf`). On GPU-2 the same day Chop Shop's hold judges all four doorways (`every probed gate sealed (4 probed)`, the big
 gate, the equator shutter and both techlight shutters `PathPartial`; `every probed gate open (4 probed)` after the release, all `PathComplete`).
 The six-map host record is in [door-poses.md](door-poses.md) "2026-11-11 - The doorway probe samples near the floor".
+
+## 2026-11-11 - Phase C: Autoservice gets Arena's own spectator crowd (branch `phase-c/crowd`, commit c0c99e1; offline, no deploy, no host)
+
+Task (lead, option (a) of the crowd survey and its check): give `arena_autoservice` the 30 fans of Arena's `Arena_AutoService_TeamFight_DesignStuff` (level 136, active root `SCAV_SPECTATORS`) with the existing spectator pipeline. The premise of PLAN-AUTOSERVICE risk 6 ("full player-body rigs, an incompatible layout") does not hold: the 30 `ArenaFanEntity` are the same rigs, the same controller (sharedassets40:338), the same 15 appearances, 39 meshes and 33 materials that Equator, Bay5, AirPit and Bowl already export. This reverses the user's 2026-11-08 "crowdless passt" for this map and needs the user's go.
+
+Changes: `extract_spectator.MAP_SCENES['autoservice'] = 'Arena_AutoService_TeamFight_DesignStuff'` (the one list the CLI choices, `validate`, `stage_spectators`, `test_crowdless_maps` and the `validate_distribution` partition follow); `ArenaSpectators.DesignScene` returns that scene for `arena_autoservice` (it is in the descriptor's AllSceneNames, so `IsOwnedScene` passes; the doors, monitors and start gates already live in the same scene); `validate_map_descriptors.CROWDLESS_MAP_KEYS = ("arena_iceberg",)`; the packer and validators derive the spectator rule and the required file from that list and needed no logic change. The client already disables an ACTIVE original `SCAV_SPECTATORS` after building the replacement (the Bay5 path), which also removes the 12 bodiless headgear MeshRenderers and the layer-8 colliders the port imported today. Tests and docs pins follow (test_crowdless_maps, test_map_pipeline, test_spectator, test_stage_spectators, test_validate_distribution, SpectatorCrowdBedModelTests, AutoServiceMapTests comment, csproj/deploy comments, dist-manifest.md, spectators-allmaps.md section).
+
+Cubemap decision: the two cubemaps (`patron_cubemap_metall`/`_matte`) have ids of their own on this map, faces byte-equal. Stage the 12 duplicates (249,714 B, shared set 123 -> 135) instead of remapping by content: no code, the existing same-name/different-bytes refusal covers it, and a remap would add a second id space to extractor, graphs and the staging check and touch the four released crowds to save 0.25 MB.
+
+Evidence: real extraction into `D:/ArenaMapPort/work/extract/spectator-autoservice`: `extracted 30 original spectators, 39 shared meshes, 33 materials, 103 textures, 2 shared animations`, `SPECTATOR_PACKAGE_OK`. Staging of all five packages into a scratch folder (not `dist/`): 135 unique textures, `validate_staged` passed. Against the existing `dist/` spectators: the shared manifest gains 12 rows, no existing PNG differs, `arena_autoservice/spectator.json.gz` is new (6,283,124 B), and the four released graphs differ in exactly one field, `texture_manifest_sha256` (graphs and manifest ship together). C# real-crowd test run on the scratch staging: Autoservice forms 4 stands within the 25 m rule. Python: the five touched suites 367 OK; the full suite showed only two environment failures of the worktree (no `dist/` DLL for test_dll_versions; a CRLF in a regenerated sidecar text for test_score_monitors), none from this change. dotnet test 3268/3269, the one failure being the CNG throughput threshold under parallel load (passes alone).
+
+Not measured: load time and texture memory on this map (computed: about 2.1 s main-thread PNG decode and about 536 MB of uncompressed textures per raid, as on the four crowd maps), placement/facing/clipping on the decks, visibility from the yard, loading and `GetSceneByName` of the TeamFight scene at crowd time, how the unoccluded murmur and roar beds sound inside the garage hall. Expected counts once staged: dist 396 files (383 + 13), core 242, autoservice 25 (computed).
+
+## 2026-11-11 - User feedback after the first raids: crowd, marker, AirPit board; merged, staged, deployed, host-checked (GPU-2)
+
+User (2026-11-11 evening, after playing on GPU-2): "sieht ganz gut aus, die zuschauer fehlen aber noch oder? die position des markers auf
+der map muesste auch nochmal verschoben werden", plus a missing object on AirPit (the lead's AirPit record, airpit-release.md, 2026-11-11).
+
+**Crowd.** A read-only survey with a skeptic (workflow `wf_4ef44eb9-f09`) found that the premise of the 2026-11-08 crowdless decision was wrong:
+Autoservice's 30 `ArenaFanEntity` are the same rigs the four crowd maps already carry (the section above). The user's question was taken as the
+go; the lead told the user that the decision rests on a corrected premise and is reversible. `phase-c/crowd` (`c0c99e1`) was reviewed
+(three low findings, all refuted by three skeptics each) and merged as `b7876d3`. Released maps: their graphs change only in
+`texture_manifest_sha256`; the AirPit raid below loaded its crowd from the re-hashed graph (`99 original fans ... load total=2159 ms`).
+
+**Marker.** On EFT's region map (PMC flow, GPU-2 1920x1080) the toggle `ARENA: CHOP SHOP` at the measured 407/471 covered the `CUSTOMS` label
+(Chop Shop dot x 594, y 424; Customs dot x 706, y 432). ArenaMode's own location screen does not list Chop Shop yet (its catalog has no
+`arena_autoservice` entry; the ArenaMode hand-off, plan item 19). `79a1bb5` displays the marker at 870/428 (`markers.json` keeps the
+measurement and gets a `display` block like Iceberg's; descriptor, sidecar and base.json carry 870/428; the 120-unit rule between released
+pins holds, 124 to Equator). Host after the deploy (22:17): `toggle "ARENA: CHOP SHOP" click 1087,457 [949,441 275x32]`, beside `CUSTOMS`
+`[696,415 163x33]` (90 px), `INTERCHANGE` `[783,494 215x33]` (21 px) and `ARENA: EQUATOR` `[884,367 248x33]` (41 px); the test
+`ChopShopIsDisplayedClearOfTheCustomsInterchangeAndEquatorLabels` pins those boxes.
+
+**Build and deploy.** Merged state `79a1bb5` plus the measured boxes: server Release build, `dotnet test -c Release` 3,285 passed (2 skipped),
+client Release build WITHOUT DllOnly and without key creation: `OK stage arena_airpit: 3 bundles encrypted (2 written)`, every other map `0 written`,
+all key files unchanged; `SHARED_SPECTATOR_PACKAGE_OK 135 unique textures, 5 maps`. `validate_distribution.py`: `DISTRIBUTION_OK 6 maps 18
+bundles 6 sidecars encrypted`; `validate_port.py --map airpit --distribution --package work/extract/airpit-native-v10`: `PORT_VALIDATED` (555 materials,
+3,474 meshes, 40 NavMesh tiles, 5,433 triangles); `make_release_zips.py --plan`: 396 files, 6,083.4 MiB. Deploy: 13 new, 10 overwritten (both
+DLLs, AirPit's scenes and NavMesh bundle, the five crowd graphs, the 12 cubemap PNGs, the shared manifest, Autoservice's base.json);
+`deploy-wait --server` 11.6 s, `gpu-run start` 66 s, 16/16 identical.
+
+**Chop Shop raid** (22:19, PMC, no bots): `warnings 0; errors 0`, `location 4.6 s`, 107 fps over 10 s (the slowest frame the known
+`[IndoorSurface]` classification). `[Spectator] arena_autoservice: 30 original fans, 150 renderers; shared 39 meshes, 33 materials; idle/cheer
+staggered; load total=2081 ms (wait=0, hash=61, parse=1663, textures=2033, ...)`; `[SpectatorAudio] ... 13 participating clips, 30 positions`,
+`70 reaction clips, kinds mask 62`; `[CrowdBed] arena_autoservice: 4 stands (radii 15.6/14.8/11.4/13.9 m, centres (-393,5,475) (-390,5,508)
+(-361,6,468) (-360,6,510)) ...`; `[ReactionBeds] ... 6 roar beds (3 cheer, 3 angry), 4 stands` (the survey's stand plan, exactly).
+`uibridge_inspect find`: the 30 replacements under `ArenaMapPort_Spectators_arena_autoservice`, the originals under `SCAV_SPECTATORS` inactive
+(so the 12 bodiless hats and mustaches and the layer-8 colliders are gone). Fans read at y 4.38-4.50 on the north gallery (z about 510.9) and
+y 2.04 on the west ledge. Screenshot from the yard (-384, -3.8, 494): fans visible on the container roof behind the sandbags and on the east
+gallery; from straight below the gallery parapets hide them, which is Arena's placement. Not listened to.

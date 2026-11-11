@@ -90,8 +90,8 @@ public sealed class SelectionMapPositionTests
     {
         // GPU-2, PMC flow on EFT's own region map, 1920x1080, 2026-11-11: dots measured at Chop Shop (594, 424) for the anchor
         // 407/471, Iceberg (441, 315) for 215/608 and Equator (894, 384) for 788/521, so a dot moves 0.79 px per IconX unit and
-        // 0.796 px per IconY unit (y grows downwards). A toggle's box runs from 10 px left of its dot to its label's end; the label
-        // 'ARENA: CHOP SHOP' ends 236 px right of the dot and the box is 33 px high around the dot.
+        // 0.796 px per IconY unit (y grows downwards). The 'ARENA: CHOP SHOP' toggle measured at 870/428 spans [949..1224] x [441..473],
+        // i.e. from 10 px left of its dot to 265 px right of it and from 17 px above to 15 px below it.
         using var document = JsonDocument.Parse(File.ReadAllText(RepoFile("tools", "maps", "selection", "markers.json")));
         var chopShop = document.RootElement.GetProperty("markers").EnumerateArray()
             .Single(m => m.GetProperty("catalog_key").ValueKind == JsonValueKind.String && m.GetProperty("catalog_key").GetString() == "arena_autoservice");
@@ -100,13 +100,13 @@ public sealed class SelectionMapPositionTests
             (ArenaMapRegistry.AutoService.IconX, ArenaMapRegistry.AutoService.IconY));
         double dotX = 594 + (ArenaMapRegistry.AutoService.IconX - 407) * .790;
         double dotY = 424 - (ArenaMapRegistry.AutoService.IconY - 471) * .796;
-        var box = (left: dotX - 10, top: dotY - 17, right: dotX + 246, bottom: dotY + 16);
-        // The labels the measured position collided with or now sits beside, read from the same screenshot.
+        var box = (left: dotX - 10, top: dotY - 17, right: dotX + 265, bottom: dotY + 15);
+        // The toggles the measured position collided with or now sits beside, as uibridge_snapshot reported them on GPU-2 (2026-11-11).
         var labels = new[]
         {
-            ("CUSTOMS", (left: 696.0, top: 415.0, right: 842.0, bottom: 448.0)),
-            ("INTERCHANGE", (left: 783.0, top: 494.0, right: 981.0, bottom: 527.0)),
-            ("ARENA: EQUATOR", (left: 884.0, top: 367.0, right: 1115.0, bottom: 400.0)),
+            ("CUSTOMS", (left: 696.0, top: 415.0, right: 859.0, bottom: 448.0)),
+            ("INTERCHANGE", (left: 783.0, top: 494.0, right: 998.0, bottom: 527.0)),
+            ("ARENA: EQUATOR", (left: 884.0, top: 367.0, right: 1132.0, bottom: 400.0)),
         };
         foreach (var (name, label) in labels)
         {

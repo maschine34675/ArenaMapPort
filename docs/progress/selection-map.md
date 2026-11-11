@@ -273,3 +273,14 @@ screenshot pin from the measurement as before, allows a `display` block only for
 Host (GPU-2, 2026-11-01 12:03, server and client of this change, `deploy-wait --server --game`): ArenaMode's
 location screen reports `toggle "ICEBERG" click 508,315 [431,298 154x33]`; the frame capture shows the whole
 label beside the panel. The PMC flow selected `ARENA: ICEBERG` and started a raid as before.
+
+## 2026-11-11 - Chop Shop displayed east of its measured position (it covered CUSTOMS)
+
+User: "die position des markers auf der map muesste auch nochmal verschoben werden". On EFT's region map (PMC flow, GPU-2 1920x1080) the toggle
+`ARENA: CHOP SHOP` at the measured 407/471 (dot x 594, y 424) lay over the `CUSTOMS` label (dot x 706, y 432); ArenaMode's location screen does
+not list Chop Shop yet. From the dots measured that day (Chop Shop 594/424 at 407/471, Iceberg 441/315 at 215/608, Equator 894/384 at
+788/521) a dot moves 0.79 px per `IconX` unit and 0.796 px per `IconY` unit. Chop Shop is now displayed at 870/428 (`markers.json` `display`
+block; descriptor, `tools/maps/autoservice.json` and `db/arena_autoservice/base.json` carry 870/428): 124 units from Equator (the released pins
+keep at least 120). Host after the deploy: `toggle "ARENA: CHOP SHOP" [949,441 275x32]`, 90 px right of `CUSTOMS` `[696,415 163x33]`, 21 px
+above `INTERCHANGE` `[783,494 215x33]`, 41 px below `ARENA: EQUATOR` `[884,367 248x33]`. `SelectionMapPositionTests` allows the `display` block
+for Iceberg and Chop Shop and checks Chop Shop's box against those three measured toggles (at least 12 px).
