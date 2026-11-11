@@ -92,7 +92,7 @@ outside it, or a sub point outside a kept hub, fails the run) and drops nothing.
 * `born_points` - the 16 `SpawnPointMarker`s of the AI scene (GameObjects `p1`, `p1 (1)` .. `p1 (16)`): the bot born points,
   5 in each pocket and 6 in the yard (name, world position); the bot rows of tools/maps/autoservice.bots.json start from them;
 * `mine_points` - the 23 `AIMinePoint`s (`AMinePlace_N`): AI data, not minefields (nothing in ArenaMode or the port arms them);
-  positions only, listed because Arena authors them on the main component (`AMinePlace_15` lies off Arena's mesh);
+  positions only, listed as Arena authors them: 21 of the 23 lie on Arena's main NavMesh component, `AMinePlace_15` and `AMinePlace_44` lie off it;
 * `scene_census` - every Transform of the scene grouped by its root object, with the horizontal distance from the play-area
   centre: the groups that lie beyond `far_field_radius` (400 m) are stale far-field leftovers of other maps' bot data
   (`ParentOfBearingPoints` 2,696 `base_navmesh_point` objects with a null script, `AI_SUSP` 93 `ai_coverplace` objects, the
