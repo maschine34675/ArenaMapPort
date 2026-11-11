@@ -1,0 +1,902 @@
+{
+  "_comment": "PLAN-TWO-MAPS item 8 (docs/progress/two-maps-item-8-ai-anchors.md) -- Arena's own AI patrol hub/core-point topology for autoservice, raw-decoded from the excluded TeamFight_AI scene (tools/extract/extract_ai_anchors.py). Loaded at raid start by ArenaMapPort.Client/AiAnchors.cs in place of AICorePointFallback/PatrolWayFallback's NavMesh-derived synthesis; a missing/invalid file (any map without a sidecar) keeps that synthesis unchanged. No connection/edge data: AICorePoint.ConnectionsAtNet is never populated outside the Unity Editor's own Gizmos callbacks (see extract_ai_anchors.py's module docstring), so every authored core point here has empty connections, same as today's single synthetic point. 16 bot born points, 23 AIMinePoints (AI data, not minefields) and a census of the scene's far-field leftovers (beyond 400 m of the play area, never exported) are recorded beside them.",
+  "born_points": [
+    {
+      "name": "p1",
+      "position": [
+        -383.23,
+        -3.718,
+        508.39
+      ]
+    },
+    {
+      "name": "p1 (1)",
+      "position": [
+        -384.98,
+        -3.773,
+        508.71
+      ]
+    },
+    {
+      "name": "p1 (2)",
+      "position": [
+        -335.588,
+        -3.76,
+        509.067
+      ]
+    },
+    {
+      "name": "p1 (4)",
+      "position": [
+        -411.461,
+        -3.68,
+        501.536
+      ]
+    },
+    {
+      "name": "p1 (5)",
+      "position": [
+        -407.38,
+        -3.67,
+        502.66
+      ]
+    },
+    {
+      "name": "p1 (6)",
+      "position": [
+        -406.99,
+        -3.785,
+        474.39
+      ]
+    },
+    {
+      "name": "p1 (7)",
+      "position": [
+        -374.651,
+        -3.685,
+        472.623
+      ]
+    },
+    {
+      "name": "p1 (8)",
+      "position": [
+        -372.72,
+        -3.685,
+        472.702
+      ]
+    },
+    {
+      "name": "p1 (9)",
+      "position": [
+        -334.39,
+        -3.749,
+        492.95
+      ]
+    },
+    {
+      "name": "p1 (10)",
+      "position": [
+        -335.18,
+        -3.749,
+        482.17
+      ]
+    },
+    {
+      "name": "p1 (11)",
+      "position": [
+        -335.45,
+        -3.749,
+        487.63
+      ]
+    },
+    {
+      "name": "p1 (12)",
+      "position": [
+        -348.09,
+        -3.749,
+        495.93
+      ]
+    },
+    {
+      "name": "p1 (13)",
+      "position": [
+        -346.55,
+        -3.749,
+        495.83
+      ]
+    },
+    {
+      "name": "p1 (14)",
+      "position": [
+        -337.809,
+        -3.76,
+        509.863
+      ]
+    },
+    {
+      "name": "p1 (15)",
+      "position": [
+        -411.189,
+        -3.68,
+        479.585
+      ]
+    },
+    {
+      "name": "p1 (16)",
+      "position": [
+        -411.285,
+        -3.671,
+        476.217
+      ]
+    }
+  ],
+  "core_points": [
+    {
+      "connection_group_id": 7,
+      "id": 1,
+      "name": "AICore ID:1 CG:7",
+      "position": [
+        -373.2439880371094,
+        -3.7899856567382812,
+        503.5320129394531
+      ]
+    },
+    {
+      "connection_group_id": 7,
+      "id": 2,
+      "name": "AICore ID:2 CG:7",
+      "position": [
+        -368.42999267578125,
+        -3.7899856567382812,
+        501.75
+      ]
+    },
+    {
+      "connection_group_id": 7,
+      "id": 3,
+      "name": "AICore ID:3 CG:7",
+      "position": [
+        -367.94000244140625,
+        -3.7899856567382812,
+        492.3599853515625
+      ]
+    },
+    {
+      "connection_group_id": 7,
+      "id": 4,
+      "name": "AICore ID:4 CG:7",
+      "position": [
+        -387.44000244140625,
+        -3.7899856567382812,
+        495.1300048828125
+      ]
+    },
+    {
+      "connection_group_id": 7,
+      "id": 5,
+      "name": "AICore ID:5 CG:7",
+      "position": [
+        -384.9800109863281,
+        -3.7899856567382812,
+        476.70001220703125
+      ]
+    },
+    {
+      "connection_group_id": 7,
+      "id": 6,
+      "name": "AICore ID:6 CG:7",
+      "position": [
+        -353.17999267578125,
+        -3.7899856567382812,
+        478.0199890136719
+      ]
+    },
+    {
+      "connection_group_id": 7,
+      "id": 7,
+      "name": "AICore ID:7 CG:7",
+      "position": [
+        -354.4100036621094,
+        -3.7899856567382812,
+        499.3800048828125
+      ]
+    }
+  ],
+  "map_key": "autoservice",
+  "mine_points": [
+    {
+      "name": "AMinePlace_0",
+      "position": [
+        -407.2077,
+        -3.6519,
+        474.5603
+      ]
+    },
+    {
+      "name": "AMinePlace_10",
+      "position": [
+        -401.2519,
+        -3.7724,
+        477.5226
+      ]
+    },
+    {
+      "name": "AMinePlace_11",
+      "position": [
+        -377.2203,
+        -3.6698,
+        490.5532
+      ]
+    },
+    {
+      "name": "AMinePlace_12",
+      "position": [
+        -350.2486,
+        -3.755,
+        506.0324
+      ]
+    },
+    {
+      "name": "AMinePlace_14",
+      "position": [
+        -401.2519,
+        -3.7576,
+        501.2046
+      ]
+    },
+    {
+      "name": "AMinePlace_15",
+      "position": [
+        -410.278,
+        -3.685,
+        475.2638
+      ]
+    },
+    {
+      "name": "AMinePlace_16",
+      "position": [
+        -343.446,
+        -3.6941,
+        506.8418
+      ]
+    },
+    {
+      "name": "AMinePlace_2",
+      "position": [
+        -391.7631,
+        -3.79,
+        482.1986
+      ]
+    },
+    {
+      "name": "AMinePlace_22",
+      "position": [
+        -384.4981,
+        -3.79,
+        480.5223
+      ]
+    },
+    {
+      "name": "AMinePlace_26",
+      "position": [
+        -387.7167,
+        -3.79,
+        504.6156
+      ]
+    },
+    {
+      "name": "AMinePlace_28",
+      "position": [
+        -385.6255,
+        -1.27,
+        510.8458
+      ]
+    },
+    {
+      "name": "AMinePlace_3",
+      "position": [
+        -371.0185,
+        -3.736,
+        487.7391
+      ]
+    },
+    {
+      "name": "AMinePlace_38",
+      "position": [
+        -370.7072,
+        -1.27,
+        510.4455
+      ]
+    },
+    {
+      "name": "AMinePlace_4",
+      "position": [
+        -343.6089,
+        -3.7718,
+        477.5128
+      ]
+    },
+    {
+      "name": "AMinePlace_44",
+      "position": [
+        -364.2931,
+        -3.79,
+        495.7185
+      ]
+    },
+    {
+      "name": "AMinePlace_5",
+      "position": [
+        -395.009,
+        -3.79,
+        487.1186
+      ]
+    },
+    {
+      "name": "AMinePlace_58",
+      "position": [
+        -349.138,
+        -3.755,
+        508.4454
+      ]
+    },
+    {
+      "name": "AMinePlace_6",
+      "position": [
+        -403.8182,
+        -3.6623,
+        502.0381
+      ]
+    },
+    {
+      "name": "AMinePlace_6",
+      "position": [
+        -412.288,
+        -3.645,
+        491.6302
+      ]
+    },
+    {
+      "name": "AMinePlace_64",
+      "position": [
+        -347.2537,
+        -3.79,
+        494.9387
+      ]
+    },
+    {
+      "name": "AMinePlace_7",
+      "position": [
+        -352.2679,
+        -3.7246,
+        509.4904
+      ]
+    },
+    {
+      "name": "AMinePlace_76",
+      "position": [
+        -334.743,
+        -3.79,
+        500.6624
+      ]
+    },
+    {
+      "name": "AMinePlace_9",
+      "position": [
+        -396.9155,
+        -3.685,
+        480.9506
+      ]
+    }
+  ],
+  "patrol_ways": [
+    {
+      "hubs": [
+        {
+          "core_point_id": 2,
+          "position": [
+            -371.0196228027344,
+            -3.805001974105835,
+            500.5799865722656
+          ],
+          "sub_points": [
+            [
+              -372.2803954470791,
+              -3.789985659053608,
+              501.7203673180384
+            ],
+            [
+              -371.8650207874471,
+              -3.78998565779887,
+              499.1051024709646
+            ],
+            [
+              -369.3736571685896,
+              -3.789985656020172,
+              500.15472413172904
+            ],
+            [
+              -370.4958496349841,
+              -3.789985654860318,
+              502.19729622108457
+            ],
+            [
+              -369.24359126111057,
+              -3.7899856541159043,
+              498.820526208267
+            ],
+            [
+              -369.21533193767453,
+              -3.7899856558104146,
+              502.3104552996968
+            ],
+            [
+              -373.09173568251623,
+              -3.7899856551792466,
+              501.97869874264813
+            ],
+            [
+              -372.4505920576958,
+              -3.789985659919798,
+              498.53002915742616
+            ],
+            [
+              -369.7204589264282,
+              -3.782700532385047,
+              503.7219849035514
+            ],
+            [
+              -373.8053894714351,
+              -3.789985654415998,
+              502.529205326162
+            ],
+            [
+              -373.56323244585855,
+              -3.789985649377112,
+              498.3238832231666
+            ],
+            [
+              -368.88650498064914,
+              -3.789985659822125,
+              497.932373025186
+            ]
+          ]
+        },
+        {
+          "core_point_id": 1,
+          "position": [
+            -371.73052978515625,
+            -3.805001735687256,
+            504.8409423828125
+          ],
+          "sub_points": [
+            [
+              -372.3208312433155,
+              -3.786015273023417,
+              506.4351501213477
+            ],
+            [
+              -373.3326111231355,
+              -3.7813661095187827,
+              504.27227785004635
+            ],
+            [
+              -371.0459289411434,
+              -3.789985656367244,
+              503.28488154441857
+            ],
+            [
+              -372.3221130098497,
+              -3.7899856517170183,
+              502.41195691901316
+            ],
+            [
+              -369.55276500775034,
+              -3.7838499581843057,
+              503.61318968627376
+            ],
+            [
+              -370.61135859667604,
+              -3.789985653270083,
+              507.0764465447987
+            ],
+            [
+              -368.33932498283644,
+              -3.7839343554556573,
+              505.0853576677699
+            ],
+            [
+              -373.1157531543531,
+              -3.7899856557642115,
+              507.9459533041432
+            ],
+            [
+              -374.57495117886987,
+              -3.7899856569575086,
+              502.9783324943845
+            ],
+            [
+              -369.2813109912381,
+              -3.7899856548199296,
+              502.4826965246904
+            ]
+          ]
+        },
+        {
+          "core_point_id": 5,
+          "position": [
+            -387.8496398925781,
+            -3.8050026893615723,
+            483.5
+          ],
+          "sub_points": [
+            [
+              -386.85348509933857,
+              -3.7899856549131714,
+              482.1224365571105
+            ],
+            [
+              -386.42044073074993,
+              -3.789985655781049,
+              484.42056275286257
+            ],
+            [
+              -388.3333740081645,
+              -3.7899856536860868,
+              485.129730278921
+            ],
+            [
+              -389.52401732989387,
+              -3.7899856568609707,
+              483.2059020969032
+            ],
+            [
+              -387.77532959120833,
+              -3.789985654000957,
+              481.00109871638153
+            ],
+            [
+              -385.3659057644622,
+              -3.7899856566036885,
+              483.40408325238525
+            ],
+            [
+              -390.3206176510789,
+              -3.789985658280349,
+              483.1201476914885
+            ],
+            [
+              -391.2484128850326,
+              -3.789985656839183,
+              483.5915222116567
+            ],
+            [
+              -387.63146971986373,
+              -3.7899856588664727,
+              480.1069945979668
+            ]
+          ]
+        },
+        {
+          "core_point_id": 6,
+          "position": [
+            -362.06964111328125,
+            -3.8050029277801514,
+            478.2099914550781
+          ],
+          "sub_points": [
+            [
+              -362.5520324834753,
+              -3.7899856581827143,
+              476.5798644178579
+            ],
+            [
+              -360.3696594873891,
+              -3.789985657015747,
+              478.20242309636075
+            ],
+            [
+              -362.22271728822875,
+              -3.789985653117773,
+              479.90307618334634
+            ],
+            [
+              -363.75439458913957,
+              -3.7899856561579455,
+              478.4371643092789
+            ],
+            [
+              -359.57015996179854,
+              -3.789985656565176,
+              478.26055908092076
+            ],
+            [
+              -361.38418575954563,
+              -3.789985651799396,
+              480.61419690565015
+            ],
+            [
+              -364.56951906017014,
+              -3.7899856568189194,
+              478.1841430674972
+            ],
+            [
+              -361.74893190325855,
+              -3.789985660139549,
+              475.7306518889664
+            ],
+            [
+              -363.43002310918575,
+              -3.7899856578925815,
+              475.0940245857439
+            ],
+            [
+              -358.7229920989894,
+              -3.7899856548963493,
+              477.6100464198001
+            ],
+            [
+              -364.59268182275946,
+              -3.789985657835721,
+              480.48907467936857
+            ]
+          ]
+        },
+        {
+          "core_point_id": 7,
+          "position": [
+            -356.2396240234375,
+            -3.805001974105835,
+            497.8699951171875
+          ],
+          "sub_points": [
+            [
+              -355.85617066409435,
+              -3.7899856531184652,
+              499.5261841073919
+            ],
+            [
+              -357.8301391460545,
+              -3.7899856570592196,
+              498.4702148481181
+            ],
+            [
+              -357.04531860452596,
+              -3.789985657796452,
+              496.3730468773978
+            ],
+            [
+              -355.00888064568994,
+              -3.78998565726629,
+              496.6972961644186
+            ],
+            [
+              -358.71255494303887,
+              -3.789985657108296,
+              498.2368163942049
+            ],
+            [
+              -357.1920776830682,
+              -3.7899856556219573,
+              495.5585326807862
+            ],
+            [
+              -353.8686522851586,
+              -3.789985655950276,
+              497.07720945465843
+            ],
+            [
+              -355.12954713541086,
+              -3.789985655678824,
+              500.11001583469084
+            ],
+            [
+              -352.8415526284387,
+              -3.789985657475592,
+              497.98455810927317
+            ],
+            [
+              -356.99993892138133,
+              -3.789985652368401,
+              501.18389909026615
+            ],
+            [
+              -359.4768371624684,
+              -3.789985658570242,
+              496.83053587351753
+            ],
+            [
+              -355.9025573681778,
+              -3.789985663220718,
+              494.48675533729767
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "scene_census": {
+    "centre_xz": [
+      -370.3,
+      486.8
+    ],
+    "far_field_radius": 400.0,
+    "groups": {
+      "AICalculationsInfo": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": null,
+        "min_distance": null,
+        "near": 0,
+        "transforms": 1
+      },
+      "AICorePointHolder": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": 20.3,
+        "min_distance": 6.0,
+        "near": 7,
+        "transforms": 8
+      },
+      "AICoversData": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": null,
+        "min_distance": null,
+        "near": 0,
+        "transforms": 1
+      },
+      "AIDangerPlacesHolder": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": null,
+        "min_distance": null,
+        "near": 0,
+        "transforms": 1
+      },
+      "AIDoorsHolder": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": null,
+        "min_distance": null,
+        "near": 0,
+        "transforms": 1
+      },
+      "AIManualPointsHolder": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": null,
+        "min_distance": null,
+        "near": 0,
+        "transforms": 1
+      },
+      "AIMinesPositionsHolder": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": 42.3,
+        "min_distance": 1.2,
+        "near": 23,
+        "transforms": 24
+      },
+      "AIPatrolsData": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": null,
+        "min_distance": null,
+        "near": 0,
+        "transforms": 1
+      },
+      "AIPlaceInfoHolder": {
+        "beyond": 4,
+        "containers": 1,
+        "max_distance": 611.6,
+        "min_distance": 605.9,
+        "near": 0,
+        "transforms": 5
+      },
+      "AIVoxelesData": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": null,
+        "min_distance": null,
+        "near": 0,
+        "transforms": 1
+      },
+      "AI_SUSP": {
+        "beyond": 93,
+        "containers": 1,
+        "max_distance": 678.8,
+        "min_distance": 540.9,
+        "near": 0,
+        "transforms": 94
+      },
+      "BotCellController": {
+        "beyond": 1,
+        "containers": 0,
+        "max_distance": 836.4,
+        "min_distance": 10.3,
+        "near": 1,
+        "transforms": 2
+      },
+      "BotZone": {
+        "beyond": 31,
+        "containers": 1,
+        "max_distance": 648.7,
+        "min_distance": 5.5,
+        "near": 76,
+        "transforms": 108
+      },
+      "EntranceInfo_AICoversData": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": null,
+        "min_distance": null,
+        "near": 0,
+        "transforms": 1
+      },
+      "GRENADE_scripts": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": null,
+        "min_distance": null,
+        "near": 0,
+        "transforms": 1
+      },
+      "Location scene": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": null,
+        "min_distance": null,
+        "near": 0,
+        "transforms": 1
+      },
+      "NavMesh": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": null,
+        "min_distance": null,
+        "near": 0,
+        "transforms": 1
+      },
+      "NavmeshObstacles": {
+        "beyond": 40,
+        "containers": 1,
+        "max_distance": 664.9,
+        "min_distance": 527.0,
+        "near": 0,
+        "transforms": 41
+      },
+      "ParentOfBearingPoints": {
+        "beyond": 2696,
+        "containers": 1,
+        "max_distance": 682.4,
+        "min_distance": 543.3,
+        "near": 0,
+        "transforms": 2697
+      },
+      "ServerSpatialController": {
+        "beyond": 0,
+        "containers": 1,
+        "max_distance": 42.4,
+        "min_distance": 0.8,
+        "near": 29,
+        "transforms": 30
+      },
+      "Shuttle1": {
+        "beyond": 1,
+        "containers": 0,
+        "max_distance": 617.1,
+        "min_distance": 617.1,
+        "near": 0,
+        "transforms": 1
+      }
+    },
+    "totals": {
+      "beyond": 2866,
+      "containers": 19,
+      "near": 136,
+      "transforms": 3021
+    }
+  },
+  "schema_version": 1
+}

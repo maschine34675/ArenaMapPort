@@ -358,7 +358,7 @@ class OffMapHubRuleTests(unittest.TestCase):
     CORES = [core(1, (0.0, 0.0, -10.0)), core(2, (5.0, 0.0, -2.0))]
 
     def test_only_iceberg_has_a_play_area_row_so_the_released_sidecars_are_untouched(self):
-        self.assertEqual(set(A.PLAY_AREA), {"iceberg"})
+        self.assertEqual(set(A.PLAY_AREA), {"iceberg", "autoservice"})      # autoservice since PLAN-AUTOSERVICE item 6
         self.assertEqual(ICEBERG_AREA, {"x": (-61.0, 121.0), "z": (-130.0, -33.0)})
         self.assertTrue({"equator", "bay5", "airpit", "bowl"}.isdisjoint(A.PLAY_AREA))
 
@@ -489,6 +489,220 @@ class IcebergRealSourceTests(unittest.TestCase):
             if status == "ok" and cls and cls.rsplit(".", 1)[-1] == "SpawnPointMarker":
                 out.append(A._world_position(A._transform_of(obj, level)))
         return out
+
+
+# --------------------------------------------------------------------------------------------------------------
+# PLAN-AUTOSERVICE item 6 (2026-11-11): the AI scene's born points, mine points and the far-field rule
+# --------------------------------------------------------------------------------------------------------------
+
+AUTOSERVICE_AREA = A.PLAY_AREA["autoservice"]
+AUTOSERVICE_AI_SCENE = (63, "Arena_AutoService_AI")
+# Roots of the AI scene whose transforms lie wholly beyond the far-field radius (measured 2026-11-11, Arena 0.6.2.0.48473)
+AUTOSERVICE_STALE_ROOTS = {"ParentOfBearingPoints": 2696, "AI_SUSP": 93, "NavmeshObstacles": 40, "Shuttle1": 1}
+
+
+class AutoserviceTableTests(unittest.TestCase):
+    """The static rows: nothing here reads Arena."""
+
+    def test_the_play_area_is_arenas_navmesh_surface_volume_rounded_outward(self):
+        # NavMeshSurface centre (-370.3, 486.8), size (101.8, 81.7) in x / z: x -421.2..-319.4, z 445.95..527.65
+        self.assertEqual(AUTOSERVICE_AREA, {"x": (-421.2, -319.4), "z": (445.9, 527.7)})
+        self.assertLessEqual(AUTOSERVICE_AREA["x"][0], -370.3 - 101.8 / 2)
+        self.assertGreaterEqual(AUTOSERVICE_AREA["x"][1], -370.3 + 101.8 / 2)
+        self.assertLessEqual(AUTOSERVICE_AREA["z"][0], 486.8 - 81.7 / 2)
+        self.assertGreaterEqual(AUTOSERVICE_AREA["z"][1], 486.8 + 81.7 / 2)
+
+    def test_only_iceberg_and_autoservice_have_play_area_and_scene_data_rows(self):
+        self.assertEqual(set(A.PLAY_AREA), {"iceberg", "autoservice"})
+        self.assertEqual(set(A.AI_SCENE_DATA), {"autoservice"})
+        self.assertTrue({"equator", "bay5", "airpit", "bowl"}.isdisjoint(A.PLAY_AREA))
+        self.assertEqual(A.AI_SCENE_DATA["autoservice"],
+                         {"born_class": "SpawnPointMarker", "born_count": 16, "mine_class": "AIMinePoint", "mine_count": 23,
+                          "far_field_radius": 400.0})
+
+    def test_the_plans_ai_role_is_level63(self):
+        from source_plan import load_plan
+        plan = load_plan(Path(__file__).resolve().parents[1] / "extract" / "plans" / "autoservice.json")
+        self.assertEqual(A.ai_scene_for_plan(plan), AUTOSERVICE_AI_SCENE)
+        self.assertEqual(A.map_key_for_plan(plan), "autoservice")
+
+    def test_the_centre_and_the_distance_are_horizontal(self):
+        self.assertEqual(A.play_area_centre({"x": (-10.0, 30.0), "z": (0.0, 40.0)}), (10.0, 20.0))
+        self.assertAlmostEqual(A.horizontal_distance((13.0, 99.0, 24.0), (10.0, 20.0)), 5.0)
+
+    def test_point_names_sort_by_their_number_and_the_unnumbered_one_comes_first(self):
+        names = ["p1 (10)", "p1 (2)", "p1", "p1 (1)"]
+        self.assertEqual(sorted(names, key=A._name_sort_key), ["p1", "p1 (1)", "p1 (2)", "p1 (10)"])
+
+    def test_rounded_vectors_never_carry_negative_zero(self):
+        self.assertEqual(str(A._round_vec((-0.00001, 1.23456789, -2.0))), "[0.0, 1.2346, -2.0]")
+
+
+class TrackedAutoserviceAiSidecarTests(unittest.TestCase):
+    """tools/maps/autoservice.ai.json: 7 core points, a 5-hub PatrolWay, 16 born points, 23 mine points, a far-field census."""
+
+    @staticmethod
+    def data():
+        path = MAPS_DIR / "autoservice.ai.json"
+        if not path.is_file():
+            raise unittest.SkipTest("autoservice.ai.json not generated yet")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_the_core_points_and_the_patrol_way_are_arenas_and_nothing_was_dropped(self):
+        data = self.data()
+        self.assertEqual(data["map_key"], "autoservice")
+        self.assertEqual([c["id"] for c in data["core_points"]], list(range(1, 8)))
+        self.assertEqual({c["connection_group_id"] for c in data["core_points"]}, {7})
+        hubs = data["patrol_ways"][0]["hubs"]
+        self.assertEqual(len(data["patrol_ways"]), 1)
+        self.assertEqual(sorted(h["core_point_id"] for h in hubs), [1, 2, 5, 6, 7])
+        self.assertEqual(sorted(len(h["sub_points"]) for h in hubs), [9, 10, 11, 12, 12])      # 5 hubs + 54 sub points = 59 PatrolPoints
+        self.assertNotIn("dropped", data)
+
+    def test_every_anchor_lies_inside_the_play_area_and_the_far_field_radius(self):
+        data = self.data()
+        positions = [c["position"] for c in data["core_points"]] + [b["position"] for b in data["born_points"]] \
+            + [m["position"] for m in data["mine_points"]]
+        for h in data["patrol_ways"][0]["hubs"]:
+            positions.append(h["position"])
+            positions.extend(h["sub_points"])
+        self.assertEqual(len(positions), 7 + 16 + 23 + 5 + 54)
+        centre = A.play_area_centre(AUTOSERVICE_AREA)
+        for p in positions:
+            self.assertTrue(A.inside_play_area(p, AUTOSERVICE_AREA), p)
+            self.assertLess(A.horizontal_distance(p, centre), 400.0, p)
+
+    def test_the_born_points_are_the_sixteen_p1_markers_five_in_each_pocket_and_six_in_the_yard(self):
+        data = self.data()
+        born = data["born_points"]
+        self.assertEqual([b["name"] for b in born], ["p1"] + [f"p1 ({n})" for n in range(1, 17) if n != 3])
+        east = [b for b in born if b["position"][0] > -344.2]          # x of the east pocket bound
+        west = [b for b in born if b["position"][0] < -402.4]          # x of the west pocket bound
+        self.assertEqual((len(east), len(west), len(born) - len(east) - len(west)), (5, 5, 6))
+        for b in born:
+            self.assertTrue(-3.9 < b["position"][1] < -3.5, b)
+
+    def test_the_mine_points_are_ai_data_twenty_three_amineplaces(self):
+        mines = self.data()["mine_points"]
+        self.assertEqual(len(mines), 23)
+        self.assertTrue(all(m["name"].startswith("AMinePlace_") for m in mines))
+        self.assertEqual(sorted(m["name"] for m in mines).count("AMinePlace_6"), 2)       # Arena reuses the name once
+
+    def test_the_far_field_census_records_what_is_beyond_four_hundred_metres_and_exports_none_of_it(self):
+        census = self.data()["scene_census"]
+        self.assertEqual(census["far_field_radius"], 400.0)
+        self.assertEqual(census["centre_xz"], [-370.3, 486.8])
+        groups = census["groups"]
+        for name, count in AUTOSERVICE_STALE_ROOTS.items():
+            self.assertEqual((groups[name]["beyond"], groups[name]["near"]), (count, 0), name)
+            self.assertGreater(groups[name]["min_distance"], 400.0, name)
+        # the one mixed group: BotZone keeps 76 on-map transforms; BotCellController has its root far away and one on-map Cube
+        self.assertEqual((groups["BotZone"]["near"], groups["BotZone"]["beyond"]), (76, 31))
+        self.assertEqual((groups["BotCellController"]["near"], groups["BotCellController"]["beyond"]), (1, 1))
+        for name in ("AICorePointHolder", "AIMinesPositionsHolder"):      # the exported classes' containers are wholly on the map
+            self.assertEqual(groups[name]["beyond"], 0, name)
+        totals = census["totals"]
+        self.assertEqual(totals["transforms"], 3021)
+        self.assertEqual(totals["transforms"], totals["near"] + totals["beyond"] + totals["containers"])
+        self.assertEqual(totals["containers"], 19)
+        self.assertEqual(sum(g["transforms"] for g in groups.values()), 3021)
+
+    def test_the_released_sidecars_carry_none_of_the_new_blocks(self):
+        for stem in ("equator", "bay5", "airpit", "bowl", "iceberg"):
+            path = MAPS_DIR / f"{stem}.ai.json"
+            if not path.is_file():
+                continue
+            data = json.loads(path.read_text(encoding="utf-8"))
+            for key in ("born_points", "mine_points", "scene_census"):
+                self.assertNotIn(key, data, f"{stem}: {key}")
+
+
+class SceneCensusModelTests(unittest.TestCase):
+    """scene_census / scene_points on a stand-in scene file (no Arena data, no UnityPy objects)."""
+
+    class Tree:
+        def __init__(self, tree, path_id):
+            self.tree, self.path_id = tree, path_id
+            self.type = type("T", (), {"name": tree["_type"]})()
+
+        def read_typetree(self):
+            return self.tree
+
+    def scene(self, entries):
+        """entries: (name, parent index or None, local position); one Transform and one GameObject per entry."""
+        objects = {}
+        for i, (name, parent, pos) in enumerate(entries):
+            objects[100 + i] = self.Tree({"_type": "GameObject", "m_Name": name}, 100 + i)
+            father = 0 if parent is None else 200 + parent
+            objects[200 + i] = self.Tree({"_type": "Transform", "m_Father": {"m_PathID": father},
+                                          "m_GameObject": {"m_PathID": 100 + i},
+                                          "m_LocalPosition": {"x": pos[0], "y": pos[1], "z": pos[2]}}, 200 + i)
+        return type("F", (), {"objects": objects})()
+
+    def test_a_container_at_the_origin_is_left_out_and_the_groups_split_at_the_radius(self):
+        from unittest import mock
+        f = self.scene([("Holder", None, (0.0, 0.0, 0.0)), ("near", 0, (3.0, 0.0, 4.0)), ("far", 0, (900.0, 0.0, 0.0)),
+                        ("Prop", None, (0.0, 0.0, 600.0))])
+
+        def world(tobj):
+            tree = tobj.read_typetree()
+            x, y, z = (tree["m_LocalPosition"][k] for k in "xyz")
+            father = tree["m_Father"]["m_PathID"]
+            if father:
+                fx, fy, fz = (f.objects[father].tree["m_LocalPosition"][k] for k in "xyz")
+                x, y, z = x + fx, y + fy, z + fz
+            return (x, y, z)
+
+        with mock.patch.object(A, "_world_position", world):
+            out = A.scene_census(f, (0.0, 0.0), 400.0)
+        self.assertEqual({k: (v["transforms"], v["containers"], v["near"], v["beyond"]) for k, v in out["groups"].items()},
+                         {"Holder": (3, 1, 1, 1), "Prop": (1, 0, 0, 1)})
+        self.assertEqual(out["groups"]["Holder"]["min_distance"], 5.0)
+        self.assertEqual(out["groups"]["Holder"]["max_distance"], 900.0)
+        self.assertEqual(out["totals"], {"transforms": 4, "near": 1, "beyond": 2, "containers": 1})
+
+
+@unittest.skipUnless(os.path.isdir(ARENA_SOURCE), "Arena source not reachable from this machine")
+class AutoserviceRealSourceTests(unittest.TestCase):
+    PLAN = Path(__file__).resolve().parents[1] / "extract" / "plans" / "autoservice.json"
+
+    @classmethod
+    def setUpClass(cls):
+        from source_plan import load_plan
+        plan = load_plan(cls.PLAN)
+        idx, name = A.ai_scene_for_plan(plan)
+        cls.live = A.extract_map(A.map_key_for_plan(plan), idx, name, A.DEFAULT_SOURCE)
+
+    def test_the_tracked_sidecar_is_what_the_extractor_writes_today(self):
+        path = MAPS_DIR / "autoservice.ai.json"
+        if not path.is_file():
+            self.skipTest("autoservice.ai.json not generated yet")
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")), json.loads(json.dumps(self.live)))
+
+    def test_the_live_scene_is_seven_core_points_five_hubs_sixteen_born_and_twenty_three_mine_points(self):
+        self.assertEqual(len(self.live["core_points"]), 7)
+        hubs = self.live["patrol_ways"][0]["hubs"]
+        self.assertEqual((len(hubs), sum(len(h["sub_points"]) for h in hubs)), (5, 54))
+        self.assertEqual((len(self.live["born_points"]), len(self.live["mine_points"])), (16, 23))
+        self.assertNotIn("dropped", self.live)
+
+    def test_a_pinned_count_that_differs_fails_the_run(self):
+        from unittest import mock
+        row = dict(A.AI_SCENE_DATA["autoservice"], born_count=15)
+        with mock.patch.dict(A.AI_SCENE_DATA, {"autoservice": row}):
+            with self.assertRaisesRegex(HardExtractError, "16 SpawnPointMarker object"):
+                A.extract_map("autoservice", AUTOSERVICE_AI_SCENE[0], AUTOSERVICE_AI_SCENE[1], A.DEFAULT_SOURCE)
+
+    def test_a_play_area_that_misses_a_core_point_fails_the_run(self):
+        from unittest import mock
+        with mock.patch.dict(A.PLAY_AREA, {"autoservice": {"x": (-421.2, -380.0), "z": (445.9, 527.7)}}):
+            with self.assertRaisesRegex(HardExtractError, "core point"):
+                A.extract_map("autoservice", AUTOSERVICE_AI_SCENE[0], AUTOSERVICE_AI_SCENE[1], A.DEFAULT_SOURCE)
+
+    def test_the_stale_far_field_roots_lie_beyond_the_radius_in_the_live_scene(self):
+        groups = self.live["scene_census"]["groups"]
+        for name, count in AUTOSERVICE_STALE_ROOTS.items():
+            self.assertEqual((groups[name]["beyond"], groups[name]["near"]), (count, 0), name)
 
 
 if __name__ == "__main__":

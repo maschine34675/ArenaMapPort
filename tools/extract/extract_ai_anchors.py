@@ -82,6 +82,27 @@ for a map without a sidecar, but the 11 real core points are authored instead of
 outside the box of a kept hub, fails the run (nothing is dropped silently); a map without a `PLAY_AREA` row is untouched, so the
 released sidecars are byte-identical.
 
+Autoservice (PLAN-AUTOSERVICE item 6, 2026-11-11). The `Arena_AutoService_AI` scene (plan role `ai`, level63) is the opposite
+case: the 7 core points, the 5-hub PatrolWay (5 hubs + 54 sub points = 59 PatrolPoints, all consumed) and everything else
+Arena authored for bots lie on the map (core points x -387.4..-353.2, z 476.7..503.5), so `PLAY_AREA` holds the rule as a
+fail-closed guard (Arena's NavMeshSurface volume, x -421.2..-319.4, z 446.0..527.65, rounded outward to 0.1 m: a core point
+outside it, or a sub point outside a kept hub, fails the run) and drops nothing. What the scene carries besides is read by
+`AI_SCENE_DATA`, a per-map table (the released sidecars have no row and stay byte-identical):
+
+* `born_points` - the 16 `SpawnPointMarker`s of the AI scene (GameObjects `p1`, `p1 (1)` .. `p1 (16)`): the bot born points,
+  5 in each pocket and 6 in the yard (name, world position); the bot rows of tools/maps/autoservice.bots.json start from them;
+* `mine_points` - the 23 `AIMinePoint`s (`AMinePlace_N`): AI data, not minefields (nothing in ArenaMode or the port arms them);
+  positions only, listed because Arena authors them on the main component (`AMinePlace_15` lies off Arena's mesh);
+* `scene_census` - every Transform of the scene grouped by its root object, with the horizontal distance from the play-area
+  centre: the groups that lie beyond `far_field_radius` (400 m) are stale far-field leftovers of other maps' bot data
+  (`ParentOfBearingPoints` 2,696 `base_navmesh_point` objects with a null script, `AI_SUSP` 93 `ai_coverplace` objects, the
+  `NavmeshObstacles` 40 inactive cubes (`AdditionalNavmeshBlock` has 44 objects in the scene), the `Shuttle1` prop, the root
+  of `BotCellController` and 31 of the 107 transforms under `BotZone`); none of it is exported. The rule is the radius: the run fails when a born or mine point lies outside the play area,
+  or when the counts differ from the pinned ones; the census itself only records (the tests pin which groups lie wholly beyond
+  400 m: a group can be mixed, `BotCellController` has its root far away and one on-map `Cube` child).
+  The containers (`AICorePointHolder`, `BotZone`, ...) sit at the world origin 612 m away and carry the children's world
+  positions in their own transforms; a root exactly at the origin is a container and is left out of the distance statistics.
+
 CLI:
     python extract_ai_anchors.py --map equator --output tools/maps/equator.ai.json
     python extract_ai_anchors.py --map bay5 --output tools/maps/bay5.ai.json
@@ -89,6 +110,7 @@ CLI:
     python extract_ai_anchors.py --map airpit                (writes tools/maps/airpit.ai.json)
     python extract_ai_anchors.py --plan tools/extract/plans/airpit.json
     python extract_ai_anchors.py --plan tools/extract/plans/iceberg.json     (writes tools/maps/iceberg.ai.json)
+    python extract_ai_anchors.py --plan tools/extract/plans/autoservice.json (writes tools/maps/autoservice.ai.json)
 The default without --map stays equator + bay5 (their sidecars are shipped as released); name
 every other map explicitly.
 """
@@ -98,6 +120,7 @@ import argparse
 import json
 import math
 import os
+import re
 import struct
 import sys
 from pathlib import Path
@@ -135,11 +158,31 @@ def missing_file_note(map_key: str) -> str:
 # (PLAN-ICEBERG section 0); the box is that AABB widened by about 1 m, the bake box of PLAN-ICEBERG item 9 in x and z.
 PLAY_AREA = {
     "iceberg": {"x": (-61.0, 121.0), "z": (-130.0, -33.0)},
+    # Autoservice: Arena's own NavMeshSurface volume of level62/63 (centre (-370.3, 486.8), size 101.8 x 81.7) rounded outward to
+    # 0.1 m. Nothing is dropped there (module docstring, "Autoservice"); the row makes a stray point fail the run.
+    "autoservice": {"x": (-421.2, -319.4), "z": (445.9, 527.7)},
+}
+
+# Maps whose sidecar also carries the AI scene's born points, mine points and a far-field census (module docstring,
+# "Autoservice"). Counts are pins: a different count fails the run. `far_field_radius` is horizontal metres from the
+# centre of the map's PLAY_AREA.
+AI_SCENE_DATA = {
+    "autoservice": {"born_class": "SpawnPointMarker", "born_count": 16,
+                    "mine_class": "AIMinePoint", "mine_count": 23,
+                    "far_field_radius": 400.0},
 }
 
 
 def inside_play_area(position, area: dict) -> bool:
     return area["x"][0] <= position[0] <= area["x"][1] and area["z"][0] <= position[2] <= area["z"][1]
+
+
+def play_area_centre(area: dict) -> tuple:
+    return ((area["x"][0] + area["x"][1]) / 2.0, (area["z"][0] + area["z"][1]) / 2.0)
+
+
+def horizontal_distance(position, centre) -> float:
+    return math.hypot(position[0] - centre[0], position[2] - centre[1])
 
 
 def drop_off_map_hubs(core_points: list, hubs: list, area: dict):
@@ -422,6 +465,95 @@ def _vec(pos) -> list:
     return [pos[0], pos[1], pos[2]]
 
 
+def _round_vec(pos) -> list:
+    return [round(float(v), 4) + 0.0 for v in pos]  # + 0.0 turns -0.0 into 0.0
+
+
+def _name_sort_key(name: str) -> tuple:
+    match = re.match(r"^(?P<stem>.*?)\s*\((?P<index>\d+)\)$", name)
+    return (match.group("stem"), int(match.group("index"))) if match else (name, -1)
+
+
+def scene_points(f, class_name: str) -> list:
+    """Name and rounded world position of every MonoBehaviour of one class (born points, mine points)."""
+    points = []
+    for obj in list(f.objects.values()):
+        if obj.type.name != "MonoBehaviour":
+            continue
+        cls_name, status = arena_census.resolve_script_name(obj)
+        if status != "ok" or not cls_name or cls_name.rsplit(".", 1)[-1] != class_name:
+            continue
+        points.append({"name": _gameobject_name(obj, f),
+                       "position": _round_vec(_world_position(_transform_of(obj, f)))})
+    return sorted(points, key=lambda p: _name_sort_key(p["name"]))
+
+
+def scene_census(f, centre, radius: float) -> dict:
+    """Every Transform of the AI scene grouped by the name of its root object: ``transforms`` (all), ``containers`` (roots exactly at
+    the world origin: they carry the children's world positions), ``near`` / ``beyond`` (``radius`` metres horizontally from
+    ``centre``, containers left out) and the min / max distance of the counted ones. A group may be mixed
+    (``BotCellController``: its root lies at (-258, 0, -342), its one ``Cube`` child on the map); nothing is dropped by this
+    function, it only records."""
+    transforms = {o.path_id: o for o in f.objects.values() if o.type.name == "Transform"}
+    names = {o.path_id: o.read_typetree().get("m_Name", "") for o in f.objects.values() if o.type.name == "GameObject"}
+    father, owner = {}, {}
+    for pid, tobj in transforms.items():
+        tree = tobj.read_typetree()
+        father[pid] = (tree.get("m_Father") or {}).get("m_PathID", 0)
+        owner[pid] = tree["m_GameObject"]["m_PathID"]
+
+    def root_of(pid):
+        seen = set()
+        while father[pid]:
+            if pid in seen:
+                raise HardExtractError("scene census: a parent cycle in the Transform hierarchy")
+            seen.add(pid)
+            pid = father[pid]
+        return pid
+
+    groups: dict = {}
+    for pid, tobj in transforms.items():
+        root = root_of(pid)
+        group = groups.setdefault(names[owner[root]], {"transforms": 0, "containers": 0, "near": 0, "beyond": 0,
+                                                       "distances": []})
+        group["transforms"] += 1
+        position = _world_position(tobj)
+        if pid == root and max(abs(v) for v in position) < 1e-3:
+            group["containers"] += 1
+            continue
+        distance = horizontal_distance(position, centre)
+        group["distances"].append(distance)
+        group["near" if distance <= radius else "beyond"] += 1
+    out = {}
+    for name, group in sorted(groups.items()):
+        distances = group.pop("distances")
+        group["min_distance"] = round(min(distances), 1) if distances else None
+        group["max_distance"] = round(max(distances), 1) if distances else None
+        out[name] = group
+    return {"centre_xz": [round(centre[0], 2), round(centre[1], 2)], "far_field_radius": radius,
+            "groups": out,
+            "totals": {"transforms": sum(g["transforms"] for g in out.values()),
+                       "near": sum(g["near"] for g in out.values()),
+                       "beyond": sum(g["beyond"] for g in out.values()),
+                       "containers": sum(g["containers"] for g in out.values())}}
+
+
+def scene_extras(map_key: str, f, spec: dict, area: dict) -> dict:
+    """born_points, mine_points and scene_census of a map with an AI_SCENE_DATA row (module docstring, "Autoservice")."""
+    out = {}
+    for key, class_key, count_key in (("born_points", "born_class", "born_count"), ("mine_points", "mine_class", "mine_count")):
+        points = scene_points(f, spec[class_key])
+        if len(points) != spec[count_key]:
+            raise HardExtractError(f"{map_key}: {len(points)} {spec[class_key]} object(s) in the AI scene, the pinned count is "
+                                   f"{spec[count_key]}")
+        outside = [p["name"] for p in points if not inside_play_area(p["position"], area)]
+        if outside:
+            raise HardExtractError(f"{map_key}: {key} {outside} lie outside the play area {area}")
+        out[key] = points
+    out["scene_census"] = scene_census(f, play_area_centre(area), spec["far_field_radius"])
+    return out
+
+
 def extract_map(map_key: str, ai_scene_idx: int, ai_scene_name: str, source: str) -> dict:
     print(f"[extract_ai_anchors] {map_key}: loading level{ai_scene_idx} ({ai_scene_name}) from {source}", file=sys.stderr)
     paths = scene_files({ai_scene_idx: ai_scene_name}, base=source)  # always pass base= explicitly (item 8 note)
@@ -550,6 +682,14 @@ def extract_map(map_key: str, ai_scene_idx: int, ai_scene_name: str, source: str
         "core_points": out_core_points,
         "patrol_ways": [{"hubs": hubs_out}] if hubs_out or dropped is None else [],
     }
+    spec = AI_SCENE_DATA.get(map_key)
+    if spec is not None:
+        if area is None:
+            raise HardExtractError(f"{map_key}: an AI_SCENE_DATA row needs a PLAY_AREA row")
+        result.update(scene_extras(map_key, f, spec, area))
+        result["_comment"] += (f" {len(result['born_points'])} bot born points, {len(result['mine_points'])} AIMinePoints (AI data, not "
+                               "minefields) and a census of the scene's far-field leftovers (beyond "
+                               f"{spec['far_field_radius']:g} m of the play area, never exported) are recorded beside them.")
     if dropped is not None:  # only a map with a PLAY_AREA row that lost hubs; the released sidecars have no such key
         result["dropped"] = dropped
         result["_comment"] += (f" {dropped['hubs']} hub(s) with {dropped['sub_points']} sub point(s) of Arena's PatrolWay "
