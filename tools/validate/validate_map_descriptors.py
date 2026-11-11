@@ -1125,12 +1125,12 @@ def registry_entries(text: str) -> dict[str, dict]:
 # Autoservice joined with PLAN-AUTOSERVICE item 12 (2026-11-11) in the same state (its bundles wait for U1, item 13).
 RELEASE_MAP_NAMES = ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService")
 RELEASE_MAP_KEYS = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice")
-# Released maps that have NO spectator crowd (PLAN-ICEBERG "No spectator crowd and no murmur bed", 2026-10-30: Iceberg's scenes hold no crowd objects,
+# Released maps that have NO spectator crowd (Iceberg only since Autoservice's crowd, PLAN-AUTOSERVICE phase C, 2026-11-11; PLAN-ICEBERG "No spectator crowd and no murmur bed", 2026-10-30: Iceberg's scenes hold no crowd objects,
 # only 12 FansAmbient sound entries). They get no spectators/<key>/ package and no crowd murmur: everything that would otherwise demand a crowd
 # for every released map (the packer's rules and required files, the distribution validator) reads this one list; the crowd maps themselves are
 # extract_spectator.MAP_SCENES, and tools/tests/test_crowdless_maps.py pins that both sets partition the release and that the client's
 # ArenaSpectators.DesignScene returns null for exactly these keys. Adding a map here is a decision, never a way around a missing package.
-CROWDLESS_MAP_KEYS = ("arena_iceberg", "arena_autoservice")
+CROWDLESS_MAP_KEYS = ("arena_iceberg",)
 # Maps with a native sea-water package, the ONE list validate_distribution (WATER_MAP_KEYS: the exact file set under water/), the packer (the required
 # files of the map's part) and the extractor's table (extract_water.MAPS, pinned by tools/tests/test_water_extraction.py) agree on. native_water_errors
 # makes every sidecar's has_native_water and every descriptor's HasNativeWater equal to membership here. Bay5's harbor (2026-09-28) and Iceberg's sea

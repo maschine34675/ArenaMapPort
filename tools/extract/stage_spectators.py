@@ -120,7 +120,7 @@ def validate_staged(output, sources=None):
 
 def stage(sources, output):
     if set(sources) != set(MAP_SCENES):
-        raise ValueError('all four crowd-map spectator exports are required (extract_spectator.MAP_SCENES; crowdless maps have none)')
+        raise ValueError('every crowd-map spectator export is required (extract_spectator.MAP_SCENES; crowdless maps have none)')
     graphs, images, manifest = collect(sources)
     output = plain(output)
     if any(output.is_relative_to(plain(p)) or plain(p).is_relative_to(output) for p in sources.values()):

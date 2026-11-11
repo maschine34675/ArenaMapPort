@@ -253,7 +253,7 @@ class DistributionSidecarTests(unittest.TestCase):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_iceberg"}', encoding="utf-8")
         # Autoservice (PLAN-AUTOSERVICE item 12): bundles, shader sidecar, database, art (five loading images), AI sidecar, acoustics, gate sounds and a
-        # flare package (the loop above); no spectator package (crowdless), no water and no overview pack (explicit absences, never fake data).
+        # flare package (the loop above); a spectator package (the crowd put by put_spectators), no water and no overview pack (explicit absences, never fake data).
         self.put_bundles("arena_autoservice")
         (self.plugin / "material-shaders.arena_autoservice.json").write_text("{}", encoding="utf-8")
         for folder in (self.server / "db/arena_autoservice", self.repo / "ArenaMapPort.Server/db/arena_autoservice"):
@@ -427,8 +427,8 @@ class DistributionSidecarTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def put_spectators(self):
-        """The four crowd packages: one tiny synthetic schema-3 source export per map under work/extract/spectator-<map> (the same
-        graph as test_spectator.fixture, all four sharing one image) and dist's staged tree, produced by stage_spectators.stage
+        """The five crowd packages: one tiny synthetic schema-3 source export per map under work/extract/spectator-<map> (the same
+        graph as test_spectator.fixture, all sharing one image) and dist's staged tree, produced by stage_spectators.stage
         itself (schema-4 graphs plus shared/). The validator finds the sources through extract_spectator.package_path, which is moved
         into the temporary repository here."""
         sources = {}
@@ -1021,23 +1021,23 @@ class DistributionSidecarTests(unittest.TestCase):
         shutil.rmtree(self.plugin / "water/arena_bowl")
         self.validate()
 
-    def test_autoservice_is_crowdless_and_carries_five_loadscreens_and_flares_but_no_sea_and_no_overview(self):
-        # PLAN-AUTOSERVICE item 12 (2026-11-11): the sixth released map is crowdless like Iceberg, ships the flare package of its eight gas lamps
+    def test_autoservice_has_a_crowd_five_loadscreens_and_flares_but_no_sea_and_no_overview(self):
+        # PLAN-AUTOSERVICE item 12 (2026-11-11): the sixth released map ships (since phase C, 2026-11-11, its fans are a crowd map; it is no longer crowdless) the flare package of its eight gas lamps
         # (FLARE_MAP_KEYS) and has neither a native sea (WATER_MAP_KEYS) nor a DynamicMaps overview pack (OVERVIEW_MAP_NAMES): explicit absences.
         self.assertEqual(5, len(extract_loadscreens.LOADSCREENS["arena_autoservice"]))
         self.assertEqual({f"arena_autoservice_{n}.jpg" for n in range(1, 6)},
                          {p.name for p in (self.plugin / "loadscreens").glob("arena_autoservice_*.jpg")})
-        self.assertFalse((self.plugin / "spectators/arena_autoservice").exists())
+        self.assertTrue((self.plugin / "spectators/arena_autoservice" / stage_spectators.GRAPH).is_file())
         self.assertFalse((self.plugin / "water/arena_autoservice").exists())
         self.assertFalse((self.plugin / "dynamicmaps/ArenaMapPort_AutoService").exists())
         self.assertTrue((self.plugin / "flares/arena_autoservice/flares.json").is_file())
         self.validate()
-        # a crowd package of the crowdless map is refused by the staged-spectator check
-        (self.plugin / "spectators/arena_autoservice").mkdir()
-        (self.plugin / "spectators/arena_autoservice" / stage_spectators.GRAPH).write_bytes(b"x")
+        # its crowd package is required like the other four: a missing folder is refused by the staged-spectator check
+        moved = self.plugin.parent / "autoservice-crowd-aside"
+        shutil.move(str(self.plugin / "spectators/arena_autoservice"), str(moved))
         with self.assertRaisesRegex(ValueError, "unexpected or missing spectator folder"):
             self.validate()
-        shutil.rmtree(self.plugin / "spectators/arena_autoservice")
+        shutil.move(str(moved), str(self.plugin / "spectators/arena_autoservice"))
         # neither a water package nor an overview pack may appear before the map lists them on purpose
         (self.plugin / "water/arena_autoservice").mkdir(parents=True)
         (self.plugin / "water/arena_autoservice/water.json").write_text("{}", encoding="utf-8")
@@ -1569,7 +1569,7 @@ class DistributionSidecarTests(unittest.TestCase):
         spectators = self.plugin / "spectators"
         shared = spectators / "shared"
         image, manifest, graph = self.SPECTATOR_IMAGE, stage_spectators.MANIFEST, stage_spectators.GRAPH
-        self.assertEqual({"arena_airpit", "arena_bay5", "arena_bowl", "arena_equator", "shared"}, {p.name for p in spectators.iterdir()})
+        self.assertEqual({"arena_airpit", "arena_autoservice", "arena_bay5", "arena_bowl", "arena_equator", "shared"}, {p.name for p in spectators.iterdir()})
         self.validate()
         with self.changed(shared / image), self.assertRaisesRegex(FileNotFoundError, image):
             self.validate()

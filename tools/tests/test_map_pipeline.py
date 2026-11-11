@@ -850,7 +850,7 @@ class RegistryTests(unittest.TestCase):
         full = "Equator, Bay5, AirPit, Bowl, Iceberg, AutoService, Third"
         self.assertEqual(VD.RELEASE_MAP_NAMES, ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService"))
         self.assertEqual(VD.RELEASE_MAP_KEYS, ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice"))
-        self.assertEqual(VD.CROWDLESS_MAP_KEYS, ("arena_iceberg", "arena_autoservice"))
+        self.assertEqual(VD.CROWDLESS_MAP_KEYS, ("arena_iceberg",))
         self.assertTrue(set(VD.CROWDLESS_MAP_KEYS) <= set(VD.RELEASE_MAP_KEYS))
         self.assertEqual(VD.registry_membership_errors(source(full, released), entries), [])
         for catalog, release in (("Equator, Bay5, AirPit, Bowl, Iceberg, AutoService", released), (full + ", Third", released),

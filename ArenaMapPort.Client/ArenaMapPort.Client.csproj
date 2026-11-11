@@ -187,8 +187,8 @@
   <!-- Optional ArenaMode audio/UI exports remain development inputs only.
        ArenaMapPort has no runtime consumers and does not distribute them. -->
 
-  <!-- The crowd maps are extract_spectator.MAP_SCENES (Equator, Bay5, AirPit, Bowl); stage_spectators.py stages exactly those. Iceberg and
-       Autoservice have no crowd and no murmur bed: they are validate_map_descriptors.CROWDLESS_MAP_KEYS, so nothing is staged for them and nothing demands a package. -->
+  <!-- The crowd maps are extract_spectator.MAP_SCENES (Equator, Bay5, AirPit, Bowl, Autoservice since 2026-11-11, whose fans sit in its TeamFight design scene); stage_spectators.py stages exactly those.
+       Iceberg has no crowd and no murmur bed: it is validate_map_descriptors.CROWDLESS_MAP_KEYS, so nothing is staged for it and nothing demands a package. -->
   <Target Name="ArenaMapPortStageSpectator" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
     <Exec Command="python &quot;$(MSBuildThisFileDirectory)..\tools\extract\stage_spectators.py&quot; stage --output &quot;$(ArenaMapPortDistDir)\spectators&quot;" />
   </Target>

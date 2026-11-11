@@ -264,3 +264,44 @@ investigated.)
 
 What this run does not cover: bots (the raids were plain PMC raids with bots None), listening to anything, and the release DLLs themselves, which are rebuilt
 from the commit that carries the release texts ([release-preparation-20261029.md](release-preparation-20261029.md)).
+
+## 2026-11-11 - Autoservice joins the crowd maps (PLAN-AUTOSERVICE phase C, branch `phase-c/crowd`; offline, no host run)
+
+Decision (lead's phase C task, the survey recommended it and it reverses the user's 2026-11-08 "crowdless passt" for Autoservice; the user's go is still to be confirmed) (option (a) of the survey, after the
+finding that the premise of PLAN-AUTOSERVICE risk 6, "an incompatible layout", does not hold: the fans are the same rigs the four crowd maps already export).
+
+**Source (measured, UnityPy on Arena 0.6.2.0.48473, survey plus an independent check).** `Arena_AutoService_TeamFight_DesignStuff` (level 136; Autoservice is the
+only map whose crowd is in a TeamFight design scene, its plain `Arena_AutoService_DesignStuff` holds none) has one ACTIVE root `SCAV_SPECTATORS` at the identity
+transform with 30 `ArenaFanEntity` children (`Arena_NewFans_01..15` and the `(1)`/`(2)` copies): layer 8, the 140-clip `ArenaFan` controller `sharedassets40.assets:338`
+of Equator's 99 fans, 149-158 nodes each, the same 15 appearances, 39 meshes and 33 materials. Positions x -398.4..-346.7, z 467.0..511.0, feet y 1.92..4.58 (9 on the south
+edge, 16 on the north edge, 5 on a lower ledge). On the other four maps the root is inactive in Arena; here Arena itself renders the bodies.
+
+**Change (smallest that works, no schema change).** `extract_spectator.MAP_SCENES['autoservice'] = 'Arena_AutoService_TeamFight_DesignStuff'` is the one list
+everything else follows (the CLI `--map` choices, `validate`'s scene table, `stage_spectators` which demands exactly that set, `test_crowdless_maps`, the
+`validate_distribution` partition); `ArenaSpectators.DesignScene` returns that scene name for `arena_autoservice`; `CROWDLESS_MAP_KEYS` is `("arena_iceberg",)`. The packer
+and the validators already derive the spectator rule and the required file from `CROWDLESS_MAP_KEYS`, so `spectators/arena_autoservice/spectator.json.gz` joins the
+autoservice part without a code change there. `ShouldBuild` needs the scene to be in `ArenaMapRaid.IsOwnedScene` (it is in the descriptor's `AllSceneNames`) and loaded by
+name at raid time: the doors, the monitors and the four start gates of this map already live in that same scene and ran on GPU-2 (item 15), so it is loaded; whether
+`GetSceneByName` answers while the crowd is built is part of the host check. The client then replaces the original: an ACTIVE original `SCAV_SPECTATORS` is disabled after the
+replacement loaded (the Bay5 path, `OriginalGroupsDisabled`), which also removes the 12 bodiless headgear meshes (4 leather caps, 4 cowboy hats, 2 mustaches, 2 kotton
+caps) and the layer-8 colliders that the port imported (the importer skips every SkinnedMeshRenderer; layer 8 is not in the bake mask, so no NavMesh effect).
+
+**Cubemap decision: stage the 12 duplicates, do not remap.** `patron_cubemap_metall` and `_matte` have ids of their own on this map (an id hashes the source file name),
+the six faces each are byte-equal to the older ones. Staging adds 12 files (249,714 B) to `spectators/shared/` (123 to 135) and nothing else. A remap by content would
+need a second id space in the extractor, the graphs and the staging check (touching the four released crowds' texture tables) to save 0.25 MB; the existing rule
+(same name with different bytes is refused, identical bytes under another name are separate files) already covers it and `validate_staged` passes.
+
+**Real run (this worktree, extractor and stager against the main checkout's ignored inputs).** `extract_spectator.py extract --map autoservice --package
+D:/ArenaMapPort/work/extract/spectator-autoservice`: `extracted 30 original spectators, 39 shared meshes, 33 materials, 103 textures, 2 shared animations`, then
+`verify`: `SPECTATOR_PACKAGE_OK`. `stage_spectators.stage` of all five packages into a SCRATCH folder (never `dist/`) printed 135 unique textures and `validate_staged`
+passed. Against the existing staged `dist/` (four crowd maps): the shared manifest gains 12 rows (123 to 135, no PNG differs in bytes), `arena_autoservice/spectator.json.gz` is
+new (6,283,124 B), and the four released graphs differ from their old files in exactly one field, `texture_manifest_sha256` (their JSON is otherwise equal), because the
+manifest bytes changed; they and the manifest therefore travel together (a full package does). The bytes of the four released maps' crowd behaviour do not change.
+
+**Stands (C#, `SpectatorCrowdBedModel.Plan`, run through the real-position test against the scratch staging).** Autoservice gets 4 stands (as the survey's Python port
+inferred), each within the 25 m radius rule; the bed, roar layer and the reaction planner take the same positions as on the other crowd maps, so
+`SpectatorCrowd.IsAvailable` turns true on this map and ArenaMode's binding needs no change.
+
+**Not measured.** Load time and texture memory on this map (computed only: the 30 fans use all 103 textures, so the main-thread PNG decode of about 2 s per raid does
+not shrink), placement and facing against the tribune geometry (fans stand 6-8 m above the yard floor), whether the stands are visible from the yard, the gain of the unoccluded
+murmur inside the garage hall, and everything audible. Gates: see the record in autoservice-release.md.

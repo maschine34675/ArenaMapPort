@@ -205,7 +205,7 @@ public sealed class AutoServiceMapTests
         Assert.Equal(0f, map.EmissionFloor);
         Assert.False(root.TryGetProperty("emission_cap", out _));
         Assert.False(root.TryGetProperty("emission_floor", out _));
-        // crowdless and waterless on purpose (user decision "crowdless passt", 2026-11-08; no sea mesh)
+        // waterless on purpose (no sea mesh); its crowd was added 2026-11-11 (PLAN-AUTOSERVICE phase C), reversing the "crowdless passt" decision of 2026-11-08
         Assert.False(map.HasNativeWater);
         Assert.False(root.TryGetProperty("has_native_water", out _));
     }
