@@ -17,7 +17,7 @@ namespace ArenaMapPort.Server;
 /// only <c>location.Banners[0]</c>, EFT.UI/LocationInfoPanel.cs:167; <c>ImageUrl =&gt; "/files/" +
 /// pic.path</c>, JsonType/LocationSettings.cs:153), built from Arena's own
 /// Matchmaker_Banner_Equator / Matchmaker_Banner_Bay5 / Matchmaker_Banner_AirPit /
-/// Matchmaker_Banner_TheBowl / Matchmaker_Banners_Iceberg art (extracted read-only by
+/// Matchmaker_Banner_TheBowl / Matchmaker_Banners_Iceberg / Matchmaker_Banner_chop-shop art (extracted read-only by
 /// tools/extract/extract_banners.py, never committed).
 ///
 /// Equator, Bay5, AirPit, Bowl and Iceberg only (the maps of <see cref="ArenaMapRegistry.All"/>; Bowl joined
@@ -58,6 +58,9 @@ public static class ArenaMapBanners
         // PLAN-ICEBERG item 10 (2026-10-30): Arena's Matchmaker_Banners_Iceberg, extract_banners.BANNERS["arena_iceberg"].
         // The row may precede the map's promotion into ArenaMapRegistry.All: it is only consulted for the maps of All.
         [ArenaMapRegistry.Iceberg.Key] = new Descriptor("arena_iceberg_banner", "arena_iceberg"),
+        // PLAN-AUTOSERVICE item 9 (2026-11-11): Arena's Matchmaker_Banner_chop-shop, extract_banners.BANNERS["arena_autoservice"].
+        // The row precedes the map's promotion into ArenaMapRegistry.All (item 12): it is only consulted for the maps of All.
+        [ArenaMapRegistry.AutoService.Key] = new Descriptor("arena_autoservice_banner", "arena_autoservice"),
     };
 
     /// <summary>

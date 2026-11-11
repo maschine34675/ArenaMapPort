@@ -44,6 +44,7 @@ public sealed class ArenaMapBannersTests : IDisposable
     [InlineData("arena_airpit", "arena_airpit_banner", "arena_airpit")]
     [InlineData("arena_bowl", "arena_bowl_banner", "arena_bowl")] // PLAN-BOWL item 8, 2026-10-18
     [InlineData("arena_iceberg", "arena_iceberg_banner", "arena_iceberg")] // PLAN-ICEBERG item 10, 2026-10-30 (row precedes the promotion)
+    [InlineData("arena_autoservice", "arena_autoservice_banner", "arena_autoservice")] // PLAN-AUTOSERVICE item 9, 2026-11-11 (row precedes the promotion)
     public void For_ReturnsTheExpectedDescriptor_ForEachBanneredMap(string mapKey, string expectedId, string expectedFileStem)
     {
         var map = FindMap(mapKey);
@@ -68,7 +69,7 @@ public sealed class ArenaMapBannersTests : IDisposable
         {
             if (map.Key != ArenaMapRegistry.Equator.Key && map.Key != ArenaMapRegistry.Bay5.Key
                 && map.Key != ArenaMapRegistry.AirPit.Key && map.Key != ArenaMapRegistry.Bowl.Key
-                && map.Key != ArenaMapRegistry.Iceberg.Key)
+                && map.Key != ArenaMapRegistry.Iceberg.Key && map.Key != ArenaMapRegistry.AutoService.Key)
             {
                 yield return new object[] { map };
             }

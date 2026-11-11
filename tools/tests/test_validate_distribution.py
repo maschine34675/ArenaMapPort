@@ -202,7 +202,8 @@ class DistributionSidecarTests(unittest.TestCase):
             (directory/'map-descriptions.json').write_text(json.dumps({
                 'schema_version': 1, 'descriptions': {'en': {
                     'arena_equator': 'Mall fixture', 'arena_bay5': 'Harbor fixture',
-                    'arena_airpit': 'Terminal fixture', 'arena_bowl': 'Stadium fixture'}}}), encoding='utf-8')
+                    'arena_airpit': 'Terminal fixture', 'arena_bowl': 'Stadium fixture',
+                    'arena_autoservice': 'Workshop fixture'}}}), encoding='utf-8')
         self.put_art()
         self.put_ai()
         self.put_acoustics()

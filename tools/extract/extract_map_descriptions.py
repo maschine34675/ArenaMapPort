@@ -5,7 +5,8 @@ Reads resources.assets without changing the Arena install. The generated text is
 BSG-derived data and belongs under ignored work/ or dist/, never in source control.
 Select exact TextAsset names rather than build-dependent Unity path IDs. Only the
 released maps that HAVE an official text (DESCRIPTION_KEYS: Equator, Bay5, AirPit and, since PLAN-BOWL item 8, Bowl)
-are exported; each available translation must be complete. A released map whose location has no Name/Description
+are exported, and so is Autoservice (PLAN-AUTOSERVICE item 9, 2026-11-11), whose row precedes its promotion into the
+registry (the server accepts such a pending entry, ArenaMapDescriptions.Load); each available translation must be complete. A released map whose location has no Name/Description
 row in Arena's locales (Iceberg, verified 2026-10-30 against 0.6.1.0.48206: only `EArenaBackgroundType/Iceberg`
 exists) gets no key here and no row in the pack: the server answers for it with the descriptor's own
 LocaleDescription (ArenaMapPort.Server/ArenaMapDescriptions.cs, whose OfficialTextMapKeys mirrors this table; a test pins both).
@@ -43,6 +44,10 @@ DESCRIPTION_KEYS = {
     # Arena's own location id for Bowl (PLAN-BOWL item 8, 2026-10-18), likewise NOT the sidecar id_field of the
     # ported location. Verified against 0.6.0.47752 in the PLAN-BOWL surveys.
     "arena_bowl": "62eba95b7ba21c1d534d305a Description",
+    # Arena's own location id for Autoservice (PLAN-AUTOSERVICE item 9, 2026-11-11; its "Name" row reads "Chop Shop" in en
+    # and ge, the same string as the key `Arena_AutoService`), NOT the sidecar id_field of the ported location
+    # (e6aa4591..., which has no row in any locale). Verified against 0.6.2.0.48473: Description rows in en, ge and ru.
+    "arena_autoservice": "6441004f8ab20b218807f14b Description",
 }
 
 
