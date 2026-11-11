@@ -215,7 +215,7 @@ Catalog-only until item 12 (the registry promotion), which is why nothing deploy
    `autoservice.modes.json`, `autoservice.bots.json` (player spawns from the pockets, bot zones from the 7 core points and the
    16 born points, waves and PMC squads after AirPit), `autoservice.exits.json` (the two boxes above), `autoservice.ai.json`
    (via `extract_ai_anchors`, bake-bounds table row, the far-field leftovers dropped). Spawn-placement covers all 20 markers
-   (Arena's mesh has all 20 on the main component). (done 2026-11-11, see the record: 4 player rows, 7 bot rows, the east exit
+   (Arena's mesh has all 20 on the main component). (done 2026-11-11, see the record: 4 player rows, 7 bot rows, the east exit
    0.5 m south of the draft for clearance, exit names 'Chop Shop East Gate' / 'Chop Shop West Gate')
 7. **Doors, gate sounds, score monitors**: patch `extract_door_poses.py` (`clossed`, clips through level 70, the equator-shutter
    override). The four gates are Mecanim clips (controllers in `sharedassets70`), so they need a `MAP_SOURCES["arena_autoservice"]`
@@ -225,7 +225,7 @@ Catalog-only until item 12 (the registry promotion), which is why nothing deploy
    both and merges the rows into one sidecar or `extract_clips` learns switch rows (decide in the item, pin it with a test); result
    `autoservice.doors.json` (4 motion rows + 4 `switch` rows); `extract_gate_sounds`
    row (`MAPS`), `gate_sound_fit.json` rows for the four clips, `autoservice.gatesounds.json`; `extract_score_monitors.MAPS`
-   row, `autoservice.monitors.json` (2 timer + 2 alive faces). (done 2026-11-11, see the record: 19 motion rows, one per moved
+   row, `autoservice.monitors.json` (2 timer + 2 alive faces). (done 2026-11-11, see the record: 19 motion rows, one per moved
    node, + 4 switch rows = 23; the equator shutter keeps the scene pose as the closed pose of its collider nodes)
 8. **NavMesh oracle and bake inputs, sidecar + descriptor in ONE commit**: `ARENA_SOURCES` row, the oracle on v1/v2 (with
    `--doors`), `bake_bounds`, `navmesh_bake_layers`, `keep_level_borders`, `opened_barriers`, `start_gates`, `uses_server_time`,
@@ -235,18 +235,18 @@ Catalog-only until item 12 (the registry promotion), which is why nothing deploy
    Iceberg item 9. (done 2026-11-11, see the record: `bake_bounds` y -5..2, not above the tribunes; oracle 1 component, 1,914.6 m2)
 9. **Identity and descriptions**: `extract_banners.BANNERS`, `extract_loadscreens.LOADSCREENS` (banner, loading screen and the
    four parallax images), `ArenaMapBanners` (+ `ArenaMapBannersTests`, `test_banners.py`), confirm the location id and add the
-   `DESCRIPTION_KEYS` / `OfficialTextMapKeys` row, drop "(spike)" from the locale name and the placeholder description. (done
+   `DESCRIPTION_KEYS` / `OfficialTextMapKeys` row, drop "(spike)" from the locale name and the placeholder description. (done
    2026-11-11, see the record: locale name 'Arena: Chop Shop'; the description loader accepts a pending map's entry)
 10. **Spatial acoustics**: `extract_spatial_audio --map arena_autoservice` (no repair rules; the plan's `sound` role), graph JSON,
     bake and room tone staged; room reverb and rain audio rows. Second opinion on the bake: SPT-SEB's MIT checker
     `check_live_acoustics.py` (routes against portal connections, buffer bounds, lost pairs; see
     [progress/spt-seb-compatibility.md](progress/spt-seb-compatibility.md)) runs against the new `.audiobakedata` as tool use (no code copied); the same
-    run on Iceberg's repaired bake is cheap and still open. (done 2026-11-11 offline, see the record: export and pins; the client
+    run on Iceberg's repaired bake is cheap and still open. (done 2026-11-11 offline, see the record: export and pins; the client
     rows move to item 12; SEB check ok for Autoservice, Iceberg's repaired bake has 510 duplicate routes in 153 pairs, open)
 11. **Light, flares and shaders offline**: MultiFlare exporter tables (`extract_multiflare.py:39-48`, tuple (21, 8, 77, 32)),
     the shader stand-in row decisions (`ShaderFallbackNames` for FogSheet and the two Cloth shaders), `MapLightingDefaults` zero
     level from the pockets' spawn floor (about y -3.72..-3.84; Iceberg's -3.7 is its own measurement, so this is a measurement,
-    not a copy), `BloomTuning` donor pair. (done 2026-11-11 offline, see the record: ZeroLevel -8.2, no emission cap, a fourth
+    not a copy), `BloomTuning` donor pair. (done 2026-11-11 offline, see the record: ZeroLevel -8.2, no emission cap, a fourth
     stand-in `p0/Reflective/Bumped Specular SMap Baked` and an Autoservice stand-in switch are item 12 rows)
 12. **Lock-step promotion into `ArenaMapRegistry.All`**, every list in one commit. First step: `git show --stat 1bd5868` (Iceberg's
     promotion, 79 files) and one row per file below or an explicit "no change needed because ...". Rows:
@@ -275,6 +275,7 @@ Catalog-only until item 12 (the registry promotion), which is why nothing deploy
       per-map tests (`AutoServiceMapTests`, acoustics and ambient tests, the bake-input and spawn tests,
       `test_spatial_audio_autoservice.py`). The gate is the full `dotnet test -c Release` and `unittest discover` run from
       PowerShell (the Bash console encoding breaks two subprocess tests).
+    - (done 2026-11-11 as `b2fd6e3`, review fixes `18e21df`; see the record.)
     - After this item no deploy of any kind goes to a host until U1 (item 13) and the first stage (item 14) are done: a full non-DllOnly
       client build stops at the first missing bundle, `deploy-to-spt.ps1` refuses a whole-dist deploy while the staged server mod has
       a `db/arena_autoservice` folder and the client plugin lacks the map's three bundles or key file, and a `-DllOnly` deploy logs
@@ -284,7 +285,7 @@ Catalog-only until item 12 (the registry promotion), which is why nothing deploy
     -OutputDir D:/ArenaMapPort/work/build/autoservice -BakeNavMesh \$true -Verify \$true -SkipGameRefsSync"`; about 13 min), then by hand
     any validator the script did not reach (`validate_bundle_blocks.py`, `validate_bundle_roundtrip.py`, `validate_preset.py`,
     `validate_map_descriptors.py`); never two Unity builds at once. Regenerated stand-in shader stubs are committed after checking
-    that they do not change a released map's build.
+    that they do not change a released map's build. (done 2026-11-11, first attempt; stubs `1f5dbe8`; see the record.)
 14. **First stage, deploy, first raid**: `dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release
     -p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_autoservice` once, without DllOnly (`ls
     work/release-keys` first; the tool prints `CREATED ... BACK UP`: copy `work/release-keys` off the VM at once), `verify-keys`
@@ -292,7 +293,8 @@ Catalog-only until item 12 (the registry promotion), which is why nothing deploy
     and then `deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm` (close EFT first; about 0.9 GiB more through Syncthing, check the
     GPU-2 free space), EFT restart, `gpu-run raid --map autoservice` without bots, log baseline (NavMesh line, spawn openings,
     warnings, shader resolution), `uibridge_teleport dryRun` from both pockets to the capture point and the yard, a raid with bots,
-    the hideout once, max frame time.
+    the hideout once, max frame time. (done 2026-11-11: key created and verified on three Arena builds, deployed, two GPU-2 raids and the
+    hideout, 0 warnings; see the record.)
 15. **Host iteration U2..Un**: gates and pockets, borders and the tribunes, props the oracle flags, rain F8, bots, cross-map raids.
 
 ### Phase C - Native features and polish

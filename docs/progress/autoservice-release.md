@@ -375,3 +375,126 @@ south-east; the faction split per pocket is a guess; the equator shutter's colli
 tribune decks (islands in the model); the area lights no exporter covers; `Factory_Building_04_Outdoor_LODLAST` (magenta
 without the new stand-in); the winter-named indoor room tone in the summer set; Iceberg's duplicate routes (released, see the
 acoustics section).
+
+## 2026-11-11 - Item 12: lock-step promotion into ArenaMapRegistry.All
+
+Commit `b2fd6e3` on `feature/autoservice` (68 files, +1,623 / -319), modelled on Iceberg's promotion `1bd5868`: one row per file of that commit and per row of plan item 12 (the checklist is in the hand-off of this item). Autoservice (`arena_autoservice`, "Chop Shop") is now the sixth map of `ArenaMapRegistry.All`, after Iceberg. It is registered and staged, NOT released and NOT deployable: the Unity bundles do not exist (U1 is item 13), no key exists (item 14), nothing is built by Unity, tagged or pushed.
+
+What changed
+- Descriptor and sidecar in one commit: `AutoService` gains `Exits` (Chop Shop East Gate / West Gate, equal to `autoservice.exits.json`), `DoorPoses` (the 23 literals from `extract_door_poses.py --csharp`: 19 clip rows of the four gates, 4 switch rows of the DOORS lamps), `ScoreMonitors` (4, scene `Arena_AutoService_DesignStuff`, type words 0/0/2/2, all active) and `ShaderFallbackNames` (`Custom/Billboard_FogSheet_Simple`, `Cloth/ClothShader`, `Cloth/ClothShader_backface`, `p0/Reflective/Bumped Specular SMap Baked`); `tools/maps/autoservice.json` gets `shader_fallback_names`. `db/arena_autoservice/base.json` was regenerated with `make_base_json.py --map tools/maps/autoservice.json` (Name 'Arena: Chop Shop', 4 player + 7 bot spawn points = 11, 5 waves, 4 PMC squads, 2 exits, BotMax 8).
+- Both csproj files: description, bundles, shader sidecar (property, Error, Copy, Message), AI sidecar, acoustics (Error condition, item, hint), gate sounds, flares (Error and item: Autoservice HAS a flare package, 8 active gas-lamp flares), key-create guard and its property, the stage Exec, and the server's base.json rows. No DynamicMaps and no water row (no overview, no sea).
+- Client rows: `AmbientAudioProfiles` (the staged row moved into `Table`, `Staged` is empty), `MapLightingDefaults` (Reserve rig, ZeroLevel -8.2, rest neutral like Bowl/Iceberg), `NativeDecalRepairs`, `NativeSpatialAudio`, `PrecipitationAudio`, `RoomReverb`, `NativeMultiFlare`, and the explicit crowdless case in `ArenaSpectators.DesignScene`; the remaining per-map files (`ReverbAudioProbe`, `SpatialAudioRepairs`, `TimeOfDayRepairs`, `WeatherTestOverride`, `HdrImageTuning`, `EquatorNightNeon`, `FixedRaidTimeSelection`, `LoadingScreenArt`, `AiAnchors`, `Bay5AmbientAudio`, `PuddleFootstepRepairs`) are descriptor- or `All`-driven and only got their map lists in comments and description texts.
+- Shader stand-ins: new developer-only key `MaterialFixes/AutoServiceShaderStandins` (default true, `ShaderStandinPolicy.AutoServiceStandinsDefault`), wired into `FallbacksActive` (optional fifth parameter) and `ShaderRebind`. Targets: fog sheet -> `Unlit/Transparent Colored` (generated soft texture, the capture is not map-gated), `Cloth/ClothShader` -> `p0/Cutout/Bumped Diffuse`, `Cloth/ClothShader_backface` -> `Legacy Shaders/Transparent/Cutout/Bumped Diffuse 2 side` (AirPit's precedent: the table row is Cull Back in all three passes, so a backface cloth would vanish from behind), `p0/Reflective/Bumped Specular SMap Baked` -> `p0/Reflective/Bumped Specular SMap`. `UsesExtendedStandins` now includes Autoservice so the cloth gets AirPit's fix (normal map slot `_NormalMap1` -> `_BumpMap`, `_Cutoff` 0: the albedo alpha carries gloss, the cutoff would discard the mesh). `IsKnownGap` and `HidesFogSheets` stay AirPit-only. Inferred, not seen: the fog sheet and cloth are expected to resolve to EFT's own loaded shader as on AirPit; the Baked shader (sharedassets216) is inferred not loaded, so its row is the live one.
+- Pipeline: `RELEASE_MAP_NAMES/KEYS`, `CROWDLESS_MAP_KEYS` (Iceberg, Autoservice), `FLARE_MAP_KEYS` (+ arena_autoservice); `PENDING_MIRROR_KEYS` is the empty tuple (mechanism kept), the `PENDING_MAPS` entry of `test_bundle_crypt_tool.py` is gone, `park-unreleased-dist.ps1` no longer parks `autoservice`. `OVERVIEW_MAP_NAMES`, `WATER_MAP_KEYS`, the deploy script's `-DynamicMapsMap` ValidateSet and the packer rules did not change (the packer is data-driven: part `autoservice`, no spectator rule). `docs/dist-manifest.md`: dated paragraph (383 files once staged, part autoservice 24, 378 in dist today).
+- Inputs: `extract_banners.py` and `extract_loadscreens.py` were run (banner + 5 loading images); the acoustics, gate sounds, flares and AI sidecar existed from Phase B and the DllOnly client build staged them.
+- Tests: the pending pins were inverted or folded into the released-set tests (descriptions: the pack entry is now mandatory by itself, the generic pending rule of `ArenaMapDescriptions.Load` is covered against a registry without Autoservice; ambient profile `Staged` empty; score-monitor/door-pose mirror; bake-input omitted-keys pin), every five-map pin became six, and `AutoServiceMapTests.cs` (8 tests) was added.
+
+How released maps were shown unchanged: every new row is keyed on `arena_autoservice` / `ArenaMapRegistry.AutoService`; `make_base_json.py` reproduces the committed base.json of Equator, Bay5, AirPit, Bowl and Iceberg byte for byte (`cmp`); `git diff` touches no other map's sidecar; `ShaderStandinPolicyTests` pin that no other map's `FallbacksActive`, `TryGetFallback`, `UsesExtendedStandins` or `FixFor` result changed (including Bay5's and AirPit's backface rows); the client's new config entries are developer-only (no key added to `CompactConfiguration.IsPublic`/`MapConfigVisibility.IsPlayerOption`; `ReleaseConfigurationTests` pins the new `Lighting (arena_autoservice)` section as hidden for players).
+
+Gates (main checkout, from PowerShell)
+- `validate_map_descriptors.py`: OK, 14 sidecars, 14 catalog entries, All membership, `EquatorDefault()`.
+- `dotnet build` Server and Client (`-c Release`, Client with `-p:ArenaMapPortDllOnly=true`): 0 warnings, 0 errors each. The DllOnly build needed no Autoservice input that only Unity produces (the shader sidecar is read by the non-DllOnly target only); no placeholder file was made.
+- `dotnet test ArenaMapPort.Server.Tests -c Release`: 3,268 of 3,268 (baseline 3,243).
+- `PYTHONUTF8=1 python -m unittest discover -s tools/tests -p "test_*.py"`: Ran 3,121 tests, OK (skipped=71) (Phase B state: 3,119 OK, 68 skipped). One CRLF working-copy artifact had to be fixed locally for it (`autoservice.monitors.json` as LF, see the hand-off).
+- `tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41'` (dry run, no `-Confirm`) REFUSES the whole-dist deploy, as intended: "[deploy-to-spt] FATAL: dist/ is incomplete for a registered map -- the server mod stages db/<map> but the client plugin lacks its files: arena_autoservice (missing bundles/arena_autoservice_scenes.bundle); arena_autoservice (missing bundles/arena_autoservice_navmesh.bundle); arena_autoservice (missing bundles/arena_autoservice_preset.bundle); arena_autoservice (missing keys/arena_autoservice.json). Finish the map's build and run a client Release build without DllOnly (or park its files) before a whole-dist deploy; nothing was copied." `make_release_zips.py --plan` likewise stops with 'incomplete dist: part autoservice lacks' the three bundles, the key file and the shader sidecar.
+
+After this item no deploy of any kind goes to a host until U1 (item 13) and the first stage (item 14); a `-DllOnly` deploy would log `Required map file is missing` and raise the incomplete-install notice (Iceberg rule 6).
+
+## 2026-11-11 - Item 12: review passes and fixes
+
+A first review pass of `b2fd6e3` (three lenses: completeness, released-map safety, data) returned no finding, but two of its three
+reviewers made only 4 and 13 tool calls, so the lead ran a second, deep pass (workflow `wf_9986c84e-e31`, 42 agents): five lenses
+(client runtime 40 files read, server and data 12, test quality 25, pipeline and deploy 24, completeness sweep 41), three skeptics per
+finding, a fixer. 12 findings, all low; 2 confirmed by at least two of three skeptics and fixed in `18e21df`:
+
+- `client-2`: AirPitFogSheetOpacity also scales AutoService's generated fog textures.
+- `sweep-2`: Usable-rows theory lists five released maps, Autoservice missing.
+
+Refuted (10): `client-1`, `tests-1`, `tests-2`, `pipeline-1`, `pipeline-2`, `sweep-1`, `sweep-3`, `sweep-4`, `sweep-5`, `sweep-6`. Among them are notes for the release step, not defects of the
+promotion: the packer's generated README prose names the maps by their registry display name ('AutoService', not 'Chop Shop'), says
+that only Iceberg has no crowd and that only Iceberg's ambient mix is provisional, and `ENCRYPTION_TEXT` names the Arena builds of the
+five older maps (`tools/release/make_release_zips.py`, lines about 678-782); `tools/build_remaining.ps1`'s synopsis still lists five
+released maps (behaviour right); `ArenaMapBanners`' class comment still says five maps. Those texts move with the release texts
+(Phase D), which are the user's.
+
+Fix commit `18e21df`: the developer key `MaterialFixes/AirPitFogSheetOpacity` also scales Autoservice's generated fog textures
+(`UsesExtendedStandins` covers both maps), so its description now names both maps (name and default unchanged; the generated fog
+texture is used only when EFT's own fog shader is not loaded, and on the first host raid it was loaded, see item 14);
+`ScoreMonitorModelTests.OnlyTheActiveRowsWithAFaceAreUsable` pins Autoservice at 4 of 4; a repository `.gitattributes` with
+`tools/maps/*.monitors.json text eol=lf` keeps those sidecars LF under `core.autocrlf=true`, which `test_score_monitors` reads as
+bytes (a fresh clone or worktree had them CRLF). Gates after the fix: `validate_map_descriptors` OK, server and client (DllOnly)
+Release builds 0 warnings, `dotnet test -c Release` 3,269 of 3,269, Python `unittest discover` 3,121 OK (71 skipped), deploy dry run
+refused as required. No bake input changed. The deep pass's host predictions that the first raid could check are answered in item 14.
+
+## 2026-11-11 - Item 13: U1 build
+
+`pwsh -Command "& 'D:/ArenaMapPort/tools/build_all.ps1' -MapKey arena_autoservice -MapDescriptor D:/ArenaMapPort/tools/maps/autoservice.json
+-PackageDir D:/ArenaMapPort/work/extract/autoservice-native-v2 -FullMap -OutputDir D:/ArenaMapPort/work/build/autoservice -BakeNavMesh $true
+-Verify $true -SkipGameRefsSync"` on `b2fd6e3`, 11:17-11:36, first attempt: `[build_all] OK -- build + mandatory identity patch + all
+validators passed`. Scenes bundle 961,635,684 B (960,078,276 before the identity patch; the plan's estimate was 0.93-0.95 GB), 10,871
+LZ4HC blocks, NavMesh bundle 61,151 B; `validate_bundle_blocks` clean for both, `validate_bundle_roundtrip` OK with one non-blocking
+warning (460 materials in the bundle against 459 package materials, Unity's default), `validate_preset` OK (5 of 5 scene keys, CAB name
+unique), `validate_map_descriptors` OK. `validate_extract.py` reports the package's known 116 warnings.
+
+Bake log: `bake inputs: bounds from the descriptor (bake_bounds), layer mask 0x60042A00 (navmesh_bake_layers), 0 navmesh_bake_exclusions,
+4 opened_barriers (4 with door poses: 19 moved subtree(s))`; the four DOORS/LIGHT switch rows `move nothing and drop nothing from the
+bake`; 30 ignoreFromBuild markups and 7 volume sources; `sources=2344` (the oracle predicted 2,346 before the modifiers it does not
+model). `navmesh_diff.py --map autoservice --descriptor tools/maps/autoservice.json --doors --points <bots> --points <exits>
+--live-core-points --compare-bundle work/build/autoservice/arena_autoservice_navmesh.bundle`: 1,150 polygons, main component 1,924.8 m2
+(Arena 1,915.6, port model 1,914.6), covering 47,564 of Arena's 47,951 samples; all 20 spawn markers, the capture point, both exits, the
+7 core points and 58 of 59 patrol points lie in the main component. The one outside is `hub2.5` at (-385.37, -3.79, 483.4), which sits
+on the edge of Arena's own mesh (border clearance 0.0) and is eroded away by the agent radius. Smaller islands: decks above the hall
+(371 m2 at y 1.7-2.35, 131 m2 at y 1.9-2.2) and a 98 m2 strip east of the east pocket (x -338..-331, z 465..501) behind the pocket wall.
+
+The generator rewrote the stand-in shader stubs from this package (21 changed, three new: `p0/Reflective/Bumped Specular SMap Baked`,
+`p0/Reflective/Bumped Color Specular SMap`, `Transparent/DepthZwriteDithered`), committed as `1f5dbe8` like Bowl's and Iceberg's (every
+build regenerates them from its own package, so a released map's rebuild is not affected).
+
+## 2026-11-11 - Item 14: first stage, keys, deploy, first raids (GPU-2)
+
+Key store before: five `.key` files, none for Autoservice. `dotnet build ArenaMapPort.Client -c Release
+-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_autoservice` on `18e21df`: `CREATED ...\work\release-keys\
+arena_autoservice.key (the content key of arena_autoservice): BACK UP the key store folder now`, then `OK stage arena_autoservice: 3 bundles
+encrypted (3 written), key file keys/arena_autoservice.json: new wrap for Arena 0.6.2.0.48473, 1 wrap(s) in the file (written), 3 files,
+3,145,728 of 464,942,688 B sampled, self-check unlocks with wrap 0`; the other five maps `3 bundles encrypted (0 written)`, key files
+unchanged. The user was asked to back the key store up off the VM at once.
+
+`verify-keys` of the Autoservice key file: OK against the VM's Arena 0.6.2.0.48473, GPU-2's 0.6.1.0.48206
+(`\\192.168.178.109\C$\Battlestate Games\Escape from Tarkov Arena`) and MASCHINE11, which now runs **0.6.2.0.48598**, a newer Arena build
+than the VM's. The five released key files (0.5.0) also unlock against 0.6.2.0.48598 (wrap 0, built for 0.6.1.0.48206): the hotfix left
+their sampled resource streams unchanged.
+
+`validate_distribution.py`: `DISTRIBUTION_OK 6 maps 18 bundles 6 sidecars encrypted`. `validate_port.py --map autoservice --distribution
+--package work/extract/autoservice-native-v2`: `PORT_VALIDATED` (479 materials, 4,270 meshes, 950 textures, 15 NavMesh tiles, 1,946
+triangles, scenes bundle 961,635,684 B, 3 verified starts, 116 warnings). Deploy dry run: 383 files, 19 new, 15 to overwrite (the
+Autoservice files, both DLLs, the six roar beds and `spectator-audio.json` of `52d0a4d`, which had not been deployed before, Autoservice's
+`base.json`, the description pack); `-Confirm` copied them. `gpu-run deploy-wait --server` (111 s to identical files, SPT server
+restarted), `gpu-run start` (62 s, 16/16 identical).
+
+Startup (12:33): server `Arena: Chop Shop is available in location selection.`, banner wired, APBS `6 Arena map key(s)`; client
+`Version 0.5.0 loaded. Maps: ... Arena: Iceberg, Arena: Chop Shop`, `[Notice] availability: arena=verified, offered=6/6`.
+
+Raid 1, PMC, no bots (12:34): `log since start: warnings 0; errors 0`, `load arena_autoservice: location 5.1 s (diff 1.3), game started
+30.6 s`. Lines: `[Bundles] stream 'arena_autoservice_scenes.bundle' (raid start): 956.1 MiB decrypted in 957 chunks ... crypto 664 ms`;
+`[NavMesh] added navmesh for 'arena_autoservice': 4246 vertices, 1946 triangles`; `[SpawnGates] gates open (navmesh installed): 23 part(s)
+registered, 2 park carver(s)`; the four lamp parts parked with `1 switch(es) in the open state, no collider to carve`; all four stand-in
+candidates `resolved to EFT's own loaded shader` (fog sheet, both cloth shaders and `SMap Baked`: nothing renders magenta, the stand-in
+switch is a safety net only); `[MultiFlare] arena_autoservice enabled: sourceLights=21 activeLights=8 flares=32`; `[NativeDecals] ...
+source=304 active=296 registered=296`; `[Monitors] arena_autoservice: 4 of 4 monitor row(s) can show a face`; `[Exfil] registered 2
+exit(s)` (`Chop Shop East Gate` and `West Gate`, 8 s, smoke lit); `[LevelSettingsOverride] map=arena_autoservice ZeroLevel=-8.20`;
+`[RoomReverb] arena_autoservice: native room controller active; 26 original parameters`; `[NativeAudio] ready players=38 started=33
+seasonalSilent=5 season=AutumnLate` (the server season is AutumnLate; five season players have no bank for it); `[IndoorSurface] ...
+elapsedMs=921`, the known one-time classification stall (the raid's `max 994 ms` frame). Spawn in the west pocket (-409.5, -3.7, 495.6).
+`uibridge_teleport dryRun` from there: capture point 42.2 m, east pocket 77-81 m, both exits and the yard points complete; from the east
+pocket marker (-337.8, 485.6): capture 44.0 m, three west markers 75-84 m, both exits. One own test point (-360, 470) lies behind border
+cube 230 (outside the play space). Performance over 10 s: 120 fps (the cap), p95 8.3 ms, max 10.0 ms. Screenshots: the west pocket with
+its roller shutter parked open, the hall at the capture point, the open equator shutter seen from the east shop.
+
+Raid 2, PMC, bots medium (12:36): `warnings 0; errors 0`, `location 3.6 s`. `zone 'BotZone_Main' authored 1 real patrol way(s) from
+ai/autoservice.ai.json (5 hub(s), 54 sub point(s))`, `authored 7 real AI core point(s)`, `BotZone.Init 'BotZone_Main': markers=7
+onNavMesh=7`, `wave fired ... side=Savage type=assault`, `ActivateBotCallback: bot='Bot1' ... registered`; the bot walked at least 27.5 m
+in 25 s on `PatrolAssault`. Spawn in the east pocket (-337.3, 502.7), so both pockets have been used. The hideout opened afterwards
+(5.9 s; four `light_CellPlafonds_holder` LODGroup warnings and one disabled audio source from EFT's own hideout scene, as on every host).
+
+Not checked yet (item 15 and the user): a hold and release (the lamp group whose RED rows go dark, the equator shutter's collider
+leading its LODs, the gate sounds), the tribune decks, rain F8, a cross-map raid, the faction split, and the listening tests.
