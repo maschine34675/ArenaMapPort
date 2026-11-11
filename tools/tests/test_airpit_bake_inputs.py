@@ -75,7 +75,7 @@ ARENA_LAYERS = [9, 11, 13, 18, 30]            # NavMeshSurface mask 0x40042A00 o
 # from 2a1e0ce (2026-10-12) to 2026-10-17, when the original north team box (z 69.16..85.16) needed its pocket meshed
 # again (the held passport gate keeps bots out of it in plain raids).
 BOUNDS = [-57, 37, -2, 8, -83, 83]
-PACKAGE = REPO / "work" / "extract" / "airpit-native-v10"   # v8 + the three SOO crates under the tarp (2026-10-17); v6/v7/v8 are archives
+PACKAGE = REPO / "work" / "extract" / "airpit-native-v10"   # v10 = v9 minus the floating level38 board (v9 = v8 + the three SOO crates under the tarp); older packages are archives
 HAVE_PACKAGE = (PACKAGE / "scenes" / "Arena_AirPit_ShootOut.json").is_file()
 ARENA_NAVMESH = Path("D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data/sharedassets33.assets")
 
@@ -1022,7 +1022,7 @@ def airpit_points():
 
 @unittest.skipUnless(pc is not None and HAVE_PACKAGE, "numpy or work/extract/airpit-native-v10 not present")
 class AirPitDoorBakePackageTests(unittest.TestCase):
-    """The rows over the real v9 package: which colliders the new bake drops, which become walls, and what the new walls stand next to."""
+    """The rows over the real v10 package: which colliders the new bake drops, which become walls, and what the new walls stand next to."""
 
     @classmethod
     def setUpClass(cls):
