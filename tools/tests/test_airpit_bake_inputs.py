@@ -16,6 +16,7 @@ which reproduce the last real bake logs for the old configuration and count what
 import copy
 import json
 import math
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -75,7 +76,8 @@ ARENA_LAYERS = [9, 11, 13, 18, 30]            # NavMeshSurface mask 0x40042A00 o
 # from 2a1e0ce (2026-10-12) to 2026-10-17, when the original north team box (z 69.16..85.16) needed its pocket meshed
 # again (the held passport gate keeps bots out of it in plain raids).
 BOUNDS = [-57, 37, -2, 8, -83, 83]
-PACKAGE = REPO / "work" / "extract" / "airpit-native-v10"   # v10 = v9 minus the floating level38 board (v9 = v8 + the three SOO crates under the tarp); older packages are archives
+WORK = Path(os.environ.get("ARENAMAPPORT_WORK_DIR", REPO / "work"))   # a git worktree has no work/: point this at the main checkout's (2026-11-12)
+PACKAGE = WORK / "extract" / "airpit-native-v10"   # v10 = v9 minus the floating level38 board (v9 = v8 + the three SOO crates under the tarp); older packages are archives
 HAVE_PACKAGE = (PACKAGE / "scenes" / "Arena_AirPit_ShootOut.json").is_file()
 ARENA_NAVMESH = Path("D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data/sharedassets33.assets")
 
@@ -138,7 +140,7 @@ class SidecarContentTests(unittest.TestCase):
         x0, x1, y0, y1, z0, z1 = self.map["bake_bounds"]
         bots, exits = sidecar("airpit.bots.json"), sidecar("airpit.exits.json")
         points = [p["position"] for p in bots["player_spawns"] + bots["bot_spawns"]] + [e["position"] for e in exits["exits"]]
-        self.assertEqual(len(points), 20)
+        self.assertEqual(len(points), 26)     # 4 Player + 20 Bot rows (6 appended on 2026-11-12) + 2 exits
         for x, y, z in points:
             self.assertTrue(x0 + 3 <= x <= x1 - 3 and z0 + 3 <= z <= z1 - 3 and y0 < y < y1, (x, y, z))
 
@@ -475,9 +477,9 @@ OLD_BAY5_BARRIERS = [                  # (3), (4) and the depot frame: the 0.2.x
 OLD_EQUATOR_BARRIERS = ["SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)"]
 AT_TOLERANCE = 0.05                    # ArenaDoorPose.AtTolerance == BakeNavMesh.DoorAtTolerance
 CLOSED_POSITION_TOLERANCE = 0.05       # ArenaDoorPose.ClosedPositionTolerance == BakeNavMesh.DoorClosedPositionTolerance
-EQUATOR_PACKAGE = REPO / "work" / "extract" / "equator-native-v5"
-BAY5_PACKAGE = REPO / "work" / "extract" / "bay5-native-v5"
-BOWL_PACKAGE = REPO / "work" / "extract" / "bowl-native-v2"
+EQUATOR_PACKAGE = WORK / "extract" / "equator-native-v5"
+BAY5_PACKAGE = WORK / "extract" / "bay5-native-v5"
+BOWL_PACKAGE = WORK / "extract" / "bowl-native-v2"
 
 
 def door_rows(stem):
@@ -1103,8 +1105,11 @@ class AirPitDoorBakePackageTests(unittest.TestCase):
             self.assertTrue(2 * AGENT_RADIUS + 0.5 <= gap <= 1.4, (name, gap))
 
     def test_no_spawn_exit_or_ai_point_stands_in_or_beside_a_back_row_door(self):
-        # 105 points (spawns, exit boxes, AI core and patrol points, the 20 team-box markers): the nearest is the south player spawn at
-        # 3.3 m. The distance is to each collider's axis-aligned box in xz, a lower bound of the distance to its triangles.
+        # 111 points (spawns, exit boxes, AI core and patrol points, the 20 team-box markers): the nearest is the south player spawn at
+        # 3.3 m. 2026-11-12 (rule R3, tools/maps/airpit.exits.json): the south exit box now stands in front of the bus doors, 1.0 m from the CLOSED
+        # leaves, but those leave the bake as moved parts; the kept door colliders this test measures are at least 4.0 m from every point of the
+        # exit boxes (centre and corners), so the 3 m rule needs no exemption for them. The distance is to each collider's axis-aligned box in xz,
+        # a lower bound of the distance to its triangles.
         new = self.new
         boxes = []
         for o in new.cset.owners:
@@ -1113,7 +1118,7 @@ class AirPitDoorBakePackageTests(unittest.TestCase):
                 boxes.append((t.min(0), t.max(0)))
         self.assertEqual(len(boxes), 30)
         points = airpit_points()
-        self.assertEqual(len(points), 105)
+        self.assertEqual(len(points), 111)
         nearest = []
         for label, (x, y, z) in points:
             squares = [max(lo[0] - x, 0.0, x - hi[0]) ** 2 + max(lo[2] - z, 0.0, z - hi[2]) ** 2
@@ -1121,7 +1126,6 @@ class AirPitDoorBakePackageTests(unittest.TestCase):
             nearest.append((math.sqrt(min(squares)) if squares else math.inf, label))
         nearest.sort()
         self.assertGreater(nearest[0][0], 3.0, nearest[:3])
-
 
 if __name__ == "__main__":
     unittest.main()
