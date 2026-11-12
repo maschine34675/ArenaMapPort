@@ -503,3 +503,14 @@ equal, `gpu-run restart`: `16/16 identical`.
 - Shadow quality medium and high, and the evening hours, were not looked at; the model has nothing of size left for the cafe at any tested hour.
 - The remaining candidates of the tool (hallway, library, shower room: at most 6.9 m2 at 09:00) and the tunnel box stay unlisted.
 - Released 0.5.0 carries the leak for players below Ultra; the fix ships with the next client build.
+
+### Merged and rebuilt in the main checkout (2026-11-12, 21:05 to 21:15)
+
+User: "Yes, merge and build". `feature/autoservice` was fast-forwarded from `8dcb6c9` to `d966804` (main checkout clean before and after). The
+regular `dotnet build ArenaMapPort.Client -c Release -p:ArenaMapPortDllOnly=true` there: 0 warnings, 0 errors,
+`SHARED_SPECTATOR_PACKAGE_OK 135 unique textures, 5 maps`; the client DLL in `dist/` is SHA-256 `38ed72f5...` (the worktree compile of the same
+source was `e64f32fd...`; this replaces the build note above: `dist/` and the host now hold the same file). Deployed with `-DllOnly -DllTarget
+Client` (dry run, then `-Confirm`), host hash equal, `gpu-run restart`: `16/16 identical`. Iceberg 21:10:28 (15:30, clear, no bots): the three
+`registered` lines, list 1574, `shadowDistance` 80.0 (shadow quality 3), `warnings 0; errors 0`; the hideout opened in 4.2 s; no Warning from
+ArenaMapPort. Equator and Chop Shop were not run again on this rebuild (same source as the build checked above). The server DLL was not
+rebuilt: nothing on the server reads the rows. Nothing is pushed.
