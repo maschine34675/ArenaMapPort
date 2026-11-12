@@ -109,7 +109,8 @@ CAPTURE_POINTS = {"A": (16.77, 3.90, -91.39), "B": (10.614, 2.69, -77.727), "C":
 # The exits of tools/maps/iceberg.exits.json, read from the sidecar (the 2026-10-30 candidates, (72.0, 1.95, -94.0) and (-30.5, 2.92, -85.0) outside
 # the gates, were superseded on 2026-11-12 by in-pocket boxes, rule R3: a later nudge of an exit touches only the sidecar and the descriptor).
 _EXITS = json.loads((REPO / "tools" / "maps" / "iceberg.exits.json").read_text(encoding="utf-8"))["exits"]
-EXIT_CANDIDATES = {"east": tuple(_EXITS[0]["position"]), "west": tuple(_EXITS[1]["position"])}
+EXIT_CANDIDATES = {"east": tuple(next(e for e in _EXITS if e["name"] == "Iceberg East Gate")["position"]),
+                   "west": tuple(next(e for e in _EXITS if e["name"] == "Iceberg West Gate")["position"])}  # by name, not list order
 
 
 def sidecar(name="iceberg.json"):

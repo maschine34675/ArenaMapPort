@@ -93,7 +93,7 @@ MIN_BOT_CLEARANCE = 1.35           # core 10 keeps 1.38 m, core 7 1.46 m; core 6
 EXIT_HALF_EDGE = 2.0               # the exit box is 4 x 3 x 4 m, rotation 0
 MIN_EXIT_PLAYER_EDGE = 2.5         # rule R3: every Player row keeps 2.5 m to the box EDGE (the Equator booth precedent), 2.70 m is the tightest
 MIN_EXIT_BOT_DISTANCE = 10.0       # no Bot row spawns in or beside an exit (17.9 m is the nearest, west exit to core-01)
-MIN_EXIT_LEAF_GAP = 0.5            # the box clears a gate leaf's centre by 0.5 m in plan; the west box is 0.75 m from the closed leaves' plane
+MIN_EXIT_LEAF_GAP = 0.5            # the box clears a gate leaf's centre (not its swept footprint) by 0.5 m in plan; the west box is 0.75 m from the closed leaves' plane
 # which team pocket (initial spawn bound of iceberg.modes.json) each exit belongs to: rule R3, one exit per team pocket
 EXIT_POCKETS = {"Iceberg East Gate": "SPAWN_BOUND_FIGHTER", "Iceberg West Gate": "SPAWN_BOUND_DEFENCE"}
 
@@ -341,7 +341,8 @@ class IcebergSidecarTests(SidecarData, unittest.TestCase):
             for bot in self.bot_points:
                 self.assertGreaterEqual(math.dist(xz(exit_point["position"]), xz(bot["position"])), MIN_EXIT_BOT_DISTANCE, bot["id"])
             # successor of "the box is within 3 m of no gate leaf" (the box now lies behind the gates, the west one 0.75 m from the leaves'
-            # plane): the box keeps a gap to every leaf centre, so a closed leaf never stands inside the trigger
+            # plane): the box keeps a gap to every leaf CENTRE in plan (not the swept footprint, 0.61 m for the west box); the gates slide along z,
+            # so what matters is the x gap to the leaf plane (x -36.04 west, 82.38 east), which stays outside the trigger
             for leaf in GATE_LEAVES.values():
                 gap = math.hypot(max(abs(leaf[0] - ex) - EXIT_HALF_EDGE, 0.0), max(abs(leaf[2] - ez) - EXIT_HALF_EDGE, 0.0))
                 self.assertGreaterEqual(gap, MIN_EXIT_LEAF_GAP, f"the box of {exit_point['name']} touches a gate leaf")
