@@ -82,8 +82,13 @@ DONOR_ROW = ("arena_autoservice-bot-core-03", [-367.44, -3.79, 492.11])
 APPENDED_GATE_DISTANCE = 2.5
 APPENDED_BOUND_DISTANCE = 1.5
 APPENDED_PLAYER_DISTANCE = 5.0
-# Candidates that are not rows, and why (the rule is in autoservice.bots.json's comment): core 6 and the born points beside a pocket
-# marker or a gate are skipped by the 10 m rule; born point 1 duplicates born point 0 (1.8 m); born points 7 and 8 have no spot with
+APPENDED_MARKER_DISTANCE = 7.0         # to a pocket marker (the decided rows measure 8.0 m at the least; the original rule was 10 m)
+# R1, the literal point of this pin: the seven original rows as they stood at e4b1d04, byte for byte (id, position, radius, categories)
+ORIGINAL_ROWS = [("core-01", [-372.74, -3.79, 503.03]), ("core-02", [-368.43, -3.79, 501.75]), ("core-03", [-367.44, -3.79, 492.11]),
+                 ("core-04", [-385.94, -3.79, 493.88]), ("core-05", [-384.98, -3.79, 476.7]), ("core-07", [-354.41, -3.79, 499.38]),
+                 ("born-00", [-383.73, -3.79, 507.89])]
+# Candidates the ORIGINAL 10 m rule skipped, and why (the rule is in autoservice.bots.json's comment; core 6 is used by an appended row under R5):
+# core 6 and the born points beside a pocket marker or a gate are skipped by the 10 m rule; born point 1 duplicates born point 0 (1.8 m); born points 7 and 8 have no spot with
 # 1.5 m of clearance within 3.5 m.
 SKIPPED_CORE_POINTS = (6,)
 SKIPPED_BORN_POINTS = (2, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16)
@@ -107,7 +112,7 @@ MIN_EXIT_ROW_EDGE = 2.5            # R3: metres between an exit box edge and any
 MIN_EXIT_GATE_EDGE = 1.4           # R3: metres between the box edge and a gate's swept footprint (was 2.5 until 2026-11-12: the east box lies beside the big gate)
 MIN_EXIT_ARENA_CLEARANCE = 1.9     # border clearance of an exit centre in Arena's mesh (west 1.99 m, east 3.20 m)
 EXIT_HALF_WIDTH = 2.0              # boxes are 4 x 3 x 4 m with rotation 0
-MIN_EXIT_FLOOR_SHARE = 0.9         # share of a 0.5 m lattice under the box that has NavMesh (west: 79 of 81, the narrow warehouse)
+MIN_EXIT_FLOOR_SHARE = 0.95        # share of a 0.5 m lattice under the box that has NavMesh (measured: east 100 %, west 79 of 81 = 97.5 %, the narrow warehouse)
 # Mine points that lie off Arena's mesh (AMinePlace_15 and AMinePlace_44; the plan expected only _15)
 OFF_MESH_MINES = ("AMinePlace_15", "AMinePlace_44")
 
@@ -186,6 +191,11 @@ class AutoserviceSidecarTests(SidecarData, unittest.TestCase):
         self.assertFalse([i for i in ids if "tdm-v1" in i])          # ArenaMode's own ids are never reused
         donor = next(p for p in self.bot_points if p["id"] == DONOR_ROW[0])
         self.assertEqual(donor["position"], DONOR_ROW[1])
+
+    def test_the_seven_original_rows_are_unchanged(self):
+        """R1: existing rows never move (ArenaMode pins six donor rows by id and exact floats, one of them here). The point of this test is the literal."""
+        self.assertEqual(self.original_rows,
+                         [{"id": f"arena_autoservice-bot-{s}", "position": pos, "radius": 25, "categories": ["Bot", "BotPmc"]} for s, pos in ORIGINAL_ROWS])
 
     def test_schema_matches_the_released_maps(self):
         equator = load("equator.bots.json")
@@ -363,7 +373,7 @@ class AutoserviceSidecarTests(SidecarData, unittest.TestCase):
             position = row["position"]
             with self.subTest(row=row["id"]):
                 self.assertGreaterEqual(nearest_gate(position), APPENDED_GATE_DISTANCE)
-                self.assertGreaterEqual(min(math.dist(xz(position), xz(m)) for m in pocket), APPENDED_GATE_DISTANCE)
+                self.assertGreaterEqual(min(math.dist(xz(position), xz(m)) for m in pocket), APPENDED_MARKER_DISTANCE)
                 for player in self.players:
                     self.assertGreaterEqual(math.dist(position, player["position"]), APPENDED_PLAYER_DISTANCE, player["id"])
 
@@ -501,9 +511,9 @@ class AutoserviceArenaMeshTests(SidecarData, unittest.TestCase):
         rows += [(p["id"], p["position"], MIN_BOT_CLEARANCE, 0.05) for p in self.original_rows]
         rows += [(p["id"], p["position"], MIN_APPENDED_ARENA_CLEARANCE, 0.05) for p in self.appended_rows]      # R5: 1.32 m is the least
         # R3: the exit boxes stand in the pockets, where Arena's mesh leaves less room than in the yard (west: 1.99 m at the centre, the box is not
-        # clear of the border); the floor under the whole box is checked on the built mesh (AutoserviceBuiltMeshTests). The east centre is the
-        # built mesh's surface (-3.60), 0.19 m above Arena's, so its dy bar is 0.25.
-        rows += [(e["name"], e["position"], MIN_EXIT_ARENA_CLEARANCE, 0.25) for e in self.exits["exits"]]
+        # clear of the border); the floor under the whole box is checked on the built mesh (AutoserviceBuiltMeshTests). The east centre y is the
+        # built mesh's interpolated surface (-3.60), 0.19 m above Arena's (-3.79), so only the east exit has the dy bar 0.25; the west one keeps 0.05.
+        rows += [(e["name"], e["position"], MIN_EXIT_ARENA_CLEARANCE, 0.25 if "East" in e["name"] else 0.05) for e in self.exits["exits"]]
         for (name, position, need, dy), (label, sy, clearance) in zip(rows, self.locate([r[1] for r in rows])):
             self.assertEqual(label, 0, f"{name} is not on Arena's main component")
             self.assertLessEqual(abs(sy - position[1]), dy, f"{name} is {sy - position[1]:+.2f} m off Arena's surface")

@@ -883,8 +883,13 @@ class OracleTests(unittest.TestCase):
         # reach each other; the lengths were 35.2 / 26.8 / 62.8 m for the 2026-11-11 yard drafts and 7.6 / 16.2 / 82.2 m for the 2026-11-12 positions.
         exit_routes = {k: with_cubes.pop(k) for k in ("Usec_house_(1)>exit_east", "Usec_house_(5)>exit_west", "exit_east>exit_west")}
         self.assertTrue(all(v is not None for v in exit_routes.values()), exit_routes)
-        self.assertLess(exit_routes["Usec_house_(1)>exit_east"], 30.0)
-        self.assertLess(exit_routes["Usec_house_(5)>exit_west"], 30.0)
+        # a route may not detour: the lattice length is Manhattan-like (up to 1.42 x the straight line), so the bar is 1.5 x the straight line + 10 m
+        # (measured 7.6 / 16.2 / 82.2 m against straight lines of 5 / 12 / 66 m); a border cube that lengthened a route past that would fail here
+        points = {p["name"]: p["position"] for p in oracle_points()}
+        for route, length in exit_routes.items():
+            a, b = route.split(">")
+            straight = math.dist(points[a], points[b])
+            self.assertLessEqual(length, 1.5 * straight + 10.0, f"{route}: {length} m for a straight line of {straight:.1f} m")
         self.assertEqual(with_cubes, {
             "Usec_house_(1)>Usec_house_(5)": 106.0, "Usec_house_(1)>capture": 59.2, "Usec_house_(5)>capture": 56.4,
             "Usec_house_(16)>Usec_house_(8)": 33.2, "Usec_house_(13)>Usec_house_(12)": 26.4})

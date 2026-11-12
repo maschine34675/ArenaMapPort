@@ -156,6 +156,23 @@ public sealed class AutoServiceMapTests
         Assert.DoesNotContain(botSpawns, b => b.GetProperty("id").GetString()!.Contains("tdm-v1"));
         var donor = botSpawns.Single(b => b.GetProperty("id").GetString() == "arena_autoservice-bot-core-03");
         Assert.Equal(new[] { -367.44f, -3.79f, 492.11f }, Floats(donor.GetProperty("position")));
+        // R1, the literal point of this pin: the seven original rows as they stood at e4b1d04 (id, position, radius, categories), first in file and base.json order
+        var original = new (string Suffix, float[] Position)[]
+        {
+            ("core-01", new[] { -372.74f, -3.79f, 503.03f }), ("core-02", new[] { -368.43f, -3.79f, 501.75f }),
+            ("core-03", new[] { -367.44f, -3.79f, 492.11f }), ("core-04", new[] { -385.94f, -3.79f, 493.88f }),
+            ("core-05", new[] { -384.98f, -3.79f, 476.7f }), ("core-07", new[] { -354.41f, -3.79f, 499.38f }),
+            ("born-00", new[] { -383.73f, -3.79f, 507.89f }),
+        };
+        for (var i = 0; i < original.Length; i++)
+        {
+            Assert.Equal("arena_autoservice-bot-" + original[i].Suffix, botSpawns[i].GetProperty("id").GetString());
+            Assert.Equal(original[i].Position, Floats(botSpawns[i].GetProperty("position")));
+            Assert.Equal(25, botSpawns[i].GetProperty("radius").GetInt32());
+            Assert.Equal(new[] { "Bot", "BotPmc" }, botSpawns[i].GetProperty("categories").EnumerateArray().Select(c => c.GetString()));
+            var point = shipped.Single(p => p.GetProperty("Id").GetString() == botSpawns[i].GetProperty("id").GetString());
+            Assert.Equal(original[i].Position, PositionOf(point));
+        }
         Assert.Equal(players.Length + botSpawns.Length, shipped.Length);
         Assert.Equal(shipped.Length, shipped.Select(p => p.GetProperty("Id").GetString()).Distinct().Count());
 
