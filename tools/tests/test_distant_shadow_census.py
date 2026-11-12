@@ -5,8 +5,9 @@ Groups:
   * synthetic packages (always run): the LOD pick rule, the filters, the sidecar enrolment and the coverage test on quads;
   * the sun and cascade model against the GPU-2 readings of 2026-11-12;
   * the accepted packages (skipped when work/extract is absent; override the folder with ARENAMAPPORT_WORK_DIR): Iceberg's
-    list equals the host's 1,571 records and its interior proxies are covered at midday, Chop Shop and Equator are clean
-    WITH their sidecar rows and show the known defects without them.
+    list equals the host's count without its sidecar rows (1,571) and with them (1,574), its interior proxies are covered at
+    midday and the three cafe rows close the morning stripes; Chop Shop and Equator are clean WITH their sidecar rows and
+    show the known defects without them.
 """
 import contextlib
 import io
@@ -327,19 +328,30 @@ def worst(rows, cast="ShadowsOnly"):
 
 @unittest.skipUnless(ICEBERG.is_dir(), "work/extract/iceberg-native-v2 is not available (set ARENAMAPPORT_WORK_DIR)")
 class IcebergTests(unittest.TestCase):
+    CAFE = ("Sanatorium_Cafe_second_floor_SHADOW_LOD0", "Sanatorium_Cafe_ground_floor_SHADOW_LOD0",
+            "Sanatorium_Cafe_constructions_SHADOW_LOD0")
+
     @classmethod
     def setUpClass(cls):
+        cls.bare = ds.census(ICEBERG)                                       # the released 0.5.0 state: no row
         cls.result = ds.census(ICEBERG, sidecar_paths("iceberg"))
+        cls.bare_cover = ds.Coverage(cls.bare, min_edge=3.0)
         cls.cover = ds.Coverage(cls.result, min_edge=3.0)
 
     def test_the_list_equals_the_host_count(self):
-        # DistantShadow._renderList.Count on GPU-2, 2026-11-12, three raids: 1571
-        self.assertEqual(self.result.draw_records, 1571)
-        self.assertEqual(len(self.result.native), 1485)
-        self.assertEqual(sidecar_paths("iceberg"), [])
+        # DistantShadow._renderList.Count on GPU-2, 2026-11-12: 1571 on the build without rows and with the live key off,
+        # 1574 with the three cafe rows enrolled
+        self.assertEqual(self.bare.draw_records, 1571)
+        self.assertEqual(len(self.bare.native), 1485)
+        self.assertEqual(self.result.draw_records, 1574)
+        self.assertEqual(len(self.result.native), 1488)
+        self.assertEqual(self.result.skipped_paths, [])
+        self.assertEqual(sorted(r["name"] for r in self.result.native if r.get("enrolled")), sorted(self.CAFE))
+        self.assertEqual({r["sides"] for r in self.result.native if r.get("enrolled")}, {"front"})
 
     def test_the_candidates(self):
-        free = self.result.unreferenced
+        self.assertEqual(len(self.result.unreferenced), 56)
+        free = self.bare.unreferenced
         self.assertEqual(len(free), 59)
         self.assertEqual({r["cast"] for r in free}, {"ShadowsOnly"})
         self.assertEqual(sum(1 for r in free if r["size"].max() >= 3.0), 28)
@@ -349,7 +361,7 @@ class IcebergTests(unittest.TestCase):
             "Sanatorium_Cafe_ground_floor_SHADOW_LOD0", "Sanatorium_Cafe_constructions_SHADOW_LOD0"])
 
     def test_the_roof_and_the_facades_are_listed(self):
-        listed = {r["name"]: r for r in self.result.native}
+        listed = {r["name"]: r for r in self.bare.native}
         roof = listed["sanatorium_roof_SHADOW_LOD0"]
         self.assertGreater(roof["size"][0], 98.0)
         self.assertGreater(roof["size"][2], 99.0)
@@ -360,20 +372,26 @@ class IcebergTests(unittest.TestCase):
     def test_midday_sun_is_kept_out_by_the_listed_casters(self):
         for hour in (12.0, 15.5, 17.0):
             with self.subTest(hour=hour):
-                rows = [r for r in self.cover.at(ds.sun_direction(hour)) if r["record"]["path"].startswith("SBG_Arena_Sanatorium_Main/")]
+                rows = [r for r in self.bare_cover.at(ds.sun_direction(hour)) if r["record"]["path"].startswith("SBG_Arena_Sanatorium_Main/")]
                 self.assertEqual(len(rows), 24)                             # the building's proxies; the rest are lamps and the tunnel box
                 self.assertLess(worst(rows)["uncovered_m2"], 6.0)
                 self.assertLess(sum(r["uncovered_m2"] for r in rows), 20.0)
 
-    def test_the_open_morning_stripes_are_the_recorded_ones(self):
-        # 2026-11-12: low sun through the east glazing meets the cafe shells first. Not visible on GPU-2 (shadow quality 80 m);
-        # unchecked for shorter cascades. Enrolling the cafe proxies would move this pin to zero.
-        rows = {r["record"]["name"]: r["uncovered_m2"] for r in self.cover.at(ds.sun_direction(9.0))}
-        self.assertTrue(25.0 < rows["Sanatorium_Cafe_second_floor_SHADOW_LOD0"] < 36.0, rows)
-        self.assertTrue(6.0 < rows["Sanatorium_Cafe_ground_floor_SHADOW_LOD0"] < 13.0, rows)
-        self.assertTrue(80.0 < rows["STENCIL_TUNNEL"] < 105.0, rows)       # under the east terrace, outside the play space
-        building = {n: a for n, a in rows.items() if n != "STENCIL_TUNNEL" and "Cafe" not in n}
-        self.assertLess(max(building.values()), 8.0)
+    def test_the_cafe_rows_close_the_morning_stripes(self):
+        # 2026-11-12: low sun through the east glazing meets the cafe shells first. GPU-2 at shadow quality Low (22 m cascade
+        # outdoors at 08:00) shows the lobby behind the ground-floor door sun-lit without the rows and dark with them.
+        bare = {r["record"]["name"]: r["uncovered_m2"] for r in self.bare_cover.at(ds.sun_direction(9.0))}
+        self.assertTrue(25.0 < bare["Sanatorium_Cafe_second_floor_SHADOW_LOD0"] < 36.0, bare)
+        self.assertTrue(6.0 < bare["Sanatorium_Cafe_ground_floor_SHADOW_LOD0"] < 13.0, bare)
+        for hour in (8.0, 9.0, 10.0):
+            with self.subTest(hour=hour):
+                rows = {r["record"]["name"]: r["uncovered_m2"] for r in self.cover.at(ds.sun_direction(hour))}
+                for name in self.CAFE:
+                    self.assertNotIn(name, rows)                            # listed now, no candidates any more
+                self.assertTrue(35.0 < rows["STENCIL_TUNNEL"] < 125.0, rows)   # under the east terrace, outside the play space
+                building = {n: a for n, a in rows.items() if n != "STENCIL_TUNNEL"}
+                self.assertLess(max(building.values()), 8.0)
+                self.assertLess(sum(building.values()), 16.0)
 
 
 @unittest.skipUnless(AUTOSERVICE.is_dir(), "work/extract/autoservice-native-v2 is not available (set ARENAMAPPORT_WORK_DIR)")

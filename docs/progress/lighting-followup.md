@@ -271,6 +271,9 @@ Python gate on `e5fe721` (PowerShell, `PYTHONUTF8=1`): `python -m unittest disco
 
 ## 2026-11-12 (evening) - Iceberg: the interior shadow proxies outside any LODGroup (no patch on GPU-2, nothing changed)
 
+*Followed the same night by a check at shadow quality Low, which found the morning leak and enrolled three cafe rows: see the next
+section. What this section says holds for GPU-2's own setting (Ultra, 80 m).*
+
 Follow-up of the census note above: Iceberg (`arena_iceberg`, package `work/extract/iceberg-native-v2`, released in 0.5.0) has storey-sized
 ShadowsOnly proxies that no LODGroup references. Question: can the sun reach the interior through them beyond the cascades, and is a patch
 visible on GPU-2? **Result: no patch is visible on GPU-2, and Iceberg's descriptor, client and bundles are unchanged** (`DistantShadowCasterPaths`
@@ -419,3 +422,84 @@ Python gate (git worktree, `PYTHONUTF8=1`, `ARENAMAPPORT_WORK_DIR` and the extra
 `test_score_monitors.SidecarTests.test_the_sidecar_text_is_what_the_cli_writes` on CRLF working copies of the five older monitors sidecars,
 which this checkout had written before the `.gitattributes` rule arrived by fast-forward. After a fresh checkout of those five files the
 module passes (`test_score_monitors` and `test_distant_shadow_census` together: 112 tests OK). .NET tests not run: no C# file changed.
+
+## 2026-11-12 (night) - Iceberg at shadow quality Low: the morning sun reaches the lobby; three cafe rows enrolled
+
+User (2026-11-12, to the open point of the section above): "Yes, check at Low". **Result: the modelled leak is real with a short cascade, and
+the three cafe rows close it.** Iceberg now lists three `DistantShadowCasterPaths` (Arena's one-sided material, `DistantShadowTwoSided` false);
+client DLL only, no bundle, server or NavMesh change. At GPU-2's own shadow quality (Ultra) nothing is visible either way, as recorded above.
+
+### Setting and calibration (GPU-2, EFT's graphics settings, Shadows quality ultra to low and back)
+
+Low reads `Graphics.Settings.ShadowDistance` 30.0 (`ShadowsQuality` 0); in the raid `QualitySettings.shadowDistance` is 30.0 for an Indoor player
+and 22.0 for an Outdoor player at 08:00 (30 x 0.733). The in-raid settings screen shows the dropdown disabled: the quality is a main-menu setting.
+After the tests it was set back to ultra (`ShadowsQuality` 3, `ShadowDistance` 80.0 read back, and 80.0 in the next raid).
+
+Where the cascades hand over at a nominal 30 m: Chop Shop, raid 20:09:33, clock 15:30, `RoofDistantShadows` false (20:09:56,
+`removed owned LOD groups=2`; set back to true at 20:11:36), looking at the east wall with yaw 70, pitch -6. From (-382.5, 1.9, 469.5), 38 m
+from the wall: the whole wall and both banners are sun-lit (14). From (-372, 1.9, 469.5), 28 m: the left half is lit, the part ahead is dark
+(15). From (-364.3, 2.0, 469.5), 20 m: dark, only the wall lamp (16). So the hand-over lies at roughly 25 to 30 m for a nominal 30 m.
+
+### Before: the released state at Low (client `8dcb6c9`, no row)
+
+- Raid 20:04:40, 08:00 and 09:00, inside the cafe from (-4, 3.2, -72), yaw 90 and yaw 55 (17 to 20, Indoor 30.0): the two hours differ only in
+  small patches of the far floor (under 5 % of the pixels by more than 25 levels, the weapon included); no stripe pattern to point at.
+- Raid 20:12:31, 08:00, plaza (78, 1.9, -92), yaw 286.1 (21, Outdoor 22.0): behind the ground-floor door the lobby is sun-lit (the steps and the
+  shutter can be seen), where the Ultra picture of the same view (04) is dark (crop 31).
+
+### Test build with the three rows, live key as control (client `a74b667e...`, raid 20:18:56, shadow quality Low)
+
+`[RoofShadow] registered '.../SOO_LOD0/CAFE/Sanatorium_Cafe_second_floor/Sanatorium_Cafe_second_floor_SHADOW_LOD0' mesh=74ab2e6c1b7479d6
+shader=shadow bounds=(20.93, 9.57, -73.17)/(42.67, 4.82, 19.46)`, the ground-floor line (`mesh=993f904c864d7fff`, bounds (10.39, 4.32,
+-71.27)/(33.58, 4.72, 23.27)) and the constructions line (`mesh=3fb32536f00b2079`, bounds (9.88, 6.05, -74.30)/(31.37, 0.42, 13.78));
+`DistantShadow._renderList.Count` **1574**, the number `distant_shadow_census.py` gives for the sidecar with the rows (1,488 renderers).
+
+- 08:00, plaza (78, 1.9, -92), yaw 286.1, Outdoor 22.0, key on (22), off (23), on again (24). Off: 20:20:46 `[RoofShadow] disabled; removed
+  owned LOD groups=3`, list 1571; on: 20:22:23 `[DistantShadowCache] map=arena_iceberg original roof proxies registered: invalidated=1`. Over the
+  pixels that agree between the two on-pictures (the trees move), the key-off picture is brighter by 24, 26, 24 and 16 levels (8-bit luminance,
+  20-pixel blocks) in a strip of the first-floor room and by 10 to 32 behind the ground-floor door; the other stable blocks differ by 8 or
+  less, most by 0 to 3 (crop 30).
+- 09:00, same place, key off (25, set 20:25:10) and on (26, set 20:27:11): the area behind the ground-floor doors has a mean luminance of 94.2
+  with the key off and 81.7 with it on (31 % of its pixels more than 12 levels brighter), against +4.5, -3.5 and -4.1 for the plaza, the facade
+  wall and the sky as controls. The crop (29) shows it plainly: with the key off the shutter and the carton behind the left door leaf stand in
+  sunlight, with it on they are dark, as at Ultra.
+- 08:00, inside the cafe from (-4, 3.2, -72), yaw 90, Indoor 30.0, key on (27) and off (28): no difference (block means 0.0 +- 0.2 outside the
+  knife). From the cafe's west end the modelled zones are either inside the cascades or hidden; the effect is seen from the east plaza.
+
+So: measured, the lobby behind the glazing is sun-lit beyond a short cascade without the rows and dark with them, at both hours, switching with
+the key. Inferred: that the first-floor strip at 08:00 is the same mechanism (it switches with the key at 08:00; at 09:00 the first-floor
+glazing shows no clear difference, mean -1.6). Not checked: shadow quality medium and high (40 and 60 m), and the evening.
+
+### Final build and regression (client `e64f32fd...`, comment-only against the test build; shadow quality ultra)
+
+`tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -DllOnly -DllTarget Client` (dry run, then `-Confirm`: `1 verified DLLs updated`), host file hash
+equal, `gpu-run restart`: `16/16 identical`.
+
+- Iceberg 20:36:01 (15:30, clear, no bots): the three `registered` lines, list 1574, `shadowDistance` 80.0, `warnings 0; errors 0`; cafe from
+  (20, 3.2, -72), yaw 270: lamp-lit as before (32).
+- Equator 20:37:22: three `registered ... equator_floor_0N_SHADOW_LOD0 ... shader=shadow_2sided` lines with the bounds of before, `warnings 0
+  from mods, 4 Unity Log`; at its unload `[RoofShadow] released material clones=3; remaining=0`.
+- Chop Shop 20:38:20: the OUTDOOR and INDOOR `registered` lines, `warnings 0; errors 0`.
+- Hideout: opened in 5.2 s. No Warning from ArenaMapPort in the session; the three `RoofDistantShadows` keys read true.
+
+### What changed
+
+- `ArenaMapPort.Shared/ArenaMapDescriptor.cs` (Iceberg `DistantShadowCasterPaths`, three rows) and `tools/maps/iceberg.json`
+  (`distant_shadow_caster_paths`), mirrored; `RoofShadowRepairs.cs` class comment (Iceberg, the cascade rule). The repair itself is unchanged: it
+  binds `Lighting (arena_iceberg)/RoofDistantShadows` (default true, developer-only) because the map now lists rows.
+- Tests: `DistantShadowCasterTests` (10: Iceberg's rows and one-sided material, its sidecar mirror, a real-data test on the Iceberg package, the
+  shared enrolment check), `Bay5MapTests.DistantCeilingCastersMatchSidecar` allows Iceberg; `test_distant_shadow_census.py` pins 1,571 records
+  without and 1,574 with the rows, 56 remaining candidates, and that at 08:00, 09:00 and 10:00 no cafe proxy is a candidate any more and no other
+  building proxy has 8 m2 or more uncovered.
+- Gates: `validate_map_descriptors.py` OK (14 descriptors); .NET 3,297 of 3,297, 0 skipped (work folder overrides set); client compile 0
+  warnings; Python suite 3,146 tests OK (127 skipped; work folder overrides set, 865 s).
+- Build note: this worktree has no `work/`, so a `-p:ArenaMapPortDllOnly=true` build stops at its staging inputs. The DLL was compiled with
+  `dotnet build ArenaMapPort.Client -c Release -t:Compile` and copied from `obj/Release` into the worktree's `dist/`, from where the deploy script
+  took it. The main checkout's `dist/` still holds the `8dcb6c9` DLL: after this branch is merged, an ordinary DllOnly build there brings it in
+  line (a deploy from it before that would put the old DLL back on the host).
+
+### Open
+
+- Shadow quality medium and high, and the evening hours, were not looked at; the model has nothing of size left for the cafe at any tested hour.
+- The remaining candidates of the tool (hallway, library, shower room: at most 6.9 m2 at 09:00) and the tunnel box stay unlisted.
+- Released 0.5.0 carries the leak for players below Ultra; the fix ships with the next client build.

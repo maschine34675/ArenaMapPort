@@ -7,12 +7,21 @@ namespace ArenaMapPort.Server.Tests;
 /// <summary>
 /// Distant sun shadow enrolment (RoofShadowRepairs, docs/progress/lighting-followup.md "2026-11-12"): EFT's DistantShadow draws only renderers that
 /// a LODGroup references, so a shadow-only proxy outside any group has to be enrolled. The descriptor rows are the one list (Equator: three ceiling
-/// proxies, two-sided material; Chop Shop: the two hall hulls, Arena's own material). The real-data test reads the ignored extracted package and
-/// skips when it is absent; the source pins keep the repair descriptor-driven, developer-only and free of scene-wide searches in periodic code.
+/// proxies, two-sided material; Chop Shop: the two hall hulls, Arena's own material; Iceberg: the cafe's three storey shells, Arena's own
+/// material, which stop low morning sun behind the east glazing). The real-data tests read the ignored extracted packages and
+/// skip when they are absent; the source pins keep the repair descriptor-driven, developer-only and free of scene-wide searches in periodic code.
 /// </summary>
 public sealed class DistantShadowCasterTests
 {
     private const string AutoServicePackageScene = "work/extract/autoservice-native-v2/scenes/Arena_AutoService.json";
+    private const string IcebergPackageScene = "work/extract/iceberg-native-v2/scenes/Arena_Sanatorium.json";
+
+    private static readonly string[] CafePaths =
+    {
+        "SBG_Arena_Sanatorium_Main/SOO_LOD0/CAFE/Sanatorium_Cafe_second_floor/Sanatorium_Cafe_second_floor_SHADOW_LOD0",
+        "SBG_Arena_Sanatorium_Main/SOO_LOD0/CAFE/Sanatorium_Cafe_ground_floor/Sanatorium_Cafe_ground_floor_SHADOW_LOD0",
+        "SBG_Arena_Sanatorium_Main/OO/CAFE/PROPS/Sanatorium_Cafe_constructions/Sanatorium_Cafe_constructions_SHADOW_LOD0",
+    };
 
     private static readonly string[] HallPaths =
     {
@@ -45,13 +54,13 @@ public sealed class DistantShadowCasterTests
         File.ReadAllText(FindUp(relative) ?? throw new FileNotFoundException(relative));
 
     [Fact]
-    public void OnlyEquatorAndAutoServiceEnrolProxies()
+    public void OnlyEquatorIcebergAndAutoServiceEnrolProxies()
     {
         foreach (var map in ArenaMapRegistry.Catalog)
         {
-            if (map == ArenaMapRegistry.Equator || map == ArenaMapRegistry.AutoService) continue;
+            if (map != ArenaMapRegistry.Equator) Assert.False(map.DistantShadowTwoSided);
+            if (map == ArenaMapRegistry.Equator || map == ArenaMapRegistry.AutoService || map == ArenaMapRegistry.Iceberg) continue;
             Assert.Empty(map.DistantShadowCasterPaths);
-            Assert.False(map.DistantShadowTwoSided);
         }
     }
 
@@ -86,12 +95,45 @@ public sealed class DistantShadowCasterTests
         Assert.Equal(ArenaMapRegistry.AutoService.DistantShadowCasterPaths, paths);
     }
 
+    [Fact]
+    public void IcebergListsTheThreeCafeShellsWithArenasOwnMaterial()
+    {
+        var map = ArenaMapRegistry.Iceberg;
+        Assert.Equal(CafePaths, map.DistantShadowCasterPaths);
+        // Census and host A/B of 2026-11-12 (shadow quality Low): the roof and the facades are in EFT's list, but low morning sun through the
+        // east glazing meets these slabs first. The stopping faces are slab tops, so Arena's one-sided material is enough. The hallway and
+        // library shells lie under listed casters and stay out; a change needs tools/validate/distant_shadow_census.py and a host A/B.
+        Assert.False(map.DistantShadowTwoSided);
+        Assert.Contains(ArenaMapRegistry.Iceberg, ArenaMapRegistry.All);
+        Assert.All(map.DistantShadowCasterPaths, p => Assert.EndsWith("_SHADOW_LOD0", p));
+        Assert.All(map.DistantShadowCasterPaths, p => Assert.StartsWith("SBG_Arena_Sanatorium_Main/", p));
+        Assert.All(map.DistantShadowCasterPaths, p => Assert.Contains("/CAFE/", p));
+        Assert.Equal(map.DistantShadowCasterPaths.Length, map.DistantShadowCasterPaths.Distinct().Count());
+    }
+
+    [Fact]
+    public void IcebergSidecarMirrorsTheDescriptor()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(FindUp("tools/maps/iceberg.json")!));
+        var paths = doc.RootElement.GetProperty("distant_shadow_caster_paths").EnumerateArray().Select(e => e.GetString()).ToArray();
+        Assert.Equal(ArenaMapRegistry.Iceberg.DistantShadowCasterPaths, paths);
+    }
+
     private sealed record Node(string Id, string? Parent, string Name, bool Active, JsonElement Components);
 
     [RealAutoServicePackageFact]
-    public void EachHallPathExistsOnceAsAnActiveShadowsOnlyRendererNoLodGroupReferences()
+    public void EachHallPathExistsOnceAsAnActiveShadowsOnlyRendererNoLodGroupReferences() =>
+        AssertEnrollable(AutoServicePackageScene, ArenaMapRegistry.AutoService.DistantShadowCasterPaths);
+
+    [RealIcebergPackageFact]
+    public void EachCafePathExistsOnceAsAnActiveShadowsOnlyRendererNoLodGroupReferences() =>
+        AssertEnrollable(IcebergPackageScene, ArenaMapRegistry.Iceberg.DistantShadowCasterPaths);
+
+    // What RoofShadowRepairs.Apply demands of a path: one object of that hierarchy path, active up the chain, an enabled ShadowsOnly
+    // MeshRenderer with a MeshFilter, no LODGroup on it or above it, and no LODGroup of the scene referencing it.
+    private static void AssertEnrollable(string packageScene, string[] paths)
     {
-        using var doc = JsonDocument.Parse(File.ReadAllText(FindWork(AutoServicePackageScene)!));
+        using var doc = JsonDocument.Parse(File.ReadAllText(FindWork(packageScene)!));
         var nodes = doc.RootElement.GetProperty("objects").EnumerateArray().Select(o => new Node(
             o.GetProperty("id").GetString()!,
             o.TryGetProperty("parent_id", out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null,
@@ -117,7 +159,8 @@ public sealed class DistantShadowCasterTests
             return string.Join('/', parts);
         }
 
-        foreach (var path in ArenaMapRegistry.AutoService.DistantShadowCasterPaths)
+        Assert.NotEmpty(paths);
+        foreach (var path in paths)
         {
             var hits = nodes.Where(n => PathOf(n) == path).ToList();
             Assert.Single(hits);
@@ -194,5 +237,19 @@ internal sealed class RealAutoServicePackageFactAttribute : FactAttribute
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
             if (File.Exists(Path.Combine(dir.FullName, relative))) return;
         Skip = relative + " is absent (BSG-derived, ignored by git; run the Autoservice extraction)";
+    }
+}
+
+/// <summary>Runs only when the ignored extracted Iceberg package is present (checkout work folder or ARENAMAPPORT_WORK_DIR).</summary>
+internal sealed class RealIcebergPackageFactAttribute : FactAttribute
+{
+    public RealIcebergPackageFactAttribute()
+    {
+        const string relative = "work/extract/iceberg-native-v2/scenes/Arena_Sanatorium.json";
+        string? env = Environment.GetEnvironmentVariable("ARENAMAPPORT_WORK_DIR");
+        if (!string.IsNullOrWhiteSpace(env) && File.Exists(Path.Combine(env, relative.Substring(5)))) return;
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+            if (File.Exists(Path.Combine(dir.FullName, relative))) return;
+        Skip = relative + " is absent (BSG-derived, ignored by git; run the Iceberg extraction)";
     }
 }

@@ -1608,6 +1608,17 @@ namespace ArenaMapPort.Shared
             // the wet quads is Concrete (58 percent of the samples), so the Concrete/Asphalt rule needs no extra surface. Mirrors
             // tools/maps/iceberg.json puddle_water_material_names.
             PuddleWaterMaterialNames: new[] { "0877f2335044042e", "34f527e8925ffebb" },
+            // The cafe's three storey shells are active ShadowsOnly proxies under no LODGroup, so EFT's DistantShadow never draws them. The roof and
+            // the facades are listed, but low morning sun through the east glazing (about 08:00-10:00) meets these slabs first; without them the
+            // distant map lets it into the storey below (docs/progress/lighting-followup.md, 2026-11-12). Arena's one-sided material is enough:
+            // the stopping faces are slab tops. The hallway and library shells lie under listed casters and are not listed. Mirrors
+            // tools/maps/iceberg.json distant_shadow_caster_paths.
+            DistantShadowCasterPaths: new[]
+            {
+                "SBG_Arena_Sanatorium_Main/SOO_LOD0/CAFE/Sanatorium_Cafe_second_floor/Sanatorium_Cafe_second_floor_SHADOW_LOD0",
+                "SBG_Arena_Sanatorium_Main/SOO_LOD0/CAFE/Sanatorium_Cafe_ground_floor/Sanatorium_Cafe_ground_floor_SHADOW_LOD0",
+                "SBG_Arena_Sanatorium_Main/OO/CAFE/PROPS/Sanatorium_Cafe_constructions/Sanatorium_Cafe_constructions_SHADOW_LOD0"
+            },
             // Bay5/AirPit/Bowl-style native server time: no Directional light exists in the imported scenes (Iceberg's dusk sun, sky and fog sit
             // in the excluded Scripts scene), the WeatherRig supplies both.
             UsesServerTime: true,

@@ -12,16 +12,19 @@ namespace ArenaMapPort.Client
 {
     /// <summary>
     /// What vanilla does: EFT's DistantShadow draws the sun's shadow beyond the Unity cascades
-    /// (QualitySettings.shadowDistance, about 55 m, a StableFit sphere ahead of the camera). Its
+    /// (QualitySettings.shadowDistance, a StableFit sphere ahead of the camera: the shadow quality's
+    /// 30 to 80 m, down to a third of that for an outdoor player in the morning and evening). Its
     /// render list (InvalidateRenderers) is built from LODGroups only: per group the second-to-last
     /// LOD (or an earlier one when that has no caster), only renderers whose shadowCastingMode is
     /// not Off, that are active in the hierarchy, have a MeshFilter mesh and a bounds edge of at
     /// least 1 m. A shadow-only proxy that no LODGroup references never reaches that list.
     /// What a ported scene lacks: some of Arena's structural shadow proxies sit outside any LODGroup
-    /// (Equator's three lower floor/ceiling meshes; Chop Shop's two hall-building hulls). The
+    /// (Equator's three lower floor/ceiling meshes; Chop Shop's two hall-building hulls; the three
+    /// storey shells of Iceberg's cafe). The
     /// cascades still draw them, the distant sun does not, so geometry beyond the cascade sphere is
     /// sunlit through a roof or ceiling (Chop Shop: a round sun patch on the far walls that follows
-    /// the view). What the repair does: for every map whose descriptor lists
+    /// the view; Iceberg: with a short cascade, morning sun behind the cafe's glazing reaches the
+    /// lobby). What the repair does: for every map whose descriptor lists
     /// <c>DistantShadowCasterPaths</c>, enrol each existing active proxy in an owned single-level
     /// LODGroup (zero cull threshold, so the always-present proxy stays always present) and queue a
     /// native cache rebuild. Equator additionally clones the proxy materials onto the native
@@ -30,8 +33,10 @@ namespace ArenaMapPort.Client
     /// from the other side; the descriptor's open atrium is retained. A map without that flag keeps
     /// Arena's own material, so the distant map draws exactly what the cascades draw. Live disable
     /// restores captured material slots and removes only owned groups; collision is untouched.
-    /// Host-verified for Equator (GPU-2, 2026-09-28, docs/progress/lighting-followup.md); Chop Shop
-    /// is offline-derived and awaits its host check (same document, 2026-11-12).
+    /// Host-verified for Equator (GPU-2, 2026-09-28, docs/progress/lighting-followup.md) and, with the
+    /// live key as control, for Chop Shop and Iceberg (same document, 2026-11-12; Iceberg at shadow
+    /// quality Low, where the cascades end before the cafe). Which proxies a map needs:
+    /// tools/validate/distant_shadow_census.py.
     /// </summary>
     internal static class RoofShadowRepairs
     {

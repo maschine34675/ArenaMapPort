@@ -59,5 +59,10 @@
   "puddle_water_material_names": [
     "0877f2335044042e",
     "34f527e8925ffebb"
+  ],
+  "distant_shadow_caster_paths": [
+    "SBG_Arena_Sanatorium_Main/SOO_LOD0/CAFE/Sanatorium_Cafe_second_floor/Sanatorium_Cafe_second_floor_SHADOW_LOD0",
+    "SBG_Arena_Sanatorium_Main/SOO_LOD0/CAFE/Sanatorium_Cafe_ground_floor/Sanatorium_Cafe_ground_floor_SHADOW_LOD0",
+    "SBG_Arena_Sanatorium_Main/OO/CAFE/PROPS/Sanatorium_Cafe_constructions/Sanatorium_Cafe_constructions_SHADOW_LOD0"
   ]
 }

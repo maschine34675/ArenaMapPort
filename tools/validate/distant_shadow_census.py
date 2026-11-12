@@ -16,9 +16,10 @@ Two steps.
      the hierarchy (the renderer's own `enabled` is not read), have a mesh and a world bounds edge of at least
      1 m, one record per submesh. Everything else that casts and is drawn by the cascades is 'unlisted': either
      a member of another LOD of some group, or referenced by no LODGroup at all (the candidates).
-     Check: `draw_records` equals the host's `DistantShadow._renderList.Count` (Iceberg 1,571 on 2026-11-12).
+     Check: `draw_records` equals the host's `DistantShadow._renderList.Count` (Iceberg on 2026-11-12: 1,571 without
+     sidecar rows, 1,574 with its three cafe rows).
   2. Coverage. Not every candidate matters: Iceberg's storey shells sit under a roof and facades that ARE in the
-     list. For a sun direction everything is projected across the sun into depth buffers; a candidate texel is
+     list (only the cafe's three shells are first blockers, of low morning sun through the east glazing). For a sun direction everything is projected across the sun into depth buffers; a candidate texel is
      'uncovered' when it is the first blocker of its sun ray and the next listed caster lies at least MIN_GAP
      behind it (or nowhere). That is sun the distant map lets into the space behind the candidate. Faces count
      as the shaders cull them: `shadow` and ordinary materials by their front faces, `shadow_backside` by its
