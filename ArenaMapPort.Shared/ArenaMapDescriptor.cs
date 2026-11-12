@@ -748,10 +748,12 @@ namespace ArenaMapPort.Shared
             LocaleDescription: "The Bay 5 harbour depot from EFT Arena: container yard, hangar, warehouse and depot.",
             IconX: 469, IconY: 92,
             DbBaseJsonPath: "arena_bay5/base.json",
+            // 2026-11-12: one exit per team pocket, the box INSIDE the pocket (the green flare marks the spawn area in team modes);
+            // see tools/maps/bay5.exits.json. Offline positions, host check pending.
             Exits: new[]
             {
-                new ArenaExitDescriptor("Bay5 North Loading Bay", 96.0f, -2.9252f, 61.0f),
-                new ArenaExitDescriptor("Bay5 South Container Lane", 99.029f, -3.8574f, -2.8513f),
+                new ArenaExitDescriptor("Bay5 North Loading Bay", 137.0f, -2.84f, 51.0f),
+                new ArenaExitDescriptor("Bay5 South Container Lane", 50.0f, -3.78f, -2.5f),
             },
             OpenedBarriers: new[]
             {
