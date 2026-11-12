@@ -1056,6 +1056,254 @@
       "Sides": [
         "Savage"
       ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_iceberg-bot-stage-bear-46",
+      "Infiltration": "",
+      "Position": {
+        "x": 62.78,
+        "y": 3.2,
+        "z": -114.26
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_iceberg-bot-stage-bear-49",
+      "Infiltration": "",
+      "Position": {
+        "x": 48.95,
+        "y": 1.98,
+        "z": -67.03
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_iceberg-bot-fill-01",
+      "Infiltration": "",
+      "Position": {
+        "x": 60.0,
+        "y": 1.95,
+        "z": -86.0
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_iceberg-bot-stage-bear-36",
+      "Infiltration": "",
+      "Position": {
+        "x": 29.82,
+        "y": 3.15,
+        "z": -80.31
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_iceberg-bot-stage-bear-33",
+      "Infiltration": "",
+      "Position": {
+        "x": 32.94,
+        "y": 3.15,
+        "z": -58.95
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_iceberg-bot-stage-usec-35",
+      "Infiltration": "",
+      "Position": {
+        "x": -8.31,
+        "y": 2.05,
+        "z": -39.65
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_iceberg-bot-stage-usec-32",
+      "Infiltration": "",
+      "Position": {
+        "x": -9.64,
+        "y": 5.0,
+        "z": -101.49
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_iceberg-bot-stage-usec-36",
+      "Infiltration": "",
+      "Position": {
+        "x": -8.83,
+        "y": 2.05,
+        "z": -52.78
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
     }
   ]
 }

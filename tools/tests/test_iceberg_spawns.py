@@ -5,11 +5,16 @@ Why: nobody has walked Iceberg yet, so everything checkable without the host is 
 
 1. Data only (the repository): the sidecars have the shape the released maps' have and the generator turns them into the
    base.json fields; the player rows are four of the 20 pocket markers of iceberg.modes.json, the bot rows are Arena's AI
-   core points minus the two on a pocket's gate approach (the rule is stated and checked both ways), nothing stands inside a
-   team box, both exits lie outside their gates and 10 m or more from every player row.
+   core points minus the two on a pocket's gate approach (the rule is stated and checked both ways) plus, appended on
+   2026-11-12, eight rows for ArenaMode's 25 m burst selector (seven CheckPoint stage markers and one fill point), nothing
+   stands inside a team box, and since 2026-11-12 (rule R3) each exit box stands INSIDE its team pocket, 2.5 m or more from
+   every player row, so that the green signal flare marks the team's spawn area (the 2026-10-30 rule put both exits
+   outside the gates and 10 m from every player row; it is retired).
 2. Arena's NavMesh (the installed Arena 0.6.1, level377, ``sharedassets377.assets`` path 2, identity placement): 64 of the 70
    markers lie on the 4,788 m2 main component, the six that do not are the known Bear stage markers, every row and exit
-   stands on it with the documented clearance, and the 4-hub PatrolWay and ten Savage markers of the AI scene lie off it.
+   stands on it with the documented clearance (one appended row, the moved stage marker Bear house (49), is the exception:
+   the port's own bake has it, Arena's mesh does not; IcebergBuiltMeshTests checks the rows on the built bundle), and the
+   4-hub PatrolWay and ten Savage markers of the AI scene lie off it.
 3. The port's colliders (the ignored package work/extract/iceberg-native-v2 through tools/validate/spawn_placement_probe.py,
    the offline stand-in for SpawnPlacementRepairs.IsValid): every row stands on a floor, 69 of 70 markers pass, and
    ``Bear house (38)`` touches a LevelBorder cube.
@@ -56,6 +61,21 @@ PLAYER_MARKERS = {
 }
 # Bot rows: id suffix -> AI core point id; the rows that do not sit on their core point, with the largest move allowed (m).
 BOT_CORE_POINTS = {f"core-{n:02d}": n for n in (1, 3, 4, 5, 6, 7, 8, 9, 10)}
+# 2026-11-12 (rules R1, R2, R5 of the spawn-count change): eight Bot rows APPENDED after the nine core rows, in this order. suffix ->
+# (the pocket-less stage marker it stands on or next to, the largest horizontal move from that marker in metres, 1.9 m = the
+# decided moves of 1.1 to 1.8 m plus a 0.1 m margin). The fill row stands on no marker: it replaces stage marker Bear house (26),
+# which stands on the balcony ladder's concrete part, by a mesh point in the open east yard.
+NEW_BOT_ROWS = {
+    "stage-bear-46": ("Bear house (46)", 0.05), "stage-bear-49": ("Bear house (49)", 1.9), "fill-01": (None, None),
+    "stage-bear-36": ("Bear house (36)", 1.9), "stage-bear-33": ("Bear house (33)", 1.9),
+    "stage-usec-35": ("Usec house (35)", 1.9), "stage-usec-32": ("Usec house (32)", 1.9), "stage-usec-36": ("Usec house (36)", 1.9),
+}
+# The one appended row that lies outside Arena's own NavMesh (a moved Bear stage marker (49), 2.3 to 7.7 m outside it): the port's
+# bake carries it on the main component with 2.23 m of clearance (IcebergBuiltMeshTests).
+OFF_ARENA_MESH_ROWS = ("arena_iceberg-bot-stage-bear-49",)
+# ArenaMode's burst selector wants five Bot rows 25 m or more from wherever the leader stands (Tactical); measured on the 1 m grid
+# of Arena's footprint the appended rows give nine everywhere (before: four).
+MIN_DISTANT_ROWS = 5
 SKIPPED_CORE_POINTS = (2, 11)
 MOVED_FROM_CORE_POINT = {"core-06": 1.5, "core-09": 3.6}
 BOT_SKIP_RADIUS = 10.0
@@ -70,8 +90,12 @@ GATE_LEAVES = {
 OFF_MESH_MARKERS = ("Bear house (38)", "Bear house (47)", "Bear house (48)", "Bear house (49)", "Bear house (50)", "Bear house (51)")
 MIN_PLAYER_CLEARANCE = 1.4         # border clearance in Arena's mesh (west-all is the tightest, 1.42 m)
 MIN_BOT_CLEARANCE = 1.35           # core 10 keeps 1.38 m, core 7 1.46 m; core 6 (0.58 m) is moved to 1.98 m
-EXIT_HALF_DIAGONAL = 2.0 * math.sqrt(2.0)
-MIN_EXIT_DISTANCE = 10.0
+EXIT_HALF_EDGE = 2.0               # the exit box is 4 x 3 x 4 m, rotation 0
+MIN_EXIT_PLAYER_EDGE = 2.5         # rule R3: every Player row keeps 2.5 m to the box EDGE (the Equator booth precedent), 2.70 m is the tightest
+MIN_EXIT_BOT_DISTANCE = 10.0       # no Bot row spawns in or beside an exit (17.9 m is the nearest, west exit to core-01)
+MIN_EXIT_LEAF_GAP = 0.5            # the box clears a gate leaf's centre (not its swept footprint) by 0.5 m in plan; the west box is 0.75 m from the closed leaves' plane
+# which team pocket (initial spawn bound of iceberg.modes.json) each exit belongs to: rule R3, one exit per team pocket
+EXIT_POCKETS = {"Iceberg East Gate": "SPAWN_BOUND_FIGHTER", "Iceberg West Gate": "SPAWN_BOUND_DEFENCE"}
 
 
 def load(stem):
@@ -103,13 +127,20 @@ class IcebergSidecarTests(SidecarData, unittest.TestCase):
 
     # ------------------------------------------------------------------ shape
     def test_counts_and_ids(self):
-        self.assertEqual((len(self.players), len(self.bot_points)), (4, 9))
+        self.assertEqual((len(self.players), len(self.bot_points)), (4, 17))
         self.assertEqual((len(self.bots["waves"]), len(self.bots["boss_waves"]), len(self.exits["exits"])), (5, 4, 2))
         self.assertEqual((self.bots["zone"], self.bots["max_bots"]), ("BotZone_Main", 8))
         ids = [p["id"] for p in self.players + self.bot_points]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual({p["id"] for p in self.players}, {f"arena_iceberg-player-{s}" for s in PLAYER_MARKERS})
-        self.assertEqual({p["id"] for p in self.bot_points}, {f"arena_iceberg-bot-{s}" for s in BOT_CORE_POINTS})
+        self.assertEqual({p["id"] for p in self.bot_points},
+                         {f"arena_iceberg-bot-{s}" for s in list(BOT_CORE_POINTS) + list(NEW_BOT_ROWS)})
+        # rule R1: the nine core rows come first, in their original order, and the eight new rows are appended in the decided order
+        # (ArenaMode pins arena_iceberg-bot-core-01 by id and exact floats); none of them is a Team Deathmatch row of ArenaMode
+        self.assertEqual([p["id"] for p in self.bot_points],
+                         [f"arena_iceberg-bot-{s}" for s in list(BOT_CORE_POINTS) + list(NEW_BOT_ROWS)])
+        self.assertFalse(any("tdm-v1-" in i for i in ids))
+        self.assertEqual(self.bot_points[0]["position"], [-10.88, 3.25, -80.66])
 
     def test_schema_matches_the_released_maps(self):
         equator = load("equator.bots.json")
@@ -123,6 +154,8 @@ class IcebergSidecarTests(SidecarData, unittest.TestCase):
         self.assertEqual(set(self.exits["exits"][0]), set(bay5_exits["exits"][0]))
         self.assertIn("2026-10-30", self.bots["_comment"])
         self.assertIn("2026-10-30", self.exits["_comment"])
+        self.assertIn("2026-11-12", self.bots["_comment"])
+        self.assertIn("2026-11-12", self.exits["_comment"])
 
     def test_waves_and_pmc_squads_are_the_released_maps(self):
         airpit, bowl = load("airpit.bots.json"), load("bowl.bots.json")
@@ -141,7 +174,7 @@ class IcebergSidecarTests(SidecarData, unittest.TestCase):
         self.assertEqual(set(base), {"SpawnPointParams", "waves", "OpenZones", "BotMax", "OfflineOldSpawn", "OfflineNewSpawn",
                                      "BossLocationSpawn", "exits"})
         self.assertEqual((len(base["SpawnPointParams"]), len(base["waves"]), len(base["BossLocationSpawn"]), len(base["exits"])),
-                         (13, 5, 4, 2))
+                         (21, 5, 4, 2))
         self.assertEqual((base["BotMax"], base["OpenZones"]), (8, "BotZone_Main"))
         for point in base["SpawnPointParams"]:
             if "Player" in point["Categories"]:
@@ -211,7 +244,21 @@ class IcebergSidecarTests(SidecarData, unittest.TestCase):
                     self.assertAlmostEqual(moved, 0.0, delta=0.006)
                     self.assertAlmostEqual(row[1], core[1], delta=0.02)    # y is Arena's NavMesh surface, the AICore's own within 2 cm
 
+    def test_the_appended_rows_stand_on_or_beside_their_stage_marker(self):
+        by_id = {p["id"]: p for p in self.bot_points}
+        for suffix, (marker_name, max_move) in NEW_BOT_ROWS.items():
+            row = by_id[f"arena_iceberg-bot-{suffix}"]
+            with self.subTest(row=suffix):
+                self.assertEqual((row["radius"], row["categories"]), (25, ["Bot", "BotPmc"]))
+                if marker_name is None:
+                    self.assertTrue(suffix.startswith("fill"))
+                    continue
+                marker = self.markers[marker_name]
+                self.assertFalse(marker["pocket"], marker_name)          # a stage marker of the CheckPoint scene, not a pocket marker
+                self.assertLessEqual(math.dist(xz(row["position"]), xz(marker["position"])), max_move, marker_name)
+
     def test_the_skip_rule_no_bot_spawn_within_ten_metres_of_a_gate_leaf_or_a_pocket_marker(self):
+        # applies to ALL 17 rows, the appended ones included (the nearest is the fill row, 22.4 m from a Bear gate leaf)
         def nearest(position):
             leaf = min(math.dist(xz(position), xz(g)) for g in GATE_LEAVES.values())
             marker = min(math.dist(xz(position), xz(m["position"])) for m in self.pocket)
@@ -225,7 +272,7 @@ class IcebergSidecarTests(SidecarData, unittest.TestCase):
             self.assertGreaterEqual(nearest(row["position"]), BOT_SKIP_RADIUS, row["id"])
         self.assertEqual(set(self.core) - set(SKIPPED_CORE_POINTS), set(BOT_CORE_POINTS.values()))
 
-    def test_no_core_point_lies_inside_a_team_box_and_no_row_or_exit_does_either(self):
+    def test_no_core_point_lies_inside_a_team_box_and_no_bot_row_does_either(self):
         pockets = [self.bounds["SPAWN_BOUND_FIGHTER"], self.bounds["SPAWN_BOUND_DEFENCE"]]
         for number, position in self.core.items():
             for bound in pockets:
@@ -233,9 +280,8 @@ class IcebergSidecarTests(SidecarData, unittest.TestCase):
         for row in self.bot_points:
             for bound in pockets:
                 self.assertLess(M.box_margin(bound, row["position"]), 0.0, row["id"])
-        for exit_point in self.exits["exits"]:
-            for bound in pockets:    # the 4 x 4 m box must clear the bound too
-                self.assertLess(M.box_margin(bound, exit_point["position"]), -2.0, exit_point["name"])
+        # the 2026-10-30 clause "the 4 x 4 m exit box clears both bounds by 2 m" is retired (rule R3): the exits stand INSIDE
+        # their pocket now, see test_each_exit_box_stands_inside_its_own_team_pocket
 
     def test_spacing_between_rows(self):
         for bot in self.bot_points:
@@ -249,29 +295,57 @@ class IcebergSidecarTests(SidecarData, unittest.TestCase):
                 if a is not b:
                     self.assertGreaterEqual(math.dist(a["position"], b["position"]), 4.0, f"{a['id']} / {b['id']}")
 
-    def test_three_distant_bot_points_cover_the_playable_footprint(self):
-        # ArenaMode's injector asks for two bots per burst and keeps a 25 m floor to the player: every cell of Arena's
-        # walkable footprint (main component x -58.7..108.7, z -126.5..-34.8, 1 m grid) keeps three distinct candidates.
+    def test_five_distant_bot_points_cover_the_playable_footprint(self):
+        # ArenaMode's burst selector uses only Bot rows 25 m or more from the player (rule R2): Tactical needs five of them from
+        # wherever the leader stands, the other modes one, pickups six usable rows. Every cell of Arena's walkable footprint (main
+        # component x -58.7..108.7, z -126.5..-34.8, 1 m grid) keeps MIN_DISTANT_ROWS distinct candidates. Until 2026-11-12 the rule
+        # was three (nine rows, four distant at the worst cell); the 17 rows give nine at the worst cell, (10, -68).
         points = [row["position"] for row in self.bot_points]
+        worst = None
         for x in range(-59, 110):
             for z in range(-127, -34):
                 usable = sum(math.hypot(x - p[0], z - p[2]) >= 25 for p in points)
-                self.assertGreaterEqual(usable, 3, f"Only {usable} distant points from ({x}, {z})")
+                worst = usable if worst is None else min(worst, usable)
+                self.assertGreaterEqual(usable, MIN_DISTANT_ROWS, f"Only {usable} distant points from ({x}, {z})")
+        self.assertEqual(worst, 9)
 
     # ------------------------------------------------------------------ exits
-    def test_exits_lie_outside_their_gates_and_far_from_every_player_row(self):
-        east, west = self.exits["exits"]
-        self.assertLess(east["position"][0], 82.38 - 8.0)          # 8 m or more west of GATES_A: outside the east pocket
-        self.assertGreater(west["position"][0], -36.04 + 4.0)      # 4 m or more east of GATES_B: outside the west pocket
+    def test_each_exit_box_stands_inside_its_own_team_pocket(self):
+        # Rule R3 (2026-11-12, replaces "exits stand outside the pockets, 10 m from every Player row, beyond the gates"): one exit per
+        # team pocket, the box centre inside the pocket's INITIAL spawn-bound footprint of iceberg.modes.json, so that the green
+        # signal flare (ExfilSignals) marks the team's spawn area in ArenaMode's team modes, where extraction is disabled. The
+        # pocket of an exit is told by its name: East Gate = the Bear pocket behind GATES_A, West Gate = the Usec pocket behind GATES_B.
+        self.assertEqual({e["name"] for e in self.exits["exits"]}, set(EXIT_POCKETS))
         for exit_point in self.exits["exits"]:
+            own = self.bounds[EXIT_POCKETS[exit_point["name"]]]
+            self.assertTrue(own["initial"], own["name"])
+            with self.subTest(exit=exit_point["name"]):
+                self.assertEqual(exit_point["rotation"], 0.0)
+                self.assertGreaterEqual(M.box_margin(own, exit_point["position"]), 0.0)
+                for other in (b for n, b in self.bounds.items() if b["initial"] and n != own["name"]):
+                    self.assertLess(M.box_margin(other, exit_point["position"]), 0.0)
+        # behind its gates as seen from the map: east of the Bear gate plane (x 82.38), west of the Usec one (x -36.04)
+        east, west = self.exits["exits"]
+        self.assertGreater(east["position"][0] - EXIT_HALF_EDGE, 82.38)
+        self.assertLess(west["position"][0] + EXIT_HALF_EDGE, -36.04)
+
+    def test_no_player_row_starts_inside_an_exit_trigger_and_no_bot_row_beside_one(self):
+        # rule R3: every Player row keeps 2.5 m to the box EDGE (not the centre), the Equator booth precedent
+        # (docs/progress/equator-booth-spawns.md): a plain-raid spawn must not start inside a trigger. Boxes are axis aligned.
+        for exit_point in self.exits["exits"]:
+            ex, ez = exit_point["position"][0], exit_point["position"][2]
             for player in self.players:
-                self.assertGreaterEqual(math.dist(exit_point["position"], player["position"]), MIN_EXIT_DISTANCE,
-                                        f"{player['id']} too close to {exit_point['name']}")
-            for leaf in GATE_LEAVES.values():
-                self.assertGreaterEqual(math.dist(xz(exit_point["position"]), xz(leaf)) - 2.0, 3.0,
-                                        f"the box of {exit_point['name']} is within 3 m of a gate leaf")
+                px, pz = player["position"][0], player["position"][2]
+                edge = math.hypot(max(abs(px - ex) - EXIT_HALF_EDGE, 0.0), max(abs(pz - ez) - EXIT_HALF_EDGE, 0.0))
+                self.assertGreaterEqual(edge, MIN_EXIT_PLAYER_EDGE, f"{player['id']} is {edge:.2f} m from the box of {exit_point['name']}")
             for bot in self.bot_points:
-                self.assertGreaterEqual(math.dist(xz(exit_point["position"]), xz(bot["position"])), MIN_EXIT_DISTANCE)
+                self.assertGreaterEqual(math.dist(xz(exit_point["position"]), xz(bot["position"])), MIN_EXIT_BOT_DISTANCE, bot["id"])
+            # successor of "the box is within 3 m of no gate leaf" (the box now lies behind the gates, the west one 0.75 m from the leaves'
+            # plane): the box keeps a gap to every leaf CENTRE in plan (not the swept footprint, 0.61 m for the west box); the gates slide along z,
+            # so what matters is the x gap to the leaf plane (x -36.04 west, 82.38 east), which stays outside the trigger
+            for leaf in GATE_LEAVES.values():
+                gap = math.hypot(max(abs(leaf[0] - ex) - EXIT_HALF_EDGE, 0.0), max(abs(leaf[2] - ez) - EXIT_HALF_EDGE, 0.0))
+                self.assertGreaterEqual(gap, MIN_EXIT_LEAF_GAP, f"the box of {exit_point['name']} touches a gate leaf")
 
     def test_the_gate_leaf_table_equals_the_package(self):
         if not (PACKAGE / "scenes" / "Arena_Sanatorium_CheckPoint_DesignStuff.json").is_file():
@@ -370,12 +444,21 @@ class IcebergArenaMeshTests(SidecarData, unittest.TestCase):
 
     def test_rows_and_exits_stand_on_the_main_component_with_room(self):
         rows = [(p["id"], p["position"], MIN_PLAYER_CLEARANCE, 0.3) for p in self.players]
-        rows += [(p["id"], p["position"], MIN_BOT_CLEARANCE, 0.05) for p in self.bot_points]
-        rows += [(e["name"], e["position"], EXIT_HALF_DIAGONAL + 0.5, 0.05) for e in self.exits["exits"]]
+        rows += [(p["id"], p["position"], MIN_BOT_CLEARANCE, 0.05) for p in self.bot_points if p["id"] not in OFF_ARENA_MESH_ROWS]
+        # exits: the 2026-10-30 draft kept the whole box (half diagonal 2.83 m + 0.5) on the mesh; the in-pocket boxes of 2026-11-12 stand
+        # 2.16 m and 2.11 m from the border, which puts the four edge midpoints (half edge 2.0 m) on the mesh and lets a corner overhang
+        # by up to 0.7 m (the corners are on the port's own mesh within 0.5 m, see IcebergBuiltMeshTests)
+        rows += [(e["name"], e["position"], EXIT_HALF_EDGE, 0.05) for e in self.exits["exits"]]
         for (name, position, need, dy), (label, sy, clearance) in zip(rows, self.locate([r[1] for r in rows])):
             self.assertEqual(label, 0, f"{name} is not on Arena's main component")
             self.assertLessEqual(abs(sy - position[1]), dy, f"{name} is {sy - position[1]:+.2f} m off Arena's surface")
             self.assertGreaterEqual(clearance, need, f"{name} is only {clearance:.2f} m from the NavMesh border")
+
+    def test_the_one_appended_row_off_arenas_mesh_is_the_moved_bear_49(self):
+        by_id = {p["id"]: p for p in self.bot_points}
+        for row_id in OFF_ARENA_MESH_ROWS:
+            self.assertEqual(self.locate([by_id[row_id]["position"]])[0][0], -1, row_id)
+        self.assertIn("Bear house (49)", OFF_MESH_MARKERS)
 
     def test_the_stale_patrol_hubs_and_savage_markers_are_off_arenas_mesh_and_off_the_map(self):
         try:
@@ -401,6 +484,55 @@ class IcebergArenaMeshTests(SidecarData, unittest.TestCase):
             for position, (mesh_label, _sy, _c) in zip(group, self.locate(group, max_dy=3.0)):
                 self.assertEqual(mesh_label, -1, f"{label} {position} is on Arena's mesh")
                 self.assertGreater(position[2], -33.0, f"{label} {position} is inside the play area")
+
+
+BUILT_NAVMESH = WORK / "build" / "iceberg" / "arena_iceberg_navmesh.bundle"
+
+
+@unittest.skipUnless(BUILT_NAVMESH.is_file(), "no built Iceberg NavMesh bundle (set ARENAMAPPORT_WORK_DIR)")
+class IcebergBuiltMeshTests(SidecarData, unittest.TestCase):
+    """The NavMesh the client really installs (work/build/iceberg, baked from the port's colliders), for the rows appended on
+    2026-11-12 and the exits. The original nine rows are pinned against Arena's own mesh above (the built mesh differs from it at
+    core 4, 0.24 m up and 0.80 m of clearance, a fact of the original rows that this test does not restate)."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import numpy as np
+            import navmesh_diff as nd
+            import spawn_coverage as sc
+        except ImportError:
+            raise unittest.SkipTest("numpy or UnityPy is not installed")
+        cls.np = np
+        cls.mesh = nd.load_bundle_mesh(BUILT_NAVMESH)
+        cls.load_data()
+        cls.play = sc.PlayMesh(cls.mesh, [p["position"] for p in cls.bot_points[:9]])
+
+    def test_the_play_component_is_the_one_the_original_rows_stand_on(self):
+        self.assertEqual(self.play.rows_on_component, 9)
+
+    def test_every_appended_row_stands_on_the_play_component_with_room(self):
+        # decided data: clearance 1.64 m (Bear 33, a dressing-room hallway) to 7.23 m (the fill row), the mesh surface within 0.01 m
+        rows = self.bot_points[9:]
+        self.assertEqual(len(rows), len(NEW_BOT_ROWS))
+        positions = self.np.array([r["position"] for r in rows])
+        poly, surface = self.play.locate(positions, max_dy=1.0)
+        clearance = self.play.clearance(positions)
+        for row, pid, sy, clear in zip(rows, poly, surface, clearance):
+            with self.subTest(row=row["id"]):
+                self.assertGreaterEqual(pid, 0, "not on the play component")
+                self.assertLessEqual(abs(sy - row["position"][1]), 0.05)
+                self.assertGreaterEqual(clear, MIN_BOT_CLEARANCE)
+
+    def test_each_exit_box_has_floor_under_its_centre_and_its_corners_on_the_mesh(self):
+        for exit_point in self.exits["exits"]:
+            x, y, z = exit_point["position"]
+            centre = self.np.array([[x, y, z]])
+            corners = self.np.array([[x + dx, y, z + dz] for dx in (-EXIT_HALF_EDGE, EXIT_HALF_EDGE) for dz in (-EXIT_HALF_EDGE, EXIT_HALF_EDGE)])
+            with self.subTest(exit=exit_point["name"]):
+                self.assertGreaterEqual(self.play.locate(centre, max_dy=1.2)[0][0], 0)
+                self.assertTrue((self.play.locate(corners, max_dy=1.2)[0] >= 0).all())
+                self.assertGreaterEqual(self.play.clearance(centre)[0], EXIT_HALF_EDGE)
 
 
 @unittest.skipUnless((PACKAGE / "scenes").is_dir() and (PACKAGE / "meshes").is_dir(), "no iceberg-native-v2 package")
@@ -430,6 +562,25 @@ class IcebergPlacementTests(SidecarData, unittest.TestCase):
             verdict = self.probe.check(exit_point["position"])
             self.assertIsNotNone(verdict.floor_y, exit_point["name"])
             self.assertLess(abs(verdict.floor_y - exit_point["position"][1]), 0.25, exit_point["name"])
+
+    def test_no_solid_stands_in_an_exit_box(self):
+        # rule R3: the box holds floor and no solid from 0.3 m above the floor point to its top at +2.5 m (ExfilRepairs spans -0.5 .. +2.5);
+        # runtime-solid triangles only (spawn markers and the moved parts of opened barriers excluded, as the placement probe sees them).
+        # The floor point is the NavMesh surface at the centre. The east box stands on the ramp: its collider floor is 1.89 m at the
+        # centre against a mesh surface of 1.67 m, which is why the check starts 0.3 m above the SURFACE and still finds the floor clear.
+        import numpy as np
+        import port_colliders as pcol
+        import spawn_coverage as sc
+        import spawn_placement_probe as spp
+        cset = pcol.load_package_colliders(PACKAGE)
+        pcol.mark_barriers(cset, list(self.map.get("opened_barriers") or []), pcol.load_door_rows(REPO / "tools" / "maps" / "iceberg.doors.json"))
+        keep = np.array([not (spp.runtime_nonsolid(o.names) or o.barrier_blocked) for o in cset.owners], bool)
+        mask = keep[cset.tri_owner]
+        solids = sc.SolidIndex(cset.tris[mask], cset.tri_owner[mask], [o.path for o in cset.owners])
+        for exit_point in self.exits["exits"]:
+            x, y, z = exit_point["position"]
+            height = 2.5 - 0.3
+            self.assertEqual(solids.solids_in_box([x, y + 0.3 + height / 2, z], [2 * EXIT_HALF_EDGE, height, 2 * EXIT_HALF_EDGE]), [], exit_point["name"])
 
     def test_the_bot_spawn_of_core_nine_stands_on_the_pool_deck_not_in_the_basin(self):
         # AICore 9 (16.55, 4.5, -91.59) is inside the swimming pool: collider floor 4.40 against a deck and an Arena mesh at

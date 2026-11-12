@@ -1,5 +1,5 @@
 {
-  "_comment": "PLAN-ICEBERG item 7 (docs/progress/iceberg-release.md, 2026-10-30): optional sidecar read by tools/server/make_base_json.py next to tools/maps/iceberg.json. OFFLINE DRAFT, not walked on the host yet: the first Iceberg raid must confirm every point with uibridge_teleport dryRun=true. Sides follow Arena's teams (Bear = the east pocket behind GATES_A, Usec = the west pocket behind GATES_B, tools/maps/iceberg.modes.json): the player spawns are the world positions of four of the 20 pocket markers, Bear (14) (All) and Bear (8) (Bear) in the east pocket (x 89..98, z -96..-84), Usec (8) (Usec) and Usec (14) (All) in the west pocket (x -44.5..-37, z -95..-80); each pocket offers both PMC sides through its All row, the other 16 pocket markers and all 50 stage markers stay unused until ArenaMode places teams. The four rows keep 1.4 to 2.8 m of border clearance in Arena's own NavMesh and are at least 10 m from both exit boxes. Bot spawns are Arena's own AI core points (tools/maps/iceberg.ai.json) minus the two that sit on a pocket's gate approach, core 2 (9.6 m outside GATES_A, 16 m from the nearest Bear marker) and core 11 (6.5 m north of the motor gate, 10.9 m from the nearest Usec marker); the rule is 'no bot spawn within 10 m of a gate leaf or a pocket marker', and no core point lies inside a team box. Two bot spawns leave their core point: core 6 keeps only 0.58 m of border clearance in Arena's mesh and moves 1.41 m inward to (-29.4, -52.7) (1.98 m); core 9 is the AICore of capture point A and stands in the swimming pool (basin floor 4.40, deck and Arena's mesh at about 5.0, a 0.6 m step a bot may not climb out of), so its spawn moves 3.54 m to the pool deck at (19.05, -89.09) (3.14 m clearance, collider top and mesh within 2 cm). The y of every bot spawn is Arena's NavMesh surface at the point (the core point's own within 0.02 m). All 20 pocket markers and all 11 core points lie on Arena's 4,788 m2 main component (identity placement, level377); the 4-hub PatrolWay and the ten Savage markers of that scene lie outside the map and are not used (iceberg.ai.json has patrol_ways []: the client builds NavMesh-derived ways from these Bot spawns). Waves and PMC boss waves copied from airpit.bots.json (Equator's). No loot, no scav raids.",
+  "_comment": "PLAN-ICEBERG item 7 (docs/progress/iceberg-release.md, 2026-10-30): optional sidecar read by tools/server/make_base_json.py next to tools/maps/iceberg.json. OFFLINE DRAFT, not walked on the host yet: the first Iceberg raid must confirm every point with uibridge_teleport dryRun=true. Sides follow Arena's teams (Bear = the east pocket behind GATES_A, Usec = the west pocket behind GATES_B, tools/maps/iceberg.modes.json): the player spawns are the world positions of four of the 20 pocket markers, Bear (14) (All) and Bear (8) (Bear) in the east pocket (x 89..98, z -96..-84), Usec (8) (Usec) and Usec (14) (All) in the west pocket (x -44.5..-37, z -95..-80); each pocket offers both PMC sides through its All row, the other 16 pocket markers and all 50 stage markers stay unused until ArenaMode places teams. The four rows keep 1.4 to 2.8 m of border clearance in Arena's own NavMesh and, since 2026-11-12 (rule R3), at least 2.5 m to the edge of the exit box of their pocket. Bot spawns are Arena's own AI core points (tools/maps/iceberg.ai.json) minus the two that sit on a pocket's gate approach, core 2 (9.6 m outside GATES_A, 16 m from the nearest Bear marker) and core 11 (6.5 m north of the motor gate, 10.9 m from the nearest Usec marker); the rule is 'no bot spawn within 10 m of a gate leaf or a pocket marker', and no core point lies inside a team box. Two bot spawns leave their core point: core 6 keeps only 0.58 m of border clearance in Arena's mesh and moves 1.41 m inward to (-29.4, -52.7) (1.98 m); core 9 is the AICore of capture point A and stands in the swimming pool (basin floor 4.40, deck and Arena's mesh at about 5.0, a 0.6 m step a bot may not climb out of), so its spawn moves 3.54 m to the pool deck at (19.05, -89.09) (3.14 m clearance, collider top and mesh within 2 cm). The y of every bot spawn is Arena's NavMesh surface at the point (the core point's own within 0.02 m). All 20 pocket markers and all 11 core points lie on Arena's 4,788 m2 main component (identity placement, level377); the 4-hub PatrolWay and the ten Savage markers of that scene lie outside the map and are not used (iceberg.ai.json has patrol_ways []: the client builds NavMesh-derived ways from these Bot spawns). Waves and PMC boss waves copied from airpit.bots.json (Equator's). No loot, no scav raids. 2026-11-12 (spawn count, user request after the ArenaMode session; offline, host check pending): eight Bot rows are APPENDED after the nine core rows, which stay byte-identical (ids, positions, radius, order; ArenaMode pins iceberg bot-core-01 by id and exact floats, so no existing row and no id starting with arena-iceberg-tdm-v1- is touched). Why: ArenaMode's burst selector uses only Bot rows at least 25 m (3D) from the player (Tactical needs five such rows from wherever the leader stands, Deathmatch, Gun Game and Zombies one, pickups at least six usable rows) and there was no row east of x 29, half the map. Seven rows are Arena's own CheckPoint stage markers (arena_iceberg-bot-stage-<side>-<n> = marker 'Bear house (n)' / 'Usec house (n)'; Bear (46) unmoved, the others moved 1.1 to 1.8 m inward onto the main component for clearance of 1.6 to 3.1 m in Arena's NavMesh; Bear house (49) lies off Arena's mesh and stands on the port's built mesh only, 2.23 m); arena_iceberg-bot-fill-01 at (60.0, 1.95, -86.0) is a mesh fill point in the open east yard (7.2 m clearance on the built mesh, 5.2 m on Arena's) that replaces stage marker Bear house (26), which stands on the balcony ladder's concrete part. The 10 m rule above still holds for them (at least 27 m from every gate leaf except the fill row, which is about 22 m from the Bear gate plane, and at least 28 m from every pocket marker). Offline coverage (spawn_coverage.py, 1 m grid, about 4,900 cells; a recomputation on Arena's main component gives 4,837 cells and 31 below five rows before the change, depending on lattice origin): rows more than 25 m away from a cell, minimum 4 -> 10, median 7 -> 14, cells with fewer than 5 such rows about 30 -> 0. Patrol ways: Iceberg builds its ways from these rows (ai.json patrol_ways [], PatrolWayRepairs.BuildForZone pairs rows with NavMesh.CalculatePath, O(n^2), once per raid): 17 rows mean 136 pair checks and the host must confirm the way count line of the first raid.",
   "zone": "BotZone_Main",
   "max_bots": 8,
   "player_spawns": [
@@ -171,6 +171,110 @@
         28.98,
         5.0,
         -98.3
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-stage-bear-46",
+      "position": [
+        62.78,
+        3.2,
+        -114.26
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-stage-bear-49",
+      "position": [
+        48.95,
+        1.98,
+        -67.03
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-fill-01",
+      "position": [
+        60.0,
+        1.95,
+        -86.0
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-stage-bear-36",
+      "position": [
+        29.82,
+        3.15,
+        -80.31
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-stage-bear-33",
+      "position": [
+        32.94,
+        3.15,
+        -58.95
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-stage-usec-35",
+      "position": [
+        -8.31,
+        2.05,
+        -39.65
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-stage-usec-32",
+      "position": [
+        -9.64,
+        5.0,
+        -101.49
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-stage-usec-36",
+      "position": [
+        -8.83,
+        2.05,
+        -52.78
       ],
       "radius": 25,
       "categories": [

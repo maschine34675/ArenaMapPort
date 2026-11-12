@@ -106,7 +106,11 @@ OMITTED_SIDECAR_KEYS = ("puddle_extra_surfaces", "shader_fallback_names")
 
 # Anchors outside the package markers (tools/maps/iceberg.exits.json and the modes sidecar will carry the same numbers):
 CAPTURE_POINTS = {"A": (16.77, 3.90, -91.39), "B": (10.614, 2.69, -77.727), "C": (21.91, 2.85, -47.30)}
-EXIT_CANDIDATES = {"east": (72.0, 1.95, -94.0), "west": (-30.5, 2.92, -85.0)}    # the draft exits of item 7: on Arena's main component, outside the gates
+# The exits of tools/maps/iceberg.exits.json, read from the sidecar (the 2026-10-30 candidates, (72.0, 1.95, -94.0) and (-30.5, 2.92, -85.0) outside
+# the gates, were superseded on 2026-11-12 by in-pocket boxes, rule R3: a later nudge of an exit touches only the sidecar and the descriptor).
+_EXITS = json.loads((REPO / "tools" / "maps" / "iceberg.exits.json").read_text(encoding="utf-8"))["exits"]
+EXIT_CANDIDATES = {"east": tuple(next(e for e in _EXITS if e["name"] == "Iceberg East Gate")["position"]),
+                   "west": tuple(next(e for e in _EXITS if e["name"] == "Iceberg West Gate")["position"])}  # by name, not list order
 
 
 def sidecar(name="iceberg.json"):
@@ -629,11 +633,12 @@ class PackageAnchorTests(unittest.TestCase):
         self.assertGreaterEqual(arr[:, 1].min() - y0, 3.0)
         self.assertGreaterEqual(y1 - arr[:, 1].max(), 3.0)          # the highest marker stands at y 4.99
 
-    def test_the_exit_candidates_lie_outside_both_pockets_and_beyond_the_gates(self):
-        # east exit x 72 < the east gates at x 82.4 < the pocket markers x 89..98; west exit x -30 > the west gates at x -36 > the pocket x -45..-37
+    def test_the_exits_lie_inside_both_pockets_behind_the_gates(self):
+        # 2026-11-12 (rule R3, replaces "outside the pockets, beyond the gates"): the east box stands behind the east gates at x 82.4 (the pocket
+        # markers x 89..98), the west box behind the west gates at x -36 (the pocket x -45..-37), each box wholly on its pocket's side
         east, west = EXIT_CANDIDATES["east"], EXIT_CANDIDATES["west"]
-        self.assertLess(east[0], 82.38 - 5.0)
-        self.assertGreater(west[0], -36.04 + 3.0)
+        self.assertGreater(east[0] - 2.0, 82.38)
+        self.assertLess(west[0] + 2.0, -36.04)
 
 
 @unittest.skipUnless(HAVE_PACKAGE, "work/extract/iceberg-native-v2 is not available (set ARENAMAPPORT_WORK_DIR)")
