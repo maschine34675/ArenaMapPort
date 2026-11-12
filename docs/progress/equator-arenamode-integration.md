@@ -153,3 +153,11 @@ continues to own its ordinary-raid shortcuts. The other 13 maps have not gained
 ArenaMode admission or runtime acceptance through this change. Next map: Bay5
 with the same geometry, spawn-distance, replenishment and protected-return
 checks. `D:\SPT41vanilla` was not updated by this integration.
+
+## 2026-11-12 (late night) - Six more Bot rows (16 in all)
+
+Record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md). Equator's Bot rows grow from 10 to 16 (appended: `core-12`, `born-21`, `born-26`, `core-11`, `core-10`, `core-02`; the donor `arena_equator-bot-atrium` at
+(0, 0.2, 2) and the other original rows untouched); coverage of ArenaMode's 25 m rule (5 distant rows per cell) goes from 82.2 % to 100 %. The "ten bot markers" statement above
+is history. ArenaMode's own harness pins `CountUsable` from (0, 0.2, 2) at 4 by design and needs a re-pin (hand-off list in the record). The two exits did not move
+((2.0, 0.1, 46.0) and (5.0, 0.1, -44.0), 0.0 m from authored on GPU-2): they are the precedent for the exit rule of the other maps. GPU-2 on build `48b316d`:
+`BotZone.Init ... markers=16 onNavMesh=16`.

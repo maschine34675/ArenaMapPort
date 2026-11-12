@@ -185,3 +185,9 @@ Raid 3 of the 0.3.0 verification (Bowl, 00:30, no bots): DynamicMaps 1.2.1 loade
 (50.20, -3.30) in the east pocket, the `Bowl BTR Gate` exit marker, both pockets, the containers and the Mi-26 outline
 (still `bowl-u3-map`). `uibridge_inspect` on the `Ground Floor` `MapLayer`: `Image.sprite.vertices.Length = 35530`
 (limit 65,500). Player-arrow alignment at the spawn matched the drawn pocket; other positions were not checked.
+
+## 2026-11-12 - The Bowl exit markers moved with the exits
+
+The exits of Bowl moved into the team pockets (record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md)). The two exit StaticMarkers in the released pack's `ArenaMapPort_Bowl.jsonc` were patched to the new
+positions (backup of the old files and fresh exports under the ignored `work/dynamicmaps/exits-20261112/`) and deployed with the full deploy of build `48b316d`; the exit
+coordinates quoted above are history. The patched file is byte-identical to a fresh export. The markers in the game were not looked at on the host.

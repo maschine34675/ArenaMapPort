@@ -304,3 +304,10 @@ Not done: item 2 (`uibridge_teleport dryRun=true` to (-7.5, 0.1, -28.0) and (7.5
 spawned at either point stay where it was authored); there was no bot raid in the session. The same session read Equator's booth screens
 (score monitors) from inside the north booth, which is the North Gate extraction box: the raid ended by extraction after 8 s
 (`docs/progress/score-monitors.md`, section "Host evidence").
+
+## 2026-11-12 - The booth precedent is now the rule for every map
+
+Equator's exits stood inside the two booths (see "Exits" above) while the other maps' exits stood beyond the gates. Since 2026-11-12 the booth
+placement is the rule for all six maps: one exit per team pocket, centre inside the pocket's initial spawn footprint, every Player row at least 2.5 m from the box
+edge (rule R3). Equator's exits did not move; its South Gate box touches the booth's back-wall elevator frames and is the one listed solid exception. Equator's
+Bot rows grow from 10 to 16. Record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md).

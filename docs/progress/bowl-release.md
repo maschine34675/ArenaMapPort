@@ -938,3 +938,11 @@ the 2 m probe radius against the tower position of that note, (-58.1, -9.1): by 
 unreachable islands, which the probes confirm (they stop 5.8 m and 6.9 m short), and the lead reads them as lying outside Arena's play area.
 Nothing to change: no bake input, no descriptor field, no sidecar. Vault limits above 1.2 m are still untested (they need player input), and
 these probes check reachability only, not a walk.
+
+## 2026-11-12 (late night) - Four more Bot rows, both exits moved into the team pockets
+
+Record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md). Bowl's Bot rows grow from 17 to 21 (appended: `born-16`, `born-27`, `fill-01`, `fill-02`; the donor `arena_bowl-bot-core-02` untouched) and the exits
+move: BTR Gate to (49.3, 0.1, -11.1) (east pocket) and Army Gate to (-57.4, 0.2, -60.8) (west pocket). This supersedes the old positions (51.0, 0.1, -31.0)
+and (-51.0, 0.1, -49.0) and the exit clearance statements of item 5 (5.1 m / 20.9 m / 12.3 m), which stay as history. New tests: `test_bowl_spawns.py` and two
+`BowlMapTests`. GPU-2 on build `48b316d`: `BotZone.Init ... markers=21 onNavMesh=21`; both exits authored 0.0 and 0.1 m from the sidecar; an ArenaMode Team
+Deathmatch run stood 12 s in the west exit box without extraction.

@@ -8,6 +8,12 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md) — **2026-11-12**: 39 appended Bot spawn rows on the six maps (Chop Shop 16, Equator 16,
+  Bay5 16, Iceberg 17, Air Pit 20, Bowl 21) for ArenaMode's 25 m rule, the ten non-Equator exits moved into the team pockets so the green flares mark the
+  start areas (rule R3, consequences R4, Chop Shop's appended rows R5), the offline tool `tools/validate/spawn_coverage.py` and its layout tests, Chop Shop's
+  marker at 743/428; gates, deploy, GPU-2 raids on all six maps and two ArenaMode Team Deathmatch runs (Bowl, Iceberg), "Not checked", the hand-off list for
+  the ArenaMode session. Supersedes the 10 m exit rule of [exfils-stage2.md](exfils-stage2.md) and the bot-row counts of the older records.
+
 - [arena-update-20261101.md](arena-update-20261101.md) — Arena 0.6.2.0.48473 (2026-11-01): keys of 0.4.0 and Iceberg verified on the VM and
   MASCHINE11, file and object diff against 0.6.1 (renumbered shared-file pointers and two dust meshes only), test adjustments; no rebuild.
 
@@ -128,7 +134,7 @@ dated state in one screen; read it before this index if you only have a minute.
   loading rotation, official description row, locale name 'Arena: Chop Shop'; spatial acoustics with the SPT-SEB check; MultiFlare, zero
   level, shader stand-in decision); items 12-14 on 2026-11-11: promotion into `ArenaMapRegistry.All` (unreleased), U1, first stage with
   its key (verified on Arena 0.6.1, 0.6.2.48473 and 0.6.2.48598), deploy and the first GPU-2 raids (0 warnings); late that night, after the user's
-  feedback, Arena's own 30-fan crowd and the marker moved to 870/428, host-checked; 2026-11-12 the hall's sun patch (roof hulls enrolled in
+  feedback, Arena's own 30-fan crowd and the marker moved to 870/428 (743/428 since 2026-11-12), host-checked; 2026-11-12 the hall's sun patch (roof hulls enrolled in
   DistantShadow, record in lighting-followup.md) and the decision to leave Iceberg's route twins (spatial-audio.md). Plan: [../PLAN-AUTOSERVICE.md](../PLAN-AUTOSERVICE.md).
 - [autoservice-source-062.md](autoservice-source-062.md) — Autoservice's Arena 0.5.4 spike package against the 0.6.2 native package v1
   (2026-11-08): no index shift, +387 objects (372 border cubes, two props), every id rehashed, the native blocks, the reviewed
@@ -632,13 +638,15 @@ successor instead unless you're specifically investigating that cycle's history.
 
 - [distribution-sidecars.md](distribution-sidecars.md) — descriptor discovery accepts bot/exit
   sidecars without weakening malformed-descriptor or exact-distribution checks; six regressions.
-- [equator-arenamode-integration.md](equator-arenamode-integration.md) — ten bot/four player markers,
+- [equator-arenamode-integration.md](equator-arenamode-integration.md) — ten bot/four player markers (16 bot rows since
+  2026-11-12, see [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md)),
   distant spawn coverage, independent review, deployment identities, native Deathmatch/Gun Game
   admission, replenishment, combat respawns and persisted-profile return on the GPU host.
 
 ## Added 2026-09-21 — Bay5 gameplay and Equator specular cap
 
-- [bay5-arenamode-integration.md](bay5-arenamode-integration.md) — four player and ten bot markers,
+- [bay5-arenamode-integration.md](bay5-arenamode-integration.md) — four player and ten bot markers (16 bot rows and both exits
+  moved into the team pockets on 2026-11-12, see [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md)),
   distant coverage, native mode admission/respawns/profile protection, two ordinary exits, numeric
   collision-layer parity in the NavMesh bake, and the final build/deployment acceptance checkpoints.
 - [equator-specular-cap.md](equator-specular-cap.md) — map-wide reversible `p0/Reflective` ceiling,

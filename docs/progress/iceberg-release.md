@@ -1274,3 +1274,13 @@ Re-seed rule: hidden int key `Lighting (arena_iceberg)/EmissionDefaultsRevision`
 Changed: `tools/maps/iceberg.json` (`emission_cap` 4.6, `emission_floor` 1.8), the Iceberg entry of `ArenaMapDescriptor.cs`, the two key descriptions and `MigrateDefaults` in `EmissionCapRepairs.cs`, `EmissionDefaultsModel.cs` (new), `EmissionDefaultsModelTests.cs` (new), `EmissionCapDescriptorTests.cs`, the test project's link, `test_iceberg_emission_cap.py`. Results: `validate_map_descriptors.py` OK (14 descriptors); `test_iceberg_emission_cap` 21 tests OK; client Release build (DllOnly) 0 warnings, 0 errors; `dotnet test -c Release --filter FullyQualifiedName~Emission` 94 of 94.
 
 **Host check pending:** an Iceberg raid should log `[EmissionCap] map=arena_iceberg cap=4.60 floor=1.80 ...` (5 capped, 15 lifted), and a .cfg that still holds 4.8 / 1.9 should log the re-seed line once. The 4.8 / 1.9 evidence above (GPU-2, 16:51-16:53) stays valid for the banding, which is unchanged.
+
+## 2026-11-12 (late night) - Eight more Bot rows, both exits moved into the team pockets
+
+Record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md). Iceberg's Bot rows grow from 9 to 17 (appended: `stage-bear-46`, `stage-bear-49`, `fill-01`, `stage-bear-36`, `stage-bear-33`, `stage-usec-35`,
+`stage-usec-32`, `stage-usec-36`; the donor `arena_iceberg-bot-core-01` untouched), and the exits move: East Gate to (90.88, 1.67, -86.34) (Bear pocket, landing
+at the top of the stairs, stage marker Bear house (9) inside the box) and West Gate to (-38.79, 3.2, -85.6) (Usec pocket, terrace, Usec house (11) inside the box).
+This supersedes the old positions (72.0, 1.95, -94.0) and (-30.5, 2.92, -85.0) and the "outside the gates, 10 m from every player spawn row" rule of item 7, which
+stay as history. GPU-2 on build `48b316d`: `spawn placement: ... all spawn points already free`; the patrol-way builder made 2 ways from 17 points
+(`BotZone.Init ... markers=17 onNavMesh=17 ... patrolWays=2`); both exits authored 0.2 and 0.0 m from the sidecar. ArenaMode Team Deathmatch: the first
+spawn (89.3, 1.9, -86.4) lay inside the east box, 1.6 m from the flare (view tinted green), and did not extract through the countdown; respawns went to (97.9, 0.7, -83.7).

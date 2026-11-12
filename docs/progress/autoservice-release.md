@@ -614,3 +614,13 @@ census and host evidence: [lighting-followup.md](lighting-followup.md), 2026-11-
 also found that the 2026-10-30 repair relabels 533 hops from the doorway at x 29.6 (scene portal 66) to portal 30 at x 33.3, 3.7 m away on the same wall:
 valid against the scene graph, not exactly Arena's geometry; modelled effect small and limited to the elevators and boiler rooms. Record:
 [spatial-audio.md](spatial-audio.md), 2026-11-12. This closes the open item of the 2026-11-11 acoustics section ("leave as is, or de-duplicate").
+
+## 2026-11-12 (late night) - More Bot rows, exits in the pockets, marker 743/428
+
+Record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md). Chop Shop's Bot rows grow from 7 to 16 (nine appended: `lasthero-04`, `lasthero-13`, `fill-01`, `core-06`, `lasthero-03`,
+`lasthero-10`, `fill-02`, `fill-03`, `fill-04`; the seven original rows and the donor `arena_autoservice-bot-core-03` untouched), and the two exits move
+into the pockets: East Gate to (-340.5, -3.6, 485.0), West Gate to (-406.5, -3.7, 478.5). This supersedes the exit positions (-349.0, -3.77, 488.5)
+and (-393.0, -3.79, 501.0) and the "10 m or more from every player and bot row" rule of items 6 and 12 above (kept as history); the 10 m / 5 m row
+conventions of 2026-11-11 stay pinned for the seven original rows, the appended rows follow rule R5. The selection marker is displayed at 743/428
+(870/428 before; section "User feedback" of 2026-11-11 above). GPU-2 on build `48b316d`: `BotZone.Init 'BotZone_Main': markers=16 onNavMesh=16`, both
+exits authored 0.1 and 0.0 m from the sidecar, flares lit, extraction by teleport into the east box after 7.7 s, 0 warnings.

@@ -3525,3 +3525,12 @@ same day). Raid on GPU-2 (22:18, PMC, no bots): `warnings 0; errors 0`, `load ar
 "plywood_board_2 (46)"` finds nothing, `VARIANT/cardbox_vinyl_(ARENA) (2)` is active at (-6.346, 4.487, 21.085) with its LOD0, collider and
 ballistic children, and the screenshot shows the same view as the user's without the board. So no crate was missing: the board was a
 level38 leftover above level324's two-crate stack.
+
+## 2026-11-12 (late night) - Six more Bot rows, both exits moved into the team pockets
+
+Record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md). Air Pit's Bot rows grow from 14 to 20 (six appended: `center-lane`, `north-hall-centre`, `south-apron-west`, `south-apron-east`,
+`west-lane`, `west-hall`; the donor `arena_airpit-bot-center-east` untouched), and the exits move: North Gate to (-12.5, 0.1, 77.0) (north pocket, behind the
+held passport gates: not reachable in a plain raid until a mode plugin releases them) and South Gate to (-9.5, 0.1, -62.0) (pocket mouth; the listed
+exception to rule R3, nearest box edge 0.41 m outside the footprint). This supersedes the old exit positions (-11.0, 0.1, 62.0) and (-3.0, 0.1, -58.0), the
+earlier distance-from-spawn and 10 m statements for the gates and the 18 spawn points (4 Player + 14 Bot; now 4 + 20 = 24) wherever they stand above; those lines stay as history. GPU-2 on build
+`48b316d`: `BotZone.Init ... markers=20 onNavMesh=20`, both exits authored 0.1 and 0.0 m from the sidecar, `status=RegularMode`.

@@ -678,6 +678,8 @@ The numbered list below is kept as the record of the options.
 | Air Pit North Gate | (-11.0, 0.1, 62.0) | 14.8 m | 6.0 m |
 | Air Pit South Gate | (-3.0, 0.1, -58.0) | 17.8 m | 4.0 m |
 
+(superseded 2026-11-12: both gates moved (North to (-12.5, 0.1, 77.0), South to (-9.5, 0.1, -62.0)) into the team pockets, rule R3; see [spawn-rows-and-pocket-exits.md](progress/spawn-rows-and-pocket-exits.md))
+
 `tools/maps/airpit.bots.json` (zone `BotZone_Main`, `max_bots 8`, waves and 4 PMC boss waves as in `equator.bots.json`):
 player spawns (y 0.1, radius 5): All (-10.24, 76.74) rot 180; Usec (0.33, 78.30) rot 180; Bear (-9.94, -74.40) rot 0;
 South_All (-16.91, -71.70) rot 0 (ids `arena_airpit-player-{all,usec,bear,south-all}`). Bot spawns (y 0.1, radius 25,

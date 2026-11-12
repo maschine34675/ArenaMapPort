@@ -1,7 +1,7 @@
 """Iceberg data contract (docs/PLAN-ICEBERG.md item 7, 2026-10-30): tools/maps/iceberg.bots.json, iceberg.exits.json,
 iceberg.modes.json and iceberg.ai.json against each other, against Arena's own NavMesh and against the port's colliders.
 
-Why: nobody has walked Iceberg yet, so everything checkable without the host is pinned here, in three layers.
+Why: the data contract is pinned offline here (the host runs are recorded in docs/progress/iceberg-release.md and spawn-rows-and-pocket-exits.md), so everything checkable without the host is pinned here, in three layers.
 
 1. Data only (the repository): the sidecars have the shape the released maps' have and the generator turns them into the
    base.json fields; the player rows are four of the 20 pocket markers of iceberg.modes.json, the bot rows are Arena's AI

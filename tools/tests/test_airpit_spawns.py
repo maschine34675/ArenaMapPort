@@ -66,13 +66,13 @@ MIN_ARENA_CLEARANCE = 1.0          # border clearance every spawn point keeps in
 EXIT_HALF_BOX = 2.0
 WORK = Path(os.environ.get("ARENAMAPPORT_WORK_DIR", REPO / "work"))   # a checkout without work/ points this at the main one (override added 2026-11-12)
 BUILT_NAVMESH = WORK / "build" / "airpit" / "arena_airpit_navmesh.bundle"
-# 2026-11-12 (user request, rules R1/R2 of docs/progress/spawn-rows-20261112.md): six Bot rows are APPENDED after the fourteen
+# 2026-11-12 (user request, rule R1 and the 25 m rule of docs/progress/spawn-rows-and-pocket-exits.md): six Bot rows are APPENDED after the fourteen
 # original ones, in this order (R1: the originals stay byte-identical, ArenaMode pins bot-center-east by id and floats). Why more rows:
-# ArenaMode's burst selector uses only Bot rows at least 25 m (3D) from the player (R2).
+# ArenaMode's burst selector uses only Bot rows at least 25 m (3D) from the player (the 25 m rule).
 APPENDED_BOTS = ["center-lane", "north-hall-centre", "south-apron-west", "south-apron-east", "west-lane", "west-hall"]
 ORIGINAL_BOT_ORDER = ["north-end-west", "north-end-east", "north-approach", "north-hall", "north-hall-west", "east-north", "east-mid",
                       "east-south", "west-mid", "west-south", "center-east", "plane-south", "south-apron", "south-end"]
-# What the appended rows satisfy, measured offline on 2026-11-12 (host check pending), with a small margin: the smallest values are
+# What the appended rows satisfy, measured offline on 2026-11-12 (host-checked on GPU-2 the same day: all rows accepted by dryRun, markers == onNavMesh), with a small margin: the smallest values are
 # 1.59 m of built-mesh clearance, 14.8 m to the nearest other row and 27.5 m to the nearest Player row.
 APPENDED_MIN_CLEARANCE = 1.5
 APPENDED_MIN_ROW_DISTANCE = 14.0

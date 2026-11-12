@@ -242,7 +242,7 @@ class BowlSidecarTests(SidecarData, unittest.TestCase):
         self.assertEqual(comment.count("one gate beyond each pocket"), 1)
         self.assertIn("OLD positions (one gate beyond each pocket)", comment)
         self.assertIn("INSIDE its pocket", comment)
-        self.assertIn("OFFLINE, host-unchecked", comment)
+        self.assertIn("Host-checked on GPU-2 2026-11-12", comment)
 
 
 def mesh_available():

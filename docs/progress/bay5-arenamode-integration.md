@@ -257,3 +257,11 @@ profile comparison; those remain established by the preceding checkpoint.
 Movement used coordinate-assisted probes, not an exhaustive walk-through of
 every passage. Gun Game advancement/full ladders, prolonged sessions and frame-time
 performance remain outside the results claimed here.
+
+## 2026-11-12 (late night) - Six more Bot rows, both exits moved into the team pockets
+
+Record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md). Bay5's Bot rows grow from 10 to 16 (appended: `core-08`, `core-07`, `core-03`, `core-06`, `fill-01`, `fill-02`; the donor `arena_bay5-bot-west-centre`
+and the other original rows untouched), and the exits move: North Loading Bay to (137.0, -2.84, 51.0) (USEC warehouse pocket) and South
+Container Lane to (50.0, -3.78, -2.5) (BEAR depot pocket). This supersedes the exit positions (96.0, -2.9252, 61.0) and (99.029, -3.8574, -2.8513) and the "ten
+bot markers" count in the sections above, which stay as history. GPU-2 on build `48b316d`: `BotZone.Init ... markers=16 onNavMesh=16`; both exits authored 0.0 m from the
+sidecar, both flares seen inside their halls. Not run: an ArenaMode match on Bay5 with the new rows or exits.

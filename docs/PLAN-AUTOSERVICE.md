@@ -117,7 +117,7 @@ between Arena 0.5.4 and 0.6.2 (62, 63, 65, 66, 69, 112, 135, 136, 243 are identi
   four of the five released maps), loading screen `AllScreens_Loadingscreen-chop-shop` (path 1731, 1920 x 1080 DXT1) and the four
   `Arena_MainMenu_Paralax_ChopShop-1..4` (sharedassets1.assets ids 438, 1445, 987, 135, 2048 x 1024). That these are Autoservice's
   art is settled by looking at them before any row is written (path ids are build hints, names decide). The selection marker
-  (407, 471) already exists in sidecar, descriptor and `markers.json`.
+  (407, 471) already exists in sidecar, descriptor and `markers.json` (superseded: displayed at 870/428 from 2026-11-11 and at 743/428 since 2026-11-12, see [selection-map.md](progress/selection-map.md)).
 - **Ambient audio** (package v2): 42 players in the Sound scene (23 `AmbientSoundPlayer`, 16 `SeasonAmbientSoundPlayer`, 3
   `SeasonLoopAmbientSoundPlayer`), two groups (`CommonAmbientInGroup` 21 on `CommonAmbInEffects`, `CommonAmbientOutGroup` 20 on
   `CommonAmbOutEffects`), 1 `BezierSpline`. New reviewed contract work (a schema with states): the `SeasonLoopAmbientSoundPlayer`
@@ -151,6 +151,7 @@ between Arena 0.5.4 and 0.6.2 (62, 63, 65, 66, 69, 112, 135, 136, 243 are identi
   the gates (the corridors are tight): east about (-349.0, -3.78, 489.0), 10.4 m from the east big-gate root (-344.09, 479.86); west
   about (-393, -3.79, 501), 9.3 m from the west techlight shutter root (-402.26, -3.78, 501.22) ((-398, 501) is only 4.3 m from it and
   is dropped); distances are stated per box, not as one range (clearance 3.3-3.4 m, nearest marker 8.7 m or more, **inferred** offline); verified with a NavMesh route and `uibridge_walk`.
+  (superseded 2026-11-12: both exits moved into the team pockets, East Gate to (-340.5, -3.6, 485.0) and West Gate to (-406.5, -3.7, 478.5), rule R3; the Bot rows grew from 7 to 16; see [spawn-rows-and-pocket-exits.md](progress/spawn-rows-and-pocket-exits.md))
 - **Bots and AI**: the AI scene's 16 bot born points (5 per pocket, 6 in the yard), 7 `AICorePoint`s (group 7), the 5-hub
   PatrolWay with 59 patrol points and the 23 mine points are authored on the main component and imported through
   `extract_ai_anchors` with the plan's `ai` role; the stale far-field leftovers (2,696 `ParentOfBearingPoints`, AI_SUSP, 44

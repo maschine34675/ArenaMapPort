@@ -147,3 +147,10 @@ is west along the hall, then out through the shutter at the hall's south-east co
 sheet/hall wall at ~2 m, which is the niche, not a closed exit). Second `CreateFromScene` pass: `deactivated 0 part(s),
 6 already off`. No warnings. Deployed to D:\SPT41 and D:\SPT41vanilla.
 
+
+## 2026-11-12 - The 10 m rule is superseded
+
+The placement statements above ("10 m from the nearest spawn", a box within about 5 m of a spawn point would extract a fresh spawn) are history. Since
+2026-11-12 every map's two exits stand inside the team pockets (Air Pit South Gate at the pocket mouth, the one listed exception) (rule R3: box centre inside the pocket's initial spawn footprint, every Player row at least
+2.5 m from the box edge, floor under the centre, no solid in the box), so that the green flares mark the start areas in team modes; in a plain raid a
+spawn is a few metres from an 8 s exit (R4). Record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md).

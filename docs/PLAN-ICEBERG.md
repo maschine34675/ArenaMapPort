@@ -123,7 +123,7 @@ Phase A (package) -> Phase B (a playable raid) -> Phase C (native features and p
    contains a marker; no equal-pocket requirement) and emits the three capture points and the stage table; `iceberg.modes.json`,
    `iceberg.bots.json` (player spawns from the pockets, bot zones from the 11 AI core points, waves and PMC squads after AirPit),
    `iceberg.exits.json` (two boxes on the main NavMesh component outside the gates: east about (72, 2.0, -94), west about
-   (-30, 2.9, -86)), `iceberg.ai.json` (11 core points; the 4 off-map patrol hubs and the 10 off-map bot markers are dropped).
+   (-30, 2.9, -86) (superseded 2026-11-12: east moved to (90.88, 1.67, -86.34), west to (-38.79, 3.2, -85.6) into the team pockets, rule R3; see [spawn-rows-and-pocket-exits.md](progress/spawn-rows-and-pocket-exits.md))), `iceberg.ai.json` (11 core points; the 4 off-map patrol hubs and the 10 off-map bot markers are dropped).
 8. **Doors, gate sounds, score monitors**: `DOT_SOURCES["arena_iceberg"]` and `iceberg.doors.json` (11 rows, 3 barrier paths),
    `extract_gate_sounds` row with a per-map join margin, `gate_sound_fit.json` rows for the six clips, `iceberg.gatesounds.json`;
    `extract_score_monitors` with word 13 dark, `iceberg.monitors.json`.

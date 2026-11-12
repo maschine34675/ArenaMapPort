@@ -749,7 +749,7 @@ namespace ArenaMapPort.Shared
             IconX: 469, IconY: 92,
             DbBaseJsonPath: "arena_bay5/base.json",
             // 2026-11-12: one exit per team pocket, the box INSIDE the pocket (the green flare marks the spawn area in team modes);
-            // see tools/maps/bay5.exits.json. Offline positions, host check pending.
+            // see tools/maps/bay5.exits.json. Host-checked on GPU-2 2026-11-12 (docs/progress/spawn-rows-and-pocket-exits.md): both exits authored 0.0 m from these positions, flares seen; not checked: a respawn onto an in-box marker.
             Exits: new[]
             {
                 new ArenaExitDescriptor("Bay5 North Loading Bay", 137.0f, -2.84f, 51.0f),
@@ -874,7 +874,7 @@ namespace ArenaMapPort.Shared
                 // south edge 0.4 m north of the spawn-bound edge (the one listed exception, stated on the box's nearest edge, at most 1 m outside the
                 // footprint: no in-pocket box keeps the south Player rows 2.5 m from its edge). During a developer gate hold neither team can walk
                 // to its exit (the south box stands north of the closed BUS_DOORS); a plain raid reaches only the south one.
-                // Offline, host-unchecked.
+                // Host-checked on GPU-2 2026-11-12 (docs/progress/spawn-rows-and-pocket-exits.md): authored 0.1 / 0.0 m from here; North Gate is unreachable in a plain raid by design (held passport gates).
                 new ArenaExitDescriptor("Air Pit North Gate", -12.5f, 0.1f, 77.0f),
                 new ArenaExitDescriptor("Air Pit South Gate", -9.5f, 0.1f, -62.0f),
             },
@@ -1272,7 +1272,7 @@ namespace ArenaMapPort.Shared
             // Native advancing server time (user, 2026-11-08): no Directional light exists in the imported scenes, the WeatherRig supplies it.
             UsesServerTime: true,
             // PLAN-AUTOSERVICE item 6/12 (docs/progress/autoservice-release.md, 2026-11-11). Exits mirror tools/maps/autoservice.exits.json
-            // (AutoServiceMapTests); Arena authors no extraction on this map. 2026-11-12 (rule R3, offline, not host-checked): one exit per team
+            // (AutoServiceMapTests); Arena authors no extraction on this map. 2026-11-12 (rule R3, host-checked on GPU-2 2026-11-12, docs/progress/spawn-rows-and-pocket-exits.md): one exit per team
             // pocket, the box (4 x 3 x 4 m) INSIDE its pocket's spawn-bound footprint so that the green signal flare marks the team's start area
             // in ArenaMode's team modes (extraction is off there). East: just inside the big gate; West: the south end of the roofed warehouse.
             // Every Player row keeps 2.5 m to the box edge. Consequences (R4): in a plain raid a player spawns a few steps from an 8 s exit; with
@@ -1403,7 +1403,7 @@ namespace ArenaMapPort.Shared
             DbBaseJsonPath: "arena_bowl/base.json",
             // PLAN-BOWL item 5/7 (docs/progress/bowl-release.md, 2026-10-18). Exits mirror tools/maps/bowl.exits.json
             // (BowlMapTests). 2026-11-12 (rule R3, docs/progress/bowl-release.md): one exit per team pocket, the box INSIDE its pocket so that the
-            // green signal flare marks the team's spawn area in ArenaMode's team modes; offline, host check pending. Before: one gate beyond each pocket.
+            // green signal flare marks the team's spawn area in ArenaMode's team modes; host-checked on GPU-2 2026-11-12 (docs/progress/spawn-rows-and-pocket-exits.md). Before: one gate beyond each pocket.
             Exits: new[]
             {
                 new ArenaExitDescriptor("Bowl BTR Gate", 49.3f, 0.1f, -11.1f),
@@ -1600,7 +1600,7 @@ namespace ArenaMapPort.Shared
             // since 2026-11-12 (lead rule R3, user request) one exit per team pocket, the box INSIDE its pocket's spawn-bound footprint (East: the Bear pocket behind
             // GATES_A, upper west part of the ramp; West: the Usec pocket behind GATES_B), so that the green signal flare marks the team's spawn area in ArenaMode's team
             // modes. Every Player row keeps 2.5 m to the box edge. In a plain raid a player now spawns a few metres from an 8 s exit and a team held by the developer gate
-            // hold can reach its exit. Offline, host-unchecked. (2026-10-30: one gate outside each pocket, 72.0/-94.0 and -30.5/-85.0.)
+            // hold can reach its exit. Host-checked on GPU-2 2026-11-12 (docs/progress/spawn-rows-and-pocket-exits.md). (2026-10-30: one gate outside each pocket, 72.0/-94.0 and -30.5/-85.0.)
             Exits: new[]
             {
                 new ArenaExitDescriptor("Iceberg East Gate", 90.88f, 1.67f, -86.34f),

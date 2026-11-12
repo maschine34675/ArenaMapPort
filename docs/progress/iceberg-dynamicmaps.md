@@ -96,3 +96,9 @@ cmd.exe for G1/G2; those commands did not run. Quoting the absolute Python path 
 the runner, and both checks then passed. G3 had already passed and was not repeated.
 A read-only code review found no blocking defect. Source/build, deployment/sync and
 native in-game evidence are complete for this overview; this is not an Iceberg release.
+
+## 2026-11-12 - The Iceberg exit markers moved with the exits
+
+The exits of Iceberg moved into the team pockets (record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md)). The two exit StaticMarkers in the released pack's `ArenaMapPort_Iceberg.jsonc` were patched to the new
+positions (backup of the old files and fresh exports under the ignored `work/dynamicmaps/exits-20261112/`) and deployed with the full deploy of build `48b316d`; the exit
+coordinates quoted above are history. The patched file is byte-identical to a fresh export. The markers in the game were not looked at on the host.

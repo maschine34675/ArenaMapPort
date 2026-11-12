@@ -1,7 +1,7 @@
 """Autoservice data contract (docs/PLAN-AUTOSERVICE.md item 6, 2026-11-11): tools/maps/autoservice.bots.json, autoservice.exits.json,
 autoservice.modes.json and autoservice.ai.json against each other, against Arena's own NavMesh and against the port's colliders.
 
-Why: nobody has walked Autoservice yet, so everything checkable without the host is pinned here, in three layers (the Iceberg
+Why: the data contract is pinned offline here (the host runs are recorded in docs/progress/autoservice-release.md and spawn-rows-and-pocket-exits.md), so everything checkable without the host is pinned here, in three layers (the Iceberg
 pattern of test_iceberg_spawns.py).
 
 1. Data only (the repository): the sidecars have the shape the released maps' have and the generator turns them into the
@@ -17,7 +17,7 @@ pattern of test_iceberg_spawns.py).
 
 The C# half (descriptor Exits mirror, server parse) is the lead's promotion test (item 12).
 
-2026-11-12 (more spawn points and exits inside the pockets; offline, host check pending): nine Bot rows are appended after the seven original
+2026-11-12 (more spawn points and exits inside the pockets; host-checked on GPU-2 2026-11-12, see docs/progress/spawn-rows-and-pocket-exits.md): nine Bot rows are appended after the seven original
 ones and the two exits moved into their team pockets. Rules, replacing the retired ones where they changed:
 
 * R1: the seven original rows stay byte-identical and first (ArenaMode pins ``core-03`` by id and floats); the appended rows follow in order.

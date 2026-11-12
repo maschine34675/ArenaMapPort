@@ -139,3 +139,9 @@ north bound 86, both boxes/compass/exits visibly rendered. Actual
 Evidence: `native-map.png` and `native-inspection.txt` in the task output directory.
 The host returned to MainMenu. This was a **menu-only renderer check**, not a
 new raid or player-arrow alignment test; coordinate formulas/axes are unchanged.
+
+## 2026-11-12 - The Air Pit exit markers moved with the exits
+
+The exits of Air Pit moved into the team pockets (record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md)). The two exit StaticMarkers in the released pack's `ArenaMapPort_AirPit.jsonc` were patched to the new
+positions (backup of the old files and fresh exports under the ignored `work/dynamicmaps/exits-20261112/`) and deployed with the full deploy of build `48b316d`; the exit
+coordinates quoted above are history. The patched file is byte-identical to a fresh export (the fresh Ground.svg differs from the released one, older navmesh.json snapshot, so the released SVG was kept). The markers in the game were not looked at on the host.

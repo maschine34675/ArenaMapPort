@@ -41,13 +41,27 @@ chain, see `AGENTS.md` Layout) or from `uibridge_player` while standing there.
 ```
 
 - `player_spawns`: one per side you want (`All`, `Usec`, `Bear`); the client stamps the map's
-  `InfiltrationName` onto Player-category points (`SpawnInfiltrationRepairs`). Keep them 10 m or more from
-  any exit box (an exit within ~5 m extracts a fresh spawn) and out of enclosed props — `SpawnPlacementRepairs`
-  moves a boxed-in point but cannot judge a narrow niche; walk it.
-- `bot_spawns`: the points the patrol-way builder chains into ways (`PatrolWayRepairs`, one way per
-  NavMesh-connected component, up to 8 points per way). Six well-spread ground-floor points gave visible
-  patrols on Equator; more points = denser patrol graph. `categories` must include `BotPmc` for PMC squads.
-  Do not put points on decorative floors outside the NavMesh volume (Equator's upper rings).
+  `InfiltrationName` onto Player-category points (`SpawnInfiltrationRepairs`). Keep every Player row at least
+  2.5 m from the edge of an exit box (since 2026-11-12; before, 10 m from any exit box: the exits now stand in the team
+  pockets, so a plain-raid spawn is a few metres from an 8 s exit by design, rule R3/R4 in section 2) and out of
+  enclosed props — `SpawnPlacementRepairs` moves a boxed-in point but cannot judge a narrow niche; walk it.
+- `bot_spawns`: the Bot rows. ArenaMode picks a bot's spawn only among rows farther than 25 m (3D) from the
+  player, so a map needs rows spread over the whole play space: aim for at least 5 rows farther than 25 m from
+  every walkable cell outside the pockets (Tactical needs five distinct coordinates), 16 to 24 rows in all (the tool's defaults), and
+  at least 6 usable positions for the pickups. `tools/validate/spawn_coverage.py` measures that on the built
+  NavMesh and proposes rows (`--stem <stem> --package work/extract/<package>`); `--check` verifies the committed
+  layout (`tools/tests/test_spawn_layout_rules.py` runs it for the six maps; add the map to its `LAYOUTS` table).
+  Take Arena's own markers first (LastHero markers, AI core and born points, CheckPoint stage markers), mesh fill
+  points only where none passes. **Rows are appended, never changed:** an existing row keeps its id, position,
+  radius and order, and ArenaMode pins one donor row per map by id and exact floats (AGENTS.md, Traps "Spawn rows
+  and pocket exits"). New ids are `arena_<stem>-bot-<suffix>` (the tool names a native row after its source: `core-<id>`, `born-<n>`, `lasthero-<n>`, `stage-<side>-<n>`, fill rows `fill-01`..), categories exactly `["Bot", "BotPmc"]`
+  (`BotPmc` for PMC squads), zone `BotZone_Main`, radius 25, never the prefix `arena-<map>-tdm-v1-`. Each row on
+  the play component of the built NavMesh with the clearance the map's test demands (1.35 m on Iceberg and Chop
+  Shop), outside both pocket footprints by 1.5 m and 2.5 m from every gate footprint; do not put points on
+  decorative floors outside the NavMesh volume (Equator's upper rings). Patrol ways: a map with `patrol_ways` in
+  its `<stem>.ai.json` keeps them whatever the row count; only a map without (today Iceberg) gets its ways built
+  from the rows (`PatrolWayRepairs`, one way per NavMesh-connected component, up to 8 points per way), where six
+  well-spread ground-floor points gave visible patrols on Equator and more points make a denser patrol graph.
 - `waves`: scav waves (Savage/assault), `slots_*` bots per wave, `time_*` seconds after raid start.
 - `boss_waves`: PMC squads are `BossLocationSpawn` entries with `BossName` pmcUSEC/pmcBEAR (Factory's
   shape, `Time -1`, `IgnoreMaxBots true` — they do not count against `max_bots`); `boss_zone` names the
@@ -67,9 +81,24 @@ Read by `make_base_json.py` (`apply_exits`) into `base.json` `exits`; the client
 ] }
 ```
 
-Place the box on real floor (the client samples the NavMesh within 6 m and logs `NotPresent` if it fails),
-on the far side of a spawn zone, 10 m from the nearest spawn. `name` doubles as the locale key
-(`ApplyExitLocale`). ArenaMode does not need exits; they are the way to end a test raid on foot.
+Place the box on real floor (the client samples the NavMesh within 6 m and logs `NotPresent` if it fails).
+**Where (rule R3, 2026-11-12, [spawn-rows-and-pocket-exits.md](progress/spawn-rows-and-pocket-exits.md)):** one exit per
+team pocket, the box centre inside the pocket's initial spawn-bound footprint (`<stem>.modes.json`), every Player row at least 2.5 m
+from the box edge, floor under the centre and no solid in the box between floor+0.3 and floor+2.5. The green flare then marks the
+team's start area in a mode that disables extraction (ArenaMode). The two listed exceptions are Air Pit's South Gate (a pocket-mouth
+exit, nearest box edge at most 1 m outside the footprint) and Equator's South Gate (touches the booth's elevator frames); any other
+exception needs a reason in the sidecar comment and in `test_spawn_layout_rules.py`. Consequences (R4): in a plain raid a player
+spawns a few metres from an 8 s exit, and an exit behind a held gate cannot be reached until the mode plugin releases the gates.
+This replaces the earlier "on the far side of a spawn zone, 10 m from the nearest spawn". `name` doubles as the locale key
+(`ApplyExitLocale`) and ArenaMode lists Equator's names, so a moved exit keeps its name. ArenaMode does not need exits; they are the way to
+end a test raid on foot and, in a team mode, a marker for the spawn area.
+
+Changing an exit: the sidecar and the descriptor's `Exits` change in one commit, `base.json` is regenerated (`make_base_json.py`;
+a server restart), the exit lines of the DynamicMaps pack (two `StaticMarkers` in
+`ArenaMapPort_<Map>.jsonc`) must be moved and the pack redeployed (`-DynamicMapsPackage`), and the score-monitor rows
+(`<stem>.monitors.json`) are checked against the new box (Equator's booth screens are read from inside an exit box). The mirror tests:
+`BaseJsonTests.Exits_DescriptorMirrorsSidecar` for Equator; add the same for the new map (each map has a `<Map>MapTests`; Bowl's are
+`ExitTransformsMatchTheSidecarAndServerEligibility` and `SpawnPointsWavesAndSquadsMatchTheBotsSidecar`, with `tools/tests/test_bowl_spawns.py`).
 
 ## 3. Barriers the client must open — `opened_barriers` in `tools/maps/<stem>.json`
 
@@ -242,4 +271,9 @@ brain-table stand-in row (`ApplyBrainTable`/`ApplyPmcBrainTables`, Equator → `
    more than one component means the spawn points sit on NavMesh islands; move them or fix the bake.
 3. `spawn openings:` block — every player spawn's rays `clear` or hitting a known prop.
 4. Extract through each gate once (`outcome: RUNNER` in the server console).
+   `[Exfil] authored exit '<name>': ... (NavMesh-sampled within 1 m, N m from authored)` for each exit: the offset says how far the
+   sampled floor is from the sidecar position; `smoke signal lit at '<name>'` names the flare.
+   `[RaidFix] spawn placement: ... all spawn points already free` (no row moved) and `[BotSpawn] BotZone.Init 'BotZone_Main':
+   markers=N onNavMesh=N` with N equal to the number of Bot rows. Before the raid, `uibridge_teleport dryRun=true` from a Player row to every
+   new row and exit (`accepted`, `path complete`; an exit behind a held gate is `path_partial` by design).
 5. Note anything the map needs that Equator did not — that is the next repair.

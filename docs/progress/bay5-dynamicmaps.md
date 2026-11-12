@@ -254,3 +254,9 @@ Verification scripts, output comparisons and the completion ledger are local und
 `work/integration/bay5-20261001/`. These comparisons verify source integration and
 the preserved historical inputs; they do not claim a new native run or acceptance
 of newly rebuilt geometry from newer extraction packages.
+
+## 2026-11-12 - The Bay5 exit markers moved with the exits
+
+The exits of Bay5 moved into the team pockets (record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md)). The two exit StaticMarkers in the released pack's `ArenaMapPort_Bay5.jsonc` were patched to the new
+positions (backup of the old files and fresh exports under the ignored `work/dynamicmaps/exits-20261112/`) and deployed with the full deploy of build `48b316d`; the exit
+coordinates quoted above are history. A fresh export's Ground.svg differs from the released one (older navmesh.json snapshot, bounds 74 against 75), so the released SVG was kept. The markers in the game were not looked at on the host.

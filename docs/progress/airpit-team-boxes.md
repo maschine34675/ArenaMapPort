@@ -159,3 +159,9 @@ Implemented and host-verified the same evening (HANDOFF 2026-10-17; log quotes i
   arrived. The south box's three authored-open inner bus doorways stay passable inside the sealed pocket; the probe
   verdict is per enclosure now, so they are listed as Debug, not warned about.
 - Still open for ArenaMode: the formation (the numbers above stay valid), the GPU trial, the vault question.
+
+## Superseded 2026-11-12: the exit boxes
+
+Both Air Pit exits moved into the team pockets on 2026-11-12 (North Gate (-12.5, 0.1, 77.0), South Gate (-9.5, 0.1, -62.0), rule R3;
+[spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md)). The `BoothExits` sentence above (north gate box z 60..64, south gate box z -60..-56)
+describes the old boxes. Whether the new boxes touch ArenaMode's team boxes was not checked.

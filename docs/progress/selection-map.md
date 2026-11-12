@@ -284,3 +284,13 @@ block; descriptor, `tools/maps/autoservice.json` and `db/arena_autoservice/base.
 keep at least 120). Host after the deploy: `toggle "ARENA: CHOP SHOP" [949,441 275x32]`, 90 px right of `CUSTOMS` `[696,415 163x33]`, 21 px
 above `INTERCHANGE` `[783,494 215x33]`, 41 px below `ARENA: EQUATOR` `[884,367 248x33]`. `SelectionMapPositionTests` allows the `display` block
 for Iceberg and Chop Shop and checks Chop Shop's box against those three measured toggles (at least 12 px).
+
+## 2026-11-12 - Chop Shop displayed another 100 px to the left (743/428)
+
+User: "den marker von chop shop sollten wir nochmal 100px nach links verschieben." Commit `6271766`. Chop Shop is displayed at `IconX` 743, `IconY` 428 (was
+870/428 from 2026-11-11; the measured 407/471 stays in `markers.json`). The dot moves from about x 960 to about x 860 on EFT's region map (1920x1080), right
+below the end of the word CUSTOMS and above INTERCHANGE. The toggle rectangles of CUSTOMS and Chop Shop share a 10 x 7 px corner of empty padding, so
+`SelectionMapPositionTests` now tests the ink of the labels (padding measured on the GPU-2 screenshot of that day: left 5, right 28, top 8, bottom 7 px; the CUSTOMS,
+INTERCHANGE and EQUATOR rectangles are from `uibridge_snapshot`), and the released-pin rule "at least 120 units of straight distance" is replaced by "rows at least 55 units apart or dots
+360 units apart" (the anchor is 103 units from Equator's, on a row 93 units above). Host (GPU-2, build `48b316d`, PMC flow): `toggle "ARENA: CHOP SHOP" click 986,457
+[849,441 275x32]`, `toggle "CUSTOMS" ... [696,415 163x33]`. Record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md).

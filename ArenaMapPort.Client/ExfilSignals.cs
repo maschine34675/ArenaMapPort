@@ -11,6 +11,8 @@ namespace ArenaMapPort.Client
     /// exfils-stage2 (docs/progress/exfils-stage2.md, "Smoke signals") — a smoke column, a coloured light and a
     /// faint looping sound on every runtime-authored exit, so players find the gates (user, 2026-09-20: the
     /// names showed in the list but the exits were nowhere to be seen — a bare trigger box has no visual).
+    /// 2026-11-12 (user): in ArenaMode's team modes extraction is disabled, so the flare of an exit that stands in a team
+    /// pocket marks that team's start area (rule R3, docs/progress/spawn-rows-and-pocket-exits.md).
     ///
     /// Vanilla exfils get their smoke from scene art parented under <c>ExfiltrationPoint._root</c>; there is no
     /// BSG component that draws one. The always-on smoke EFT does ship is the airdrop crate's signal
