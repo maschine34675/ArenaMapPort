@@ -14,10 +14,10 @@ import xml.etree.ElementTree as ET
 from test_dynamicmaps_export import exporter, owner
 
 REPO = Path(__file__).resolve().parents[2]
-EXITS = [
-    {"name": "Bowl BTR Gate", "position": [51.0, 0.1, -31.0]},
-    {"name": "Bowl Army Gate", "position": [-51.0, 0.1, -49.0]},
-]
+# The synthetic layout takes the REAL exit sidecar (2026-11-12, rule R6: the exits moved into the team pockets and a later
+# host-driven nudge touches only the sidecar and the descriptor); names and order are the fixed part.
+EXITS = [{"name": e["name"], "position": e["position"]}
+         for e in json.loads((REPO / "tools" / "maps" / "bowl.exits.json").read_text(encoding="utf-8"))["exits"]]
 # Pitch area of the synthetic layout (see pitch_quads): north half, south half, bridge, east strip.
 PITCH_AREA = 80 * 59.2 + 80 * 27.8 + 10 * 19 + 28 * 87  # 9,586 m2
 GROUND_FILL, MUTED_FILL = "#b8c1c4", "#66747d"
@@ -109,9 +109,9 @@ class BowlOverviewTests(unittest.TestCase):
             self.assertEqual(actual["Labels"][0]["Text"], "BOWL / GROUND")
             self.assertEqual(receipt["bounds_xz"], [-66, -82, 62, 11])
             # World (x, y, z) becomes map (x, z, y); the exits stay outside raids only.
-            self.assertEqual([(m["Text"], m["Position"], m["ShowInRaid"]) for m in actual["StaticMarkers"]], [
-                ("Bowl BTR Gate", {"x": 51.0, "y": -31.0, "z": 0.1}, False),
-                ("Bowl Army Gate", {"x": -51.0, "y": -49.0, "z": 0.1}, False)])
+            self.assertEqual([e["name"] for e in EXITS], ["Bowl BTR Gate", "Bowl Army Gate"])
+            self.assertEqual([(m["Text"], m["Position"], m["ShowInRaid"]) for m in actual["StaticMarkers"]],
+                             [(e["name"], {"x": e["position"][0], "y": e["position"][2], "z": e["position"][1]}, False) for e in EXITS])
             self.assertEqual(sorted(p.relative_to(output / "pack").as_posix() for p in (output / "pack").rglob("*") if p.is_file()),
                              ["ArenaMapPort_Bowl.jsonc", "Layers/Ground.svg"])
             drawing = ET.parse(output / "pack/Layers/Ground.svg").getroot()
@@ -192,9 +192,11 @@ class BowlProfileMirrorTests(unittest.TestCase):
         self.assertTrue(self.profile["relative"])
         self.assertEqual(self.profile["heights"], (-.5, 1.2))
 
-    def test_exit_sidecar_matches_the_synthetic_fixture_and_lies_inside_the_drawing(self):
+    def test_exits_lie_inside_the_drawing_and_keep_the_fixture_names(self):
+        # 2026-11-12: both exits stand inside their team pockets; the drawing bounds (-66,-82)..(62,11) must still hold them
         exits = self.sidecar("bowl.exits.json")["exits"]
-        self.assertEqual([(e["name"], e["position"]) for e in exits], [(e["name"], e["position"]) for e in EXITS])
+        # EXITS is built from this sidecar (R6), so a position comparison would be a tautology; the names are locale keys and fixed
+        self.assertEqual([e["name"] for e in exits], ["Bowl BTR Gate", "Bowl Army Gate"])
         x0, z0, x1, z1 = self.profile["bounds"]
         for item in exits:
             self.assertTrue(x0 < item["position"][0] < x1 and z0 < item["position"][2] < z1, item["name"])

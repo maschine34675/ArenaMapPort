@@ -10,6 +10,10 @@ namespace ArenaMapPort.Server.Tests;
 /// the client reads. The two must agree number for number (validate_map_descriptors.py checks the same on the Python
 /// side) and every pose must lie below one of the map's opened barriers. Equator and Bay5 (DotAnimator poses, schema 2)
 /// have their own checks in DoorPoseSidecarTests, which also covers Bowl's schema-2 fields.
+/// Since 2026-11-12 (more spawn rows, exits inside the team pockets) it also mirrors the exits and the spawn rows: descriptor ==
+/// tools/maps/bowl.exits.json == db/arena_bowl/base.json, and base.json's SpawnPointParams == tools/maps/bowl.bots.json. The rules
+/// behind the numbers (pocket footprint, 2.5 m to the box edge, the appended rows) are pinned on the Python side in
+/// tools/tests/test_bowl_spawns.py, so a host-driven nudge of an exit touches the sidecar and the descriptor only.
 /// </summary>
 public sealed class BowlMapTests
 {
@@ -25,6 +29,99 @@ public sealed class BowlMapTests
 
     private static float[] Floats(JsonElement array) =>
         array.EnumerateArray().Select(v => (float)v.GetDouble()).ToArray();
+
+    private static string BaseJsonPath => Path.Combine(AppContext.BaseDirectory, "db", "arena_bowl", "base.json");
+
+    private static float[] PositionOf(JsonElement spawnPoint)
+    {
+        var p = spawnPoint.GetProperty("Position");
+        return new[] { p.GetProperty("x").GetSingle(), p.GetProperty("y").GetSingle(), p.GetProperty("z").GetSingle() };
+    }
+
+    [Fact]
+    public void ExitTransformsMatchTheSidecarAndServerEligibility()
+    {
+        using var sidecar = JsonDocument.Parse(File.ReadAllText(Sidecar("bowl.exits.json")));
+        using var server = JsonDocument.Parse(File.ReadAllText(BaseJsonPath));
+        var map = ArenaMapRegistry.Bowl;
+        var authored = sidecar.RootElement.GetProperty("exits").EnumerateArray().ToArray();
+        var shipped = server.RootElement.GetProperty("exits").EnumerateArray().ToArray();
+        Assert.Equal(2, map.Exits.Length);
+        Assert.Equal(new[] { "Bowl BTR Gate", "Bowl Army Gate" }, map.Exits.Select(e => e.Name));
+        Assert.Equal(map.Exits.Length, authored.Length);
+        Assert.Equal(map.Exits.Length, shipped.Length);
+        foreach (var expected in map.Exits)
+        {
+            var point = authored.Single(e => e.GetProperty("name").GetString() == expected.Name);
+            Assert.Equal(new[] { expected.X, expected.Y, expected.Z }, Floats(point.GetProperty("position")));
+            Assert.Equal(new[] { expected.SizeX, expected.SizeY, expected.SizeZ }, Floats(point.GetProperty("box_size")));
+            Assert.Equal(expected.RotationY, point.GetProperty("rotation").GetSingle());
+            var exit = shipped.Single(e => e.GetProperty("Name").GetString() == expected.Name);
+            Assert.Equal(map.InfiltrationName, exit.GetProperty("EntryPoints").GetString());
+            Assert.Equal("Individual", exit.GetProperty("ExfiltrationType").GetString());
+            Assert.Equal("None", exit.GetProperty("PassageRequirement").GetString());
+            Assert.Equal(100, exit.GetProperty("Chance").GetDouble());
+            Assert.Equal(point.GetProperty("exfiltration_time").GetDouble(), exit.GetProperty("ExfiltrationTime").GetDouble());
+        }
+        Assert.Empty(ArenaMapRegistration.ExitNameMismatches(
+            shipped.Select(e => e.GetProperty("Name").GetString()), map));
+    }
+
+    [Fact]
+    public void SpawnPointsWavesAndSquadsMatchTheBotsSidecar()
+    {
+        using var sidecar = JsonDocument.Parse(File.ReadAllText(Sidecar("bowl.bots.json")));
+        using var server = JsonDocument.Parse(File.ReadAllText(BaseJsonPath));
+        var map = ArenaMapRegistry.Bowl;
+        var bots = sidecar.RootElement;
+        var zone = bots.GetProperty("zone").GetString();
+        var shipped = server.RootElement.GetProperty("SpawnPointParams").EnumerateArray().ToArray();
+        var players = bots.GetProperty("player_spawns").EnumerateArray().ToArray();
+        var botSpawns = bots.GetProperty("bot_spawns").EnumerateArray().ToArray();
+
+        // Four player rows on pocket markers and 21 bot rows: 17 of Arena's 19 AI core points (the two inside or on the gate line of a pocket are
+        // skipped) and four appended on 2026-11-12 (tools/tests/test_bowl_spawns.py states the rules of each group)
+        Assert.Equal(4, players.Length);
+        Assert.Equal(21, botSpawns.Length);
+        Assert.Equal(players.Length + botSpawns.Length, shipped.Length);
+        Assert.Equal(shipped.Length, shipped.Select(p => p.GetProperty("Id").GetString()).Distinct().Count());
+        // the appended rows come after the originals, in the sidecar's order
+        Assert.Equal(botSpawns.Select(p => p.GetProperty("id").GetString()),
+                     shipped.Where(p => p.GetProperty("Categories").EnumerateArray().Any(c => c.GetString() == "Bot"))
+                            .Select(p => p.GetProperty("Id").GetString()));
+
+        foreach (var expected in players)
+        {
+            var point = shipped.Single(p => p.GetProperty("Id").GetString() == expected.GetProperty("id").GetString());
+            Assert.Equal(Floats(expected.GetProperty("position")), PositionOf(point));
+            Assert.Equal(expected.GetProperty("rotation").GetDouble(), point.GetProperty("Rotation").GetDouble());
+            Assert.Equal(expected.GetProperty("sides").EnumerateArray().Select(s => s.GetString()),
+                         point.GetProperty("Sides").EnumerateArray().Select(s => s.GetString()));
+            Assert.Equal(new[] { "Player" }, point.GetProperty("Categories").EnumerateArray().Select(c => c.GetString()));
+            Assert.Equal(map.InfiltrationName, point.GetProperty("Infiltration").GetString());
+        }
+        foreach (var expected in botSpawns)
+        {
+            var point = shipped.Single(p => p.GetProperty("Id").GetString() == expected.GetProperty("id").GetString());
+            Assert.Equal(Floats(expected.GetProperty("position")), PositionOf(point));
+            Assert.Equal(zone, point.GetProperty("BotZoneName").GetString());
+            Assert.Equal(expected.GetProperty("categories").EnumerateArray().Select(c => c.GetString()),
+                         point.GetProperty("Categories").EnumerateArray().Select(c => c.GetString()));
+            Assert.Contains("BotPmc", point.GetProperty("Categories").EnumerateArray().Select(c => c.GetString()));
+            Assert.Equal("", point.GetProperty("Infiltration").GetString());
+        }
+        // ArenaMode pins one donor row by id and exact floats (2026-11-12 rule R1: the original rows never move)
+        var donor = shipped.Single(p => p.GetProperty("Id").GetString() == "arena_bowl-bot-core-02");
+        Assert.Equal(new[] { 2.5f, 0.11f, -21.1f }, PositionOf(donor));
+
+        var root = server.RootElement;
+        Assert.Equal(bots.GetProperty("max_bots").GetInt32(), root.GetProperty("BotMax").GetInt32());
+        Assert.Equal(zone, root.GetProperty("OpenZones").GetString());
+        Assert.True(root.GetProperty("DisabledForScav").GetBoolean());
+        Assert.Empty(root.GetProperty("Loot").EnumerateArray());
+        Assert.Equal(bots.GetProperty("waves").GetArrayLength(), root.GetProperty("waves").GetArrayLength());
+        Assert.Equal(bots.GetProperty("boss_waves").GetArrayLength(), root.GetProperty("BossLocationSpawn").GetArrayLength());
+    }
 
     [Fact]
     public void DoorPosesMatchTheSidecarNumberForNumber()
