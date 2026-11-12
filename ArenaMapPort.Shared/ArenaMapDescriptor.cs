@@ -1223,7 +1223,7 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaAutoService",
             LocaleName: "Arena: Chop Shop",
             LocaleDescription: "The Chop Shop from EFT Arena: a garage hall and a walled street yard turned into a death-fighting arena, with a long team pocket at each end and a yard between them. Vans, cars, containers and shelving make the cover; the tribune edges above the hall bound the play space.",
-            IconX: 870,
+            IconX: 743,
             IconY: 428,
             DbBaseJsonPath: "arena_autoservice/base.json",
             // Bake inputs (PLAN-AUTOSERVICE item 8, docs/progress/autoservice-release.md, 2026-11-11; tools/tests/test_autoservice_bake_inputs.py

@@ -252,10 +252,14 @@ public sealed class AirPitMapTests
         }
         // Released pins remain selectable and inside the map. Their geographic positions now come
         // from Arena screenshots, not the old arbitrary box between Equator and Bay5.
+        // A label is one row of text to the right of its dot (33 px high, up to 275 px wide at 1920x1080; a dot moves 0.79 px per
+        // IconX unit and 0.796 px per IconY unit, SelectionMapPositionTests). Two pins are apart when their rows are at least 55 units
+        // (44 px) apart or their dots at least 360 units (284 px) apart. Until 2026-11-12 the rule was 120 units of straight distance,
+        // which a label of 275 px never satisfied on one row and which forbade Chop Shop's place 93 units above Equator's row.
         foreach (var a in ArenaMapRegistry.All)
             foreach (var b in ArenaMapRegistry.All.Where(b => b.Key != a.Key))
-                Assert.True(Math.Sqrt(Math.Pow(a.IconX - b.IconX, 2) + Math.Pow(a.IconY - b.IconY, 2)) >= 120,
-                    $"{a.Key} and {b.Key} menu icons are closer than 120 units");
+                Assert.True(Math.Abs(a.IconY - b.IconY) >= 55 || Math.Abs(a.IconX - b.IconX) >= 360,
+                    $"{a.Key} and {b.Key} menu labels share a row: rows {Math.Abs(a.IconY - b.IconY)} units, dots {Math.Abs(a.IconX - b.IconX)} units apart");
         Assert.InRange(map.IconX, 0, 1000);
         Assert.InRange(map.IconY, 0, 1000);
         // The banner row ships with the map; base.json itself keeps Banners empty (ArenaMapBanners adds it at load).

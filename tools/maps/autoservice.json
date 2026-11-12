@@ -12,7 +12,7 @@
   "infiltration_name": "ArenaAutoService",
   "locale_name": "Arena: Chop Shop",
   "locale_description": "The Chop Shop from EFT Arena: a garage hall and a walled street yard turned into a death-fighting arena, with a long team pocket at each end and a yard between them. Vans, cars, containers and shelving make the cover; the tribune edges above the hall bound the play space.",
-  "icon_x": 870,
+  "icon_x": 743,
   "icon_y": 428,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_autoservice/base.json",

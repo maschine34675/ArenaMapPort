@@ -82,10 +82,10 @@
       "icon_x": 407,
       "icon_y": 471,
       "display": {
-        "icon_x": 870,
+        "icon_x": 743,
         "icon_y": 428,
-        "reason": "On EFT's own region map (the PMC flow, GPU-2 1920x1080, 2026-11-11) the toggle 'ARENA: CHOP SHOP' at the measured 407/471 covered the CUSTOMS label (Chop Shop dot at x 594, y 424; Customs dot at x 706, y 432). 870/428 puts the dot at about x 960, y 458 (0.79 px per IconX unit, 0.796 px per IconY unit from the measured points), east of Customs; measured on GPU-2 after the move, the toggle spans x 949..1224, y 441..473 and clears CUSTOMS by 90 px, INTERCHANGE by 21 px and EQUATOR by 41 px, and the anchor keeps the 124 units from Equator's that the released pins keep from each other (at least 120).",
-        "decision": "user, 2026-11-11: the Chop Shop marker has to move (it overlapped Customs)"
+        "reason": "On EFT's own region map (the PMC flow, GPU-2 1920x1080, 2026-11-11) the toggle 'ARENA: CHOP SHOP' at the measured 407/471 covered the CUSTOMS label (Chop Shop dot at x 594, y 424; Customs dot at x 706, y 432). The first display position, 870/428 (2026-11-11), put the dot at x 960, y 458, east of the land mass. 743/428 (2026-11-12) moves it 100 px west to about x 860, y 458 (0.79 px per IconX unit, 0.796 px per IconY unit): the dot sits right below the end of the word CUSTOMS and above INTERCHANGE. The toggle rectangles of CUSTOMS and Chop Shop then share a 10 x 7 px corner of empty padding; the ink (dot and text, measured insets left 5, right 28, top 8, bottom 7 px) keeps 24 px horizontally and 9 px vertically from the CUSTOMS ink, 36 px from INTERCHANGE and 50 px from EQUATOR. The anchor is 103 units from Equator's, on a row 93 units (74 px) above it.",
+        "decision": "user, 2026-11-11: the Chop Shop marker has to move (it overlapped Customs); user, 2026-11-12: move it another 100 px to the left"
       }
     },
     {

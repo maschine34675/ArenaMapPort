@@ -92,6 +92,10 @@ public sealed class SelectionMapPositionTests
         // 407/471, Iceberg (441, 315) for 215/608 and Equator (894, 384) for 788/521, so a dot moves 0.79 px per IconX unit and
         // 0.796 px per IconY unit (y grows downwards). The 'ARENA: CHOP SHOP' toggle measured at 870/428 spans [949..1224] x [441..473],
         // i.e. from 10 px left of its dot to 265 px right of it and from 17 px above to 15 px below it.
+        // 2026-11-12 (user: another 100 px to the left, 743/428): the toggle rectangles are padding around the ink. Measured on the
+        // GPU-2 screenshot of that day (pixels brighter than 150): the ink (dot and text) starts 5 px inside the left edge, ends 28 px
+        // inside the right edge, 8 px below the top and 7 px above the bottom, the same for CUSTOMS, INTERCHANGE, FACTORY and RESERVE.
+        // The rule is therefore on the ink: the rectangles of CUSTOMS and Chop Shop share a 10 x 7 px corner of empty padding.
         using var document = JsonDocument.Parse(File.ReadAllText(RepoFile("tools", "maps", "selection", "markers.json")));
         var chopShop = document.RootElement.GetProperty("markers").EnumerateArray()
             .Single(m => m.GetProperty("catalog_key").ValueKind == JsonValueKind.String && m.GetProperty("catalog_key").GetString() == "arena_autoservice");
@@ -100,13 +104,14 @@ public sealed class SelectionMapPositionTests
             (ArenaMapRegistry.AutoService.IconX, ArenaMapRegistry.AutoService.IconY));
         double dotX = 594 + (ArenaMapRegistry.AutoService.IconX - 407) * .790;
         double dotY = 424 - (ArenaMapRegistry.AutoService.IconY - 471) * .796;
-        var box = (left: dotX - 10, top: dotY - 17, right: dotX + 265, bottom: dotY + 15);
-        // The toggles the measured position collided with or now sits beside, as uibridge_snapshot reported them on GPU-2 (2026-11-11).
+        var box = (left: dotX - 10 + 5, top: dotY - 17 + 8, right: dotX + 265 - 28, bottom: dotY + 15 - 7);
+        // The ink of the toggles the position sits beside: uibridge_snapshot's rectangles on GPU-2 (CUSTOMS [696..859] x [415..448],
+        // INTERCHANGE [783..998] x [494..527], ARENA: EQUATOR [884..1132] x [367..400]) less the measured padding.
         var labels = new[]
         {
-            ("CUSTOMS", (left: 696.0, top: 415.0, right: 859.0, bottom: 448.0)),
-            ("INTERCHANGE", (left: 783.0, top: 494.0, right: 998.0, bottom: 527.0)),
-            ("ARENA: EQUATOR", (left: 884.0, top: 367.0, right: 1132.0, bottom: 400.0)),
+            ("CUSTOMS", (left: 702.0, top: 423.0, right: 830.0, bottom: 440.0)),
+            ("INTERCHANGE", (left: 788.0, top: 502.0, right: 969.0, bottom: 519.0)),
+            ("ARENA: EQUATOR", (left: 890.0, top: 375.0, right: 1102.0, bottom: 396.0)),
         };
         foreach (var (name, label) in labels)
         {

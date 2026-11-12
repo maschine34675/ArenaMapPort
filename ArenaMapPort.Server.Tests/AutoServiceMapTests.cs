@@ -62,7 +62,7 @@ public sealed class AutoServiceMapTests
         Assert.Equal(map.LocaleName, server.RootElement.GetProperty("Name").GetString());
         Assert.Equal(map.IconX, server.RootElement.GetProperty("IconX").GetInt32());
         Assert.Equal(map.IconY, server.RootElement.GetProperty("IconY").GetInt32());
-        Assert.Equal((870, 428), (map.IconX, map.IconY)); // displayed east of the measured 407/471 (markers.json display block)
+        Assert.Equal((743, 428), (map.IconX, map.IconY)); // displayed east of the measured 407/471 (markers.json display block; 870 until 2026-11-12)
         // The port's own fallback words (the official text is in the ignored pack and wins when it is there): factual, ASCII, no spike wording.
         Assert.DoesNotContain("spike", map.LocaleName, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Internal test build", map.LocaleDescription, StringComparison.OrdinalIgnoreCase);
