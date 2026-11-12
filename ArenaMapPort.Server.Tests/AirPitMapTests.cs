@@ -80,7 +80,7 @@ public sealed class AirPitMapTests
         var botSpawns = bots.GetProperty("bot_spawns").EnumerateArray().ToArray();
 
         Assert.Equal(4, players.Length);
-        Assert.Equal(14, botSpawns.Length);
+        Assert.Equal(20, botSpawns.Length); // 14 original rows + 6 appended on 2026-11-12 (R1)
         Assert.Equal(players.Length + botSpawns.Length, shipped.Length);
         Assert.Equal(shipped.Length, shipped.Select(p => p.GetProperty("Id").GetString()).Distinct().Count());
 
@@ -212,9 +212,9 @@ public sealed class AirPitMapTests
         var map = ArenaMapRegistry.AirPit;
         Assert.Equal(map.Key, location!.Id);
         Assert.Equal(map.IdField, location.IdField.ToString());
-        Assert.Equal(18, location.SpawnPointParams!.Count());
+        Assert.Equal(24, location.SpawnPointParams!.Count());
         Assert.Equal(4, location.SpawnPointParams!.Count(p => p.Categories!.Contains("Player")));
-        Assert.Equal(14, location.SpawnPointParams!.Count(p => p.Categories!.Contains("Bot")));
+        Assert.Equal(20, location.SpawnPointParams!.Count(p => p.Categories!.Contains("Bot")));
         Assert.Equal(2, location.Exits.Count());
         Assert.Equal(5, location.Waves!.Count);
         Assert.Equal(4, location.BossLocationSpawn!.Count);

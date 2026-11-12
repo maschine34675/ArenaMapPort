@@ -14,6 +14,7 @@ stand in the shop back rooms that the furnished interiors (level38, U6 2026-10-1
 import importlib.util
 import json
 import math
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -63,7 +64,27 @@ SEALED_ROOMS = {
 }
 MIN_ARENA_CLEARANCE = 1.0          # border clearance every spawn point keeps in Arena's own NavMesh and in the built one
 EXIT_HALF_BOX = 2.0
-BUILT_NAVMESH = REPO / "work" / "build" / "airpit" / "arena_airpit_navmesh.bundle"
+WORK = Path(os.environ.get("ARENAMAPPORT_WORK_DIR", REPO / "work"))   # a checkout without work/ points this at the main one (override added 2026-11-12)
+BUILT_NAVMESH = WORK / "build" / "airpit" / "arena_airpit_navmesh.bundle"
+# 2026-11-12 (user request, rules R1/R2 of docs/progress/spawn-rows-20261112.md): six Bot rows are APPENDED after the fourteen
+# original ones, in this order (R1: the originals stay byte-identical, ArenaMode pins bot-center-east by id and floats). Why more rows:
+# ArenaMode's burst selector uses only Bot rows at least 25 m (3D) from the player (R2).
+APPENDED_BOTS = ["center-lane", "north-hall-centre", "south-apron-west", "south-apron-east", "west-lane", "west-hall"]
+ORIGINAL_BOT_ORDER = ["north-end-west", "north-end-east", "north-approach", "north-hall", "north-hall-west", "east-north", "east-mid",
+                      "east-south", "west-mid", "west-south", "center-east", "plane-south", "south-apron", "south-end"]
+# What the appended rows satisfy, measured offline on 2026-11-12 (host check pending), with a small margin: the smallest values are
+# 1.59 m of built-mesh clearance, 14.8 m to the nearest other row and 27.5 m to the nearest Player row.
+APPENDED_MIN_CLEARANCE = 1.5
+APPENDED_MIN_ROW_DISTANCE = 14.0
+APPENDED_MIN_PLAYER_DISTANCE = 20.0
+# Rule R3 (2026-11-12, replaces "the exits stand outside the pockets, 10 m from every Player row"): one exit per team pocket, the box
+# stands INSIDE its pocket's initial spawn-bound footprint (airpit.modes.json), so that the green signal flare marks the team's start in
+# ArenaMode's team modes (extraction is disabled there); every Player row keeps 2.5 m to the box EDGE (docs/progress/equator-booth-spawns.md).
+# The one listed exception is the south gate: no in-pocket box keeps both south Player rows 2.5 m away (the patch is about 12 x 12 m), so
+# it stands at the pocket mouth, its nearest edge at most 1 m outside the footprint (0.41 m measured; its centre is 2.41 m outside).
+EXIT_PLAYER_EDGE_MIN = 2.5
+EXIT_MOUTH_EXCEPTIONS = {"Air Pit South Gate": 1.0}
+EXIT_FLOOR_BELOW, EXIT_TOP, EXIT_SOLID_FROM = 0.5, 2.5, 0.3   # ExfilRepairs: the box spans 0.5 m below to 2.5 m above the floor point
 
 
 def inside_pocket(x, z):
@@ -78,7 +99,7 @@ def package_dir():
     """The accepted 0.6.0 package only (PLAN-AIRPIT item 5; v8 = v7 + the rest of the furnished hall, v7 = v6 + the
     furnished-shop scenes, whose object ids are disjoint from the DesignStuff scene read here); the superseded 0.5.4
     spike package ``work/extract/airpit`` is deliberately not a fallback, the test skips when the accepted one is absent."""
-    path = REPO / "work" / "extract" / "airpit-native-v10"
+    path = WORK / "extract" / "airpit-native-v10"
     if (path / "scenes" / "Arena_Airpit_TeamFight_DesignStuff.json").is_file():
         return path
     return None
@@ -96,7 +117,7 @@ class AirPitSidecarTests(unittest.TestCase):
     # ------------------------------------------------------------------ shape and generator freshness
     def test_counts_and_ids(self):
         self.assertEqual(len(self.players), 4)
-        self.assertEqual(len(self.bot_points), 14)
+        self.assertEqual(len(self.bot_points), 20)      # 14 originals + 6 appended on 2026-11-12
         self.assertEqual(len(self.bots["waves"]), 5)
         self.assertEqual(len(self.bots["boss_waves"]), 4)
         self.assertEqual(len(self.exits["exits"]), 2)
@@ -109,7 +130,13 @@ class AirPitSidecarTests(unittest.TestCase):
         self.assertEqual({p["id"] for p in self.players},
                          {f"arena_airpit-player-{suffix}" for suffix in PLAYER_MARKERS})
         self.assertEqual({p["id"] for p in self.bot_points},
-                         {f"arena_airpit-bot-{suffix}" for suffix in {**BOT_MARKERS, **BOT_CORE_POINTS}})
+                         {f"arena_airpit-bot-{suffix}" for suffix in {**BOT_MARKERS, **BOT_CORE_POINTS}}
+                         | {f"arena_airpit-bot-{suffix}" for suffix in APPENDED_BOTS})
+        # R1: the fourteen originals come first in their order, the six new rows follow in the decided order, none is a TDM donor id.
+        self.assertEqual([p["id"] for p in self.bot_points],
+                         [f"arena_airpit-bot-{s}" for s in ORIGINAL_BOT_ORDER + APPENDED_BOTS])
+        for pid in ids:
+            self.assertFalse(pid.startswith("arena_airpit-tdm-v1-"), pid)
 
     def test_schema_matches_the_released_maps(self):
         equator = json.loads((REPO / "tools/maps/equator.bots.json").read_text(encoding="utf-8"))
@@ -143,7 +170,7 @@ class AirPitSidecarTests(unittest.TestCase):
                           "BossLocationSpawn", "exits"}, set(generated))
         for key, value in generated.items():
             self.assertEqual(self.base[key], value, f"Stale generated field: {key}")
-        self.assertEqual(len(self.base["SpawnPointParams"]), 18)
+        self.assertEqual(len(self.base["SpawnPointParams"]), 24)
         self.assertEqual(len(self.base["waves"]), 5)
         self.assertEqual(len(self.base["BossLocationSpawn"]), 4)
         self.assertEqual(len(self.base["exits"]), 2)
@@ -198,11 +225,77 @@ class AirPitSidecarTests(unittest.TestCase):
                 self.assertGreaterEqual(math.dist(bot["position"], player["position"]), 2,
                                         f"{bot['id']} overlaps {player['id']}")
 
-    def test_players_never_spawn_inside_or_near_an_exit_box(self):
+    def pockets(self):
+        """The two initial spawn-bound footprints of airpit.modes.json: (side, xmin, xmax, zmin, zmax); the bounds are axis-aligned (yaw 0)."""
+        modes = json.loads((REPO / "tools/maps/airpit.modes.json").read_text(encoding="utf-8"))
+        out = {}
+        for b in modes["spawn_bounds"]:
+            self.assertTrue(b["active"])
+            self.assertEqual(b["yaw"], 0.0)
+            (cx, _cy, cz), (sx, _sy, sz) = b["center"], b["size"]
+            out[b["side"]] = (cx - sx / 2, cx + sx / 2, cz - sz / 2, cz + sz / 2)
+        self.assertEqual(sorted(out), ["north", "south"])
+        return out
+
+    @staticmethod
+    def outside_distance(box, x0, x1, z0, z1):
+        """XZ distance from the footprint (x0, x1, z0, z1) to the nearest point of the exit box; 0 when they touch or overlap."""
+        return math.hypot(max(x0 - box[1], 0.0, box[0] - x1), max(z0 - box[3], 0.0, box[2] - z1))
+
+    def test_each_pocket_has_one_exit_inside_it_so_the_flare_marks_the_team_start(self):
+        # R3: one exit per pocket (the north one has z > 0), the 4 x 3 x 4 m box (rotation 0) INSIDE the pocket footprint; the listed
+        # exception (EXIT_MOUTH_EXCEPTIONS) only has to touch it within the stated distance.
+        pockets = self.pockets()
+        seen = set()
+        for e in self.exits["exits"]:
+            side = "north" if e["position"][2] > 0 else "south"
+            seen.add(side)
+            x, _y, z = e["position"]
+            self.assertEqual(e["rotation"], 0.0)
+            hx, hz = e["box_size"][0] / 2, e["box_size"][2] / 2
+            box = (x - hx, x + hx, z - hz, z + hz)
+            x0, x1, z0, z1 = pockets[side]
+            if e["name"] in EXIT_MOUTH_EXCEPTIONS:
+                self.assertLessEqual(self.outside_distance(box, x0, x1, z0, z1), EXIT_MOUTH_EXCEPTIONS[e["name"]], e["name"])
+                self.assertGreater(self.outside_distance(box, x0, x1, z0, z1), 0.0, f"{e['name']} is inside: drop it from the exception list")
+            else:
+                self.assertTrue(x0 <= box[0] and box[1] <= x1 and z0 <= box[2] and box[3] <= z1, f"{e['name']} is not inside the {side} pocket")
+                self.assertTrue(x0 <= x <= x1 and z0 <= z <= z1, e["name"])
+        self.assertEqual(seen, {"north", "south"})
+
+    def test_players_keep_2_5_m_to_every_exit_box_edge(self):
+        # R3 successor of "10 m from every Player row": a plain-raid spawn must not start inside a trigger (the Equator booth precedent).
         for player in self.players:
-            for exit_point in self.exits["exits"]:
-                self.assertGreaterEqual(math.dist(player["position"], exit_point["position"]), 10,
-                                        f"{player['id']} too close to {exit_point['name']}")
+            for e in self.exits["exits"]:
+                x, _y, z = e["position"]
+                px, _py, pz = player["position"]
+                edge = math.hypot(max(abs(px - x) - e["box_size"][0] / 2, 0.0), max(abs(pz - z) - e["box_size"][2] / 2, 0.0))
+                self.assertGreaterEqual(edge, EXIT_PLAYER_EDGE_MIN, f"{player['id']} is {edge:.2f} m from the edge of {e['name']}")
+
+    def test_the_appended_bot_rows_keep_their_distances(self):
+        # R5: the originals keep the rules of the tests above and below; the appended rows state what the decided data satisfies.
+        appended = self.bot_points[14:]
+        others = self.players + self.bot_points
+        for row in appended:
+            for other in others:
+                if other is row:
+                    continue
+                floor = APPENDED_MIN_PLAYER_DISTANCE if "player" in other["id"] else APPENDED_MIN_ROW_DISTANCE
+                self.assertGreaterEqual(math.dist(row["position"], other["position"]), floor, f"{row['id']} vs {other['id']}")
+            x, _y, z = row["position"]
+            for side, (x0, x1, z0, z1) in self.pockets().items():
+                self.assertGreater(self.outside_distance((x, x, z, z), x0, x1, z0, z1), 0.0, f"{row['id']} stands in the {side} pocket")
+            for e in self.exits["exits"]:
+                ex, _ey, ez = e["position"]
+                edge = math.hypot(max(abs(x - ex) - 2.0, 0.0), max(abs(z - ez) - 2.0, 0.0))
+                self.assertGreater(edge, 0.0, f"{row['id']} stands in {e['name']}")
+
+    def test_twenty_bot_rows_leave_five_distant_candidates_everywhere(self):
+        # R2: ArenaMode's Tactical burst needs five Bot rows at least 25 m (3D) from the player. 2026-11-12: the 14 originals already gave at least
+        # 10 on the walkable lattice; with the appended rows every cell of the envelope keeps at least 5 on this (conservative, all cells) grid.
+        points = [tuple(p["position"]) for p in self.bot_points]
+        worst = min(sum(math.hypot(x - p[0], z - p[2]) >= 25 for p in points) for x in range(-57, 34) for z in range(-79, 87))
+        self.assertGreaterEqual(worst, 5)
 
     def test_no_spawn_stands_in_a_sealed_back_room(self):
         # The furnished shops leave their back rooms closed (old shell partitions, closed inside doors), like Arena's own
@@ -275,7 +368,11 @@ class AirPitSidecarTests(unittest.TestCase):
                 self.assertAlmostEqual(moved, 0.0, delta=0.01, msg=suffix)
         mesh, _meta = nd.load_arena_mesh()
         points = [(p["id"], p["position"], MIN_ARENA_CLEARANCE) for p in self.players + self.bot_points]
-        points += [(e["name"], e["position"], EXIT_HALF_BOX + 0.5) for e in self.exits["exits"]]
+        # Exit boxes: 0.5 m beyond the inscribed circle (2.5 m); the mouth exception (south gate: 2.19 m in Arena's mesh, 2.11 m in the
+        # built one, 2026-11-12) keeps the inscribed circle itself (2.0 m, every edge of the box over mesh), and the built-mesh test below
+        # checks its four corners. Nothing weaker is needed by the decided position.
+        points += [(e["name"], e["position"], EXIT_HALF_BOX if e["name"] in EXIT_MOUTH_EXCEPTIONS else EXIT_HALF_BOX + 0.5)
+                   for e in self.exits["exits"]]
         xyz = np.array([pos for _n, pos, _c in points], dtype=float)
         poly, surf = mesh.locate(xyz, max_dy=1.5)
         for (name, pos, need), pid, sy in zip(points, poly, surf):
@@ -335,6 +432,69 @@ class AirPitSidecarTests(unittest.TestCase):
             clearance = float(mesh.clearance(np.array([[point["position"][0], sy, point["position"][2]]]))[0])
             self.assertGreaterEqual(clearance, MIN_ARENA_CLEARANCE,
                                     f"{name} is only {clearance:.2f} m from the built NavMesh border")
+
+    @unittest.skipUnless(BUILT_NAVMESH.is_file(), "no built AirPit NavMesh bundle (work/build/airpit)")
+    def test_every_exit_box_has_floor_under_its_centre_and_corners_on_the_built_navmesh(self):
+        # R3: the box holds floor. Centre and the four corners (within 1.2 m of the surface) on the main component of the built bake.
+        import numpy as np
+        import navmesh_diff as nd
+        try:
+            mesh = nd.load_bundle_mesh(BUILT_NAVMESH)
+        except ImportError:
+            self.skipTest("UnityPy is not installed")
+        for e in self.exits["exits"]:
+            x, y, z = e["position"]
+            hx, hz = e["box_size"][0] / 2, e["box_size"][2] / 2
+            pts = np.array([[x, y, z], [x - hx, y, z - hz], [x + hx, y, z - hz], [x - hx, y, z + hz], [x + hx, y, z + hz]], dtype=float)
+            poly, surf = mesh.locate(pts, max_dy=1.2)
+            for pid, sy in zip(poly, surf):
+                self.assertGreaterEqual(pid, 0, f"{e['name']}: a point of the box has no floor")
+                self.assertEqual(int(mesh.labels[pid]), 0, e["name"])
+                self.assertLess(abs(sy - y), 0.4, e["name"])
+
+    @unittest.skipIf(package_dir() is None, "no extracted AirPit package")
+    def test_no_exit_box_holds_a_solid_from_the_floor_up(self):
+        # R3: the box holds no solid between floor + 0.3 and floor + 2.5 (the package's colliders; the moved parts of the opened barriers
+        # and the SPAWN_BOUND barriers are not solid at raid time).
+        import numpy as np
+        import port_colliders as pcol
+        import spawn_coverage as sc
+        import spawn_placement_probe as spp
+        descriptor = json.loads((REPO / "tools/maps/airpit.json").read_text(encoding="utf-8"))
+        cset = pcol.load_package_colliders(package_dir())
+        pcol.mark_barriers(cset, list(descriptor.get("opened_barriers") or []),
+                           pcol.load_door_rows(REPO / "tools/maps/airpit.doors.json"))
+        keep = np.array([not (spp.runtime_nonsolid(o.names) or o.barrier_blocked) for o in cset.owners], bool)
+        mask = keep[cset.tri_owner]
+        solids = sc.SolidIndex(cset.tris[mask], cset.tri_owner[mask], [o.path for o in cset.owners])
+        for e in self.exits["exits"]:
+            x, y, z = e["position"]
+            sx, sy, sz = e["box_size"]
+            found = solids.solids_in_box([x, y + (EXIT_TOP - EXIT_FLOOR_BELOW) / 2 + EXIT_SOLID_FROM / 2, z],
+                                         [sx, EXIT_TOP - EXIT_SOLID_FROM, sz])
+            self.assertEqual(found, [], f"{e['name']} holds solids: {found[:4]}")
+
+    @unittest.skipIf(package_dir() is None or not BUILT_NAVMESH.is_file(), "no extracted AirPit package or built NavMesh")
+    def test_the_appended_rows_have_standing_room_and_built_mesh_clearance(self):
+        # R1/R5: each appended row passes the offline model of SpawnPlacementRepairs.IsValid (upper bound; the host's 'spawn placement:'
+        # line is the authority) and keeps APPENDED_MIN_CLEARANCE in the built NavMesh on its main component.
+        import numpy as np
+        import navmesh_diff as nd
+        import spawn_placement_probe as spp
+        try:
+            mesh = nd.load_bundle_mesh(BUILT_NAVMESH)
+        except ImportError:
+            self.skipTest("UnityPy is not installed")
+        probe = spp.PlacementProbe.from_package(package_dir())
+        for row in self.bot_points[14:]:
+            verdict = probe.check(tuple(row["position"]))
+            self.assertTrue(verdict.valid, f"{row['id']}: floor {verdict.floor_y}, ground_ok {verdict.ground_ok}, blocked {verdict.blocked[:2]}")
+            xyz = np.array([row["position"]], dtype=float)
+            poly, surf = mesh.locate(xyz, max_dy=1.0)
+            self.assertGreaterEqual(int(poly[0]), 0, row["id"])
+            self.assertEqual(int(mesh.labels[poly[0]]), 0, row["id"])
+            clearance = float(mesh.clearance(np.array([[row["position"][0], surf[0], row["position"][2]]]))[0])
+            self.assertGreaterEqual(clearance, APPENDED_MIN_CLEARANCE, f"{row['id']} is only {clearance:.2f} m from the border")
 
 
 if __name__ == "__main__":

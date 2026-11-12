@@ -862,9 +862,13 @@ namespace ArenaMapPort.Shared
             Exits: new[]
             {
                 // Mirrors tools/maps/airpit.exits.json (AirPitMapTests.ExitTransformsMatchTheSidecarAndServerEligibility).
-                // Floor points on the two ends of the play space, 14.8 m / 17.8 m from the nearest player spawn.
-                new ArenaExitDescriptor("Air Pit North Gate", -11.0f, 0.1f, 62.0f),
-                new ArenaExitDescriptor("Air Pit South Gate", -3.0f, 0.1f, -58.0f),
+                // 2026-11-12 (rule R3, tools/maps/airpit.exits.json): one box per team pocket so that the green signal flare marks the
+                // team's start in ArenaMode's team modes (extraction is disabled there). North: the middle of the north pocket, behind the
+                // HELD passport gates, so unreachable in a plain raid until a mode plugin releases them. South: at the pocket mouth, the box's
+                // south edge 0.4 m north of the spawn-bound edge (the one listed exception: no in-pocket box keeps the south Player rows 2.5 m from its edge).
+                // Offline, host-unchecked.
+                new ArenaExitDescriptor("Air Pit North Gate", -12.5f, 0.1f, 77.0f),
+                new ArenaExitDescriptor("Air Pit South Gate", -9.5f, 0.1f, -62.0f),
             },
             OpenedBarriers: new[]
             {
