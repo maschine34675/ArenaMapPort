@@ -1012,7 +1012,9 @@ def exit_metrics(ctx: Context, pocket: Pocket, pos, markers, solids: SolidIndex 
         m["nearest_player_row"] = r2(d.min())
         ex = np.maximum(np.abs(pr[:, 0] - x) - EXIT_BOX / 2, 0.0)
         ez = np.maximum(np.abs(pr[:, 2] - z) - EXIT_BOX / 2, 0.0)
-        m["nearest_player_row_box_edge"] = r2(np.hypot(ex, ez).min())
+        edge_raw = float(np.hypot(ex, ez).min())
+        m["nearest_player_row_box_edge"] = r2(edge_raw)
+        m["nearest_player_row_box_edge_raw"] = round(edge_raw, 6)       # the rules compare this, never the 2-decimal print value
     mkb = np.asarray(markers, float).reshape(-1, 3)
     m["markers_in_box"] = int((np.maximum(np.abs(mkb[:, 0] - x), np.abs(mkb[:, 2] - z)) <= EXIT_BOX / 2).sum()) if len(mkb) else 0
     br = ctx.bot_rows
@@ -1034,7 +1036,7 @@ def exit_metrics(ctx: Context, pocket: Pocket, pos, markers, solids: SolidIndex 
     else:
         m["solid_free"] = None
     gate_ok = m["gate_distance_box_edge"] is None or m["gate_distance_box_edge"] >= ctx.params["exit_gate_margin"]
-    edge = m.get("nearest_player_row_box_edge")
+    edge = m.get("nearest_player_row_box_edge_raw")
     player_ok = edge is None or edge >= ctx.params["exit_player_margin"]
     m["player_margin_ok"] = bool(player_ok)
     m["valid"] = bool(inside and player_ok and m["centre_on_mesh"] and on_mesh >= ctx.params["min_corners"] and (m["plain_raid_reachable"] or not ctx.params["exit_require_reach"]) and m["solid_free"] is not False
@@ -1285,24 +1287,37 @@ def analyse(inputs: dict, mesh, cset=None, params: dict | None = None, gates: li
 # check mode: the COMMITTED layout of one map against the rules
 # ---------------------------------------------------------------------------------------------------------------------
 # ArenaMode pins one donor Bot row per map by id and exact floats (rule R1); the rows must stay.
-DONOR_IDS = {"equator": ["arena_equator-bot-atrium"], "bay5": ["arena_bay5-bot-west-centre"], "airpit": ["arena_airpit-bot-center-east"],
-             "bowl": ["arena_bowl-bot-core-02"], "iceberg": ["arena_iceberg-bot-core-01"], "autoservice": ["arena_autoservice-bot-core-03"]}
+# The pins are (position, radius) of the committed sidecars at e4b1d04; the check compares the floats exactly.
+DONOR_ROWS = {
+    "equator": {"arena_equator-bot-atrium": ([0.0, 0.2, 2.0], 30)},
+    "bay5": {"arena_bay5-bot-west-centre": ([63.497, -3.8574, 42.2217], 25)},
+    "airpit": {"arena_airpit-bot-center-east": ([-3.21, 0.1, -12.09], 25)},
+    "bowl": {"arena_bowl-bot-core-02": ([2.5, 0.11, -21.1], 25)},
+    "iceberg": {"arena_iceberg-bot-core-01": ([-10.88, 3.25, -80.66], 25)},
+    "autoservice": {"arena_autoservice-bot-core-03": ([-367.44, -3.79, 492.11], 25)},
+}
+DONOR_IDS = {k: list(v) for k, v in DONOR_ROWS.items()}
 FORBIDDEN_ID_PART = "-tdm-v1-"        # ArenaMode's own row ids ("arena-<map>-tdm-v1-..."): no row of this repository may carry one
 EXPECTED_BOX = [4.0, 3.0, 4.0]
 
 
 def check_layout(inputs: dict, mesh, cset=None, params: dict | None = None, stem: str = "?", appended_since: str | None = None,
-                 grandfathered=(), donor_ids=None, mouth_exits=(), solid_exceptions=(), clearance_tolerance: float = 0.02) -> dict:
+                 grandfathered=(), donor_ids=None, mouth_exits=(), solid_exceptions=(), clearance_tolerance: float = 0.02,
+                 require_solid_check: bool = True) -> dict:
     """Verify the layout in `inputs` (the sidecars as committed) and return {"violations": [...], "info": [...], ...}; a violation is one line.
 
     Rows (R1): every Bot and Player row lies on the play component (membership: the snap tolerance of the candidates, 0.5 m XZ / 1.0 m
     vertical, so an old row that stands 0.02 m from the border passes); ids are unique; the donor ids are present; no id carries '-tdm-v1-'.
     Rows that need border clearance >= --clearance (minus `clearance_tolerance`, the rounding of 2-decimal positions): the Bot rows from
     `appended_since` (an id; that row and every later Bot row) on and nothing else, or, when only `grandfathered` ids are given, every row
-    not listed; with neither, every row. Exits (R3): one exit per pocket; box 4 x 3 x 4, rotation 0; the centre inside the pocket footprint
-    (a name in `mouth_exits`: at most --mouth-tolerance outside); every Player row at least --exit-player-margin from the box EDGE; floor
-    (NavMesh) under the centre; with a package no solid in the box (a name in `solid_exceptions` reports it as information). Plain-raid
-    reachability, markers inside the box, gate distances and coverage are information."""
+    not listed; with neither, every row. An `appended_since` id that is not among the Bot rows is a violation (it would switch the clearance
+    rule off for the whole map). The donor rows of the stem (DONOR_ROWS) must be present with their exact position and radius (R1); with an
+    explicit `donor_ids` list only the ids are tested. Exits (R3): one exit per pocket; box 4 x 3 x 4, rotation 0; the centre inside the pocket
+    footprint (a name in `mouth_exits`: the nearest box EDGE at most --mouth-tolerance outside the footprint, the centre may stand further out);
+    every Player row at least --exit-player-margin from the box EDGE (unrounded distance, no tolerance); floor (NavMesh) under the centre; with a
+    package no solid in the box (a name in `solid_exceptions` reports it as information; without a package the unevaluated solid rule is a
+    violation unless `require_solid_check` is False). The only tolerances: the clearance 0.02 m (rounding of 2-decimal positions) and the mouth
+    tolerance. Plain-raid reachability, markers inside the box, corners on the mesh, gate distances and coverage are information."""
     P = dict(DEFAULTS)
     P.update(params or {})
     bots = inputs["bots"]
@@ -1319,9 +1334,18 @@ def check_layout(inputs: dict, mesh, cset=None, params: dict | None = None, stem
     for rid in sorted(set(ids)):
         if FORBIDDEN_ID_PART in rid:
             V.append(f"row id '{rid}' contains '{FORBIDDEN_ID_PART}' (ArenaMode's own row ids)")
-    for d in (DONOR_IDS.get(stem, []) if donor_ids is None else list(donor_ids)):
-        if d not in ids:
-            V.append(f"donor row '{d}' (pinned by ArenaMode) is missing")
+    if donor_ids is None:
+        by_id = {r.get("id", ""): r for r in bot_list}
+        for d, (dpos, drad) in DONOR_ROWS.get(stem, {}).items():
+            r = by_id.get(d)
+            if r is None:
+                V.append(f"donor row '{d}' (pinned by ArenaMode) is missing")
+            elif [float(v) for v in r["position"]] != [float(v) for v in dpos] or float(r.get("radius", -1)) != float(drad):
+                V.append(f"donor row '{d}' (pinned by ArenaMode, rule R1) changed: {r['position']} radius {r.get('radius')}, pinned {dpos} radius {drad}")
+    else:
+        for d in donor_ids:
+            if d not in ids:
+                V.append(f"donor row '{d}' (pinned by ArenaMode) is missing")
     grand = set(grandfathered)
     appended: set = set()
     if appended_since is not None:
@@ -1329,7 +1353,7 @@ def check_layout(inputs: dict, mesh, cset=None, params: dict | None = None, stem
         if appended_since in bot_ids:
             appended = set(bot_ids[bot_ids.index(appended_since):])
         else:
-            info.append(f"--appended-since '{appended_since}' is not among the Bot rows: no row is treated as appended (this is the pre-change layout)")
+            V.append(f"--appended-since '{appended_since}' is not among the Bot rows (the clearance rule would silently apply to no row)")
 
     def needs_clearance(rid, is_bot):
         if rid in grand:
@@ -1376,16 +1400,16 @@ def check_layout(inputs: dict, mesh, cset=None, params: dict | None = None, stem
             ring = np.array([[pos[0] + dx, pos[1], pos[2] + dz] for dx in np.linspace(-2.0, 2.0, 17) for dz in np.linspace(-2.0, 2.0, 17) if max(abs(dx), abs(dz)) == 2.0])
             edge_out = float(pk.xz_outside_distance(ring).min())
             if name in mouth_exits:
-                if d_out > P["mouth_tolerance"]:
-                    V.append(f"exit '{name}' {m['position']} centre is {d_out:.2f} m outside pocket '{lab}' (its nearest box edge {edge_out:.2f} m), "
-                             f"more than the mouth tolerance {P['mouth_tolerance']:g} m of the centre")
+                if edge_out > P["mouth_tolerance"]:
+                    V.append(f"exit '{name}' {m['position']}: nearest box edge is {edge_out:.2f} m outside pocket '{lab}' (centre {d_out:.2f} m), "
+                             f"more than the mouth tolerance {P['mouth_tolerance']:g} m")
                 else:
-                    info.append(f"exit '{name}' is a listed mouth exit: {d_out:.2f} m outside pocket '{lab}' (tolerance {P['mouth_tolerance']:g} m)")
+                    info.append(f"exit '{name}' is a listed mouth exit: nearest box edge {edge_out:.2f} m outside pocket '{lab}' (centre {d_out:.2f} m; tolerance {P['mouth_tolerance']:g} m on the edge)")
             else:
                 V.append(f"exit '{name}' {m['position']} centre is {d_out:.2f} m outside pocket '{lab}' (rule R3: inside its pocket)")
-        edge = m.get("nearest_player_row_box_edge")
-        if edge is not None and edge < P["exit_player_margin"] - 1e-6:
-            V.append(f"exit '{name}': a Player row is {edge:.2f} m from the box edge, below {P['exit_player_margin']:g} m")
+        edge = m.get("nearest_player_row_box_edge_raw")
+        if edge is not None and edge < P["exit_player_margin"]:
+            V.append(f"exit '{name}': a Player row is {edge:.3f} m from the box edge, below {P['exit_player_margin']:g} m")
         if not m["centre_on_mesh"]:
             V.append(f"exit '{name}' {m['position']}: no floor (play-component NavMesh) under the centre")
         if m.get("solid_free") is False:
@@ -1395,7 +1419,10 @@ def check_layout(inputs: dict, mesh, cset=None, params: dict | None = None, stem
             else:
                 V.append(line)
         elif m.get("solid_free") is None:
-            info.append(f"exit '{name}': no --package, solid check skipped")
+            if require_solid_check:
+                V.append(f"exit '{name}': the solid check was not run (no package; pass --package or an explicit --no-solid-check)")
+            else:
+                info.append(f"exit '{name}': no --package, solid check skipped on request")
         info.append(f"exit '{name}' in '{lab}': plain-raid reachable {m['plain_raid_reachable']}, markers in box {m['markers_in_box']}, "
                     f"corners on mesh {m['corners_on_mesh']}/4, clearance {m['border_clearance']}, nearest marker {m['nearest_marker']}")
     for pk in pockets:
@@ -1591,7 +1618,7 @@ def build_parser():
                           ("exit_clearance", float, "min border clearance at an exit box centre"),
                           ("ai_used_radius", float, "an AI point this close to an existing row counts as used"),
                           ("exit_player_margin", float, "min distance of every Player row to an exit BOX EDGE (rule R3; the Equator booth precedent)"),
-                          ("mouth_tolerance", float, "check mode: how far outside its pocket footprint a --mouth-exit centre may stand")):
+                          ("mouth_tolerance", float, "check mode: how far outside its pocket footprint the nearest box edge of a --mouth-exit may stand")):
         ap.add_argument("--" + k.replace("_", "-"), type=typ, default=DEFAULTS[k], help=f"{help_} (default {DEFAULTS[k]})")
     ap.add_argument("--metric", choices=("3d", "xz"), default=DEFAULTS["metric"], help="distance the selection optimises (both are reported)")
     ap.add_argument("--include-pockets", action="store_true", help="optimise the cells inside the pockets too")
@@ -1603,7 +1630,7 @@ def build_parser():
                     help="repeatable: native row ids that were left out on purpose; a candidate with such an id is rejected (dropped_on_purpose)")
     ap.add_argument("--check", action="store_true",
                     help="CHECK MODE: verify the committed layout of --stem (rows on the play component, ids unique, donor ids present, exits per rule R3) and "
-                         "exit 1 with one line per violation; needs --package for the exit solid check; prints coverage and plain-raid reachability as information")
+                         "exit 1 with one line per violation; needs --package for the exit solid check (exit 2 without it unless --no-solid-check); prints coverage and plain-raid reachability as information")
     ap.add_argument("--appended-since", metavar="ID",
                     help="check mode: this Bot row and every later one are the appended rows and need --clearance; older rows (and Player rows) need only "
                          "membership on the play component. Without this and --grandfathered-ids every row needs the clearance")
@@ -1612,7 +1639,9 @@ def build_parser():
     ap.add_argument("--donor-ids", action="append", default=None, metavar="ID[,ID]",
                     help="check mode, repeatable: replaces the built-in pinned donor row of the stem (R1)")
     ap.add_argument("--mouth-exit", action="append", default=[], metavar="NAME",
-                    help="check mode, repeatable: this exit may stand at the pocket mouth (centre at most --mouth-tolerance outside the footprint)")
+                    help="check mode, repeatable: this exit may stand at the pocket mouth (its nearest box EDGE at most --mouth-tolerance outside the footprint; the centre may stand further out)")
+    ap.add_argument("--no-solid-check", action="store_true",
+                    help="check mode: run without --package and skip the exit solid check on purpose (otherwise --check without --package exits 2)")
     ap.add_argument("--solid-exception", action="append", default=[], metavar="NAME",
                     help="check mode, repeatable: a solid in this exit's box is reported as information, not a violation (state the reason where you pass it)")
     return ap
@@ -1625,6 +1654,9 @@ def _csv(values) -> list:
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     maps_dir = Path(args.maps_dir)
+    if args.check and not args.package and not args.no_solid_check:
+        print("error: --check needs --package (the exit solid check); pass --no-solid-check to skip it on purpose", file=sys.stderr)
+        return 2
     try:
         inputs, mesh, cset = load_world(args.stem, maps_dir, args.sources, Path(args.navmesh) if args.navmesh else None, Path(args.package) if args.package else None)
     except WorldError as e:
@@ -1643,7 +1675,7 @@ def main(argv=None) -> int:
     if args.check:
         rep = check_layout(inputs, mesh, cset, params, stem=args.stem, appended_since=args.appended_since, grandfathered=_csv(args.grandfathered_ids),
                            donor_ids=_csv(args.donor_ids) if args.donor_ids is not None else None, mouth_exits=set(args.mouth_exit),
-                           solid_exceptions=set(args.solid_exception))
+                           solid_exceptions=set(args.solid_exception), require_solid_check=not args.no_solid_check)
         if not args.quiet:
             print(format_check(rep))
         if args.out:

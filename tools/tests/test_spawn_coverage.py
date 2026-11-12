@@ -1,6 +1,8 @@
 """tools/validate/spawn_coverage.py on synthetic meshes only (no work/ data, no Arena, no Unity)."""
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import math
 import sys
@@ -660,6 +662,7 @@ class CheckLayoutTests(unittest.TestCase):
         verts, idx = grid_mesh(0, 80, 0, 20)
         mesh = oracle.mesh_from_triangulation(verts, idx)
         kw.setdefault("donor_ids", ["d1"])
+        kw.setdefault("require_solid_check", False)      # the synthetic map has no collider package
         kw.setdefault("appended_since", "new1")          # the row 'old' stands 0.1 m from the border: membership only, like Bay5's old rows
         return sc.check_layout(inputs, mesh, None, {"probe": False}, stem="test", **kw)
 
@@ -684,15 +687,20 @@ class CheckLayoutTests(unittest.TestCase):
         rep = self.run_check(inp, mouth_exits={"XW"})
         self.assertEqual(rep["violations"], [])
         self.assertTrue(any("listed mouth exit" in i for i in rep["info"]))
-        inp["exits"]["exits"][0]["position"] = [11.5, 0.0, 10.0]                           # 1.5 m: beyond the tolerance
+        # the tolerance is measured on the nearest box EDGE (Air Pit South Gate: centre 2.41 m out, edge 0.41 m out)
+        inp["exits"]["exits"][0]["position"] = [12.4, 0.0, 10.0]                           # centre 2.4 m out, nearest edge 0.4 m out: allowed
+        rep = self.run_check(inp, mouth_exits={"XW"})
+        self.assertEqual(rep["violations"], [])
+        self.assertTrue(any("nearest box edge 0.40 m" in i for i in rep["info"]), rep["info"])
+        inp["exits"]["exits"][0]["position"] = [13.5, 0.0, 10.0]                           # nearest edge 1.5 m out: beyond the tolerance
         v = self.violations(inp, mouth_exits={"XW"})
-        self.assertTrue(any("mouth tolerance" in x for x in v), v)
+        self.assertTrue(any("mouth tolerance" in x and "nearest box edge is 1.50" in x for x in v), v)
 
     def test_a_player_row_must_keep_two_and_a_half_metres_from_the_box_edge(self):
         inp = self.base()
         inp["bots"]["player_spawns"][0]["position"] = [2.0, 0.0, 14.0]                    # box 4..8: the row is 2.0 m from its edge
         v = self.violations(inp)
-        self.assertTrue(any("Player row is 2.00 m from the box edge" in x for x in v), v)
+        self.assertTrue(any("Player row is 2.000 m from the box edge" in x for x in v), v)
         inp["bots"]["player_spawns"][0]["position"] = [1.5, 0.0, 14.0]                    # 2.5 m: allowed
         self.assertEqual(self.violations(inp), [])
 
@@ -743,8 +751,51 @@ class CheckLayoutTests(unittest.TestCase):
         self.assertTrue(any("'old'" in x for x in v) and any("'new1'" in x for x in v), v)
         v = self.violations(inp, appended_since=None, grandfathered=["old", "new1"])
         self.assertEqual(v, [])
-        rep = self.run_check(inp, appended_since="missing")
-        self.assertTrue(any("not among the Bot rows" in i for i in rep["info"]))
+
+    def test_a_missing_appended_since_id_is_a_violation_not_a_silent_pass(self):
+        inp = self.base()
+        inp["bots"]["bot_spawns"][2]["position"] = [50.0, 0.0, 0.5]                        # would fail the clearance rule with the right id
+        v = self.violations(inp, appended_since="new1x")
+        self.assertTrue(any("--appended-since 'new1x' is not among the Bot rows" in x for x in v), v)
+        rep = self.run_check(inp, appended_since="new1")
+        self.assertEqual(rep["rows_checked_for_clearance"], 1)
+        self.assertEqual(len(rep["violations"]), 1)
+
+    def test_donor_rows_are_pinned_by_exact_floats(self):
+        inp = self.base()
+        saved = dict(sc.DONOR_ROWS)
+        sc.DONOR_ROWS["test"] = {"d1": ([30.0, 0.0, 10.0], 25)}
+        try:
+            self.assertEqual(self.run_check(inp, donor_ids=None)["violations"], [])
+            inp["bots"]["bot_spawns"][0]["position"] = [30.5, 0.0, 10.0]
+            v = self.violations(inp, donor_ids=None)
+            self.assertTrue(any("donor row 'd1'" in x and "changed" in x for x in v), v)
+            inp["bots"]["bot_spawns"][0]["position"] = [30.0, 0.0, 10.0]
+            inp["bots"]["bot_spawns"][0]["radius"] = 30
+            self.assertTrue(any("donor row 'd1'" in x for x in self.violations(inp, donor_ids=None)))
+        finally:
+            sc.DONOR_ROWS.clear()
+            sc.DONOR_ROWS.update(saved)
+
+    def test_donor_pins_of_the_six_maps_match_the_committed_sidecars_when_unchanged(self):
+        self.assertEqual(sorted(sc.DONOR_ROWS), sorted(sc.DONOR_IDS))
+        for stem, rows in sc.DONOR_ROWS.items():
+            self.assertEqual(len(rows), 1, stem)
+
+    def test_the_player_margin_is_compared_unrounded(self):
+        inp = self.base()
+        inp["bots"]["player_spawns"][0]["position"] = [1.5025, 0.0, 14.0]                  # 2.4975 m from the box edge: prints as 2.50, still a violation
+        v = self.violations(inp)
+        self.assertTrue(any("Player row is 2.498" in x for x in v), v)
+
+    def test_without_a_package_the_unevaluated_solid_rule_is_a_violation(self):
+        v = self.violations(self.base(), require_solid_check=True)
+        self.assertTrue(any("solid check was not run" in x for x in v), v)
+        self.assertEqual(self.violations(self.base(), require_solid_check=False), [])
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(sc.main(["--stem", "equator", "--check"]), 2)
+        self.assertIn("--no-solid-check", err.getvalue())
 
     def test_the_parser_takes_the_new_options(self):
         a = sc.build_parser().parse_args(["--stem", "s", "--check", "--appended-since", "x", "--mouth-exit", "A", "--mouth-exit", "B", "--keep-out", "1,2,3",
@@ -754,6 +805,7 @@ class CheckLayoutTests(unittest.TestCase):
         self.assertEqual(sc._csv(a.grandfathered_ids), ["a", "b", "c"])
         self.assertEqual(a.exit_player_margin, 2.5)
         self.assertEqual(a.mouth_tolerance, 1.0)
+        self.assertFalse(a.no_solid_check)
 
 
 if __name__ == "__main__":

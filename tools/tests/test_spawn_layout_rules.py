@@ -2,16 +2,20 @@
 
 What it pins are RULES, not coordinates (a later host-driven nudge of an exit touches only the sidecar and the descriptor):
   R1  every Bot and Player row lies on the play component of the BUILT NavMesh; ids are unique; ArenaMode's pinned donor row of the map is
-      still there; no id carries '-tdm-v1-'; the rows appended in the 2026-11-12 spawn increase keep the border clearance (1.35 m) while the
-      older rows need membership only (Bay5 carries old rows 0.02 m from the border);
+      still there with its exact floats (byte-identity of the whole original prefix belongs to the sidecar streams); no id carries '-tdm-v1-';
+      the rows appended in the 2026-11-12 spawn increase (from the first-new id of the table below to the end; the count is asserted and must
+      be above 0) keep the border clearance (1.35 m minus 0.02 m for the rounding of 2-decimal positions) while the older rows need
+      membership only (Bay5 carries old rows 0.02 m from the border);
   R3  one exit per team pocket, the 4 x 3 x 4 box (rotation 0) INSIDE its pocket's initial spawn-bound footprint (the green signal flare then marks the
-      team's spawn area), every Player row at least 2.5 m from the box EDGE (the Equator booth precedent, docs/progress/equator-booth-spawns.md),
+      team's spawn area), every Player row at least 2.5 m from the box EDGE, unrounded (the Equator booth precedent, docs/progress/equator-booth-spawns.md),
       the NavMesh floor under the centre and no solid in the box between floor+0.3 and floor+2.5.
 Plain-raid reachability (Air Pit's north pocket lies behind the held passport gates and is not reachable until a mode plugin releases them), the
 markers inside a box and the coverage numbers are printed by the tool and are information here.
 
 Listed exceptions, with their reasons:
-  Air Pit South Gate   a MOUTH exit (centre at most 1 m outside the pocket footprint): no in-pocket box keeps the south Player rows 2.5 m from the box edge.
+  Air Pit South Gate   a MOUTH exit: its nearest box EDGE stands at most 1 m outside the pocket footprint (decided position: edge 0.41 m, centre
+                       2.41 m out; the first solid-free box on the built mesh has that centre, so a centre rule cannot be met). No in-pocket box keeps
+                       the south Player rows 2.5 m from the box edge and boxes closer to the pocket hold solids or lie off the mesh.
   Equator South Gate   its box touches the back-wall elevator frames of the booth (the booth precedent); the solid check is information there.
 
 Inputs (all optional; a missing bundle or package skips the map, a skipped test is not evidence, read the skip reason):
@@ -55,6 +59,12 @@ class SpawnLayoutRuleTests(unittest.TestCase):
         inputs, mesh, cset = sc.load_world(stem, MAPS_DIR, None, nav, pkg)
         rep = sc.check_layout(inputs, mesh, cset, {"probe": False}, stem=stem, appended_since=first_new, mouth_exits=set(mouth), solid_exceptions=set(solid_ok))
         self.assertEqual(rep["violations"], [], "\n" + sc.format_check(rep))
+        # the clearance rule must have been applied to the appended rows (a drifted first-new id would switch it off silently)
+        ids = [r["id"] for r in inputs["bots"]["bot_spawns"]]
+        self.assertIn(first_new, ids)
+        n_new = len(ids) - ids.index(first_new)
+        self.assertGreater(n_new, 0)
+        self.assertEqual(rep["rows_checked_for_clearance"], n_new)
         return rep
 
     def test_equator(self):
