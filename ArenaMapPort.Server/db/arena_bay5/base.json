@@ -1087,6 +1087,192 @@
       "Sides": [
         "Savage"
       ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_bay5-bot-core-08",
+      "Infiltration": "",
+      "Position": {
+        "x": 97.3,
+        "y": -3.875,
+        "z": 47.8
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_bay5-bot-core-07",
+      "Infiltration": "",
+      "Position": {
+        "x": 100.1,
+        "y": -3.875,
+        "z": 15.2
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_bay5-bot-core-03",
+      "Infiltration": "",
+      "Position": {
+        "x": 125.69,
+        "y": -3.775,
+        "z": 19.66
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_bay5-bot-core-06",
+      "Infiltration": "",
+      "Position": {
+        "x": 108.3,
+        "y": -3.842,
+        "z": 25.4
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_bay5-bot-fill-01",
+      "Infiltration": "",
+      "Position": {
+        "x": 80.0,
+        "y": -3.875,
+        "z": 24.0
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_bay5-bot-fill-02",
+      "Infiltration": "",
+      "Position": {
+        "x": 64.0,
+        "y": -3.875,
+        "z": 58.0
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
     }
   ]
 }
