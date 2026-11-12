@@ -1386,11 +1386,12 @@ namespace ArenaMapPort.Shared
             IconY: 679,
             DbBaseJsonPath: "arena_bowl/base.json",
             // PLAN-BOWL item 5/7 (docs/progress/bowl-release.md, 2026-10-18). Exits mirror tools/maps/bowl.exits.json
-            // (BowlMapTests): one gate beyond each pocket as seen from the pocket, on Arena's own NavMesh main component.
+            // (BowlMapTests). 2026-11-12 (rule R3, docs/progress/bowl-release.md): one exit per team pocket, the box INSIDE its pocket so that the
+            // green signal flare marks the team's spawn area in ArenaMode's team modes; offline, host check pending. Before: one gate beyond each pocket.
             Exits: new[]
             {
-                new ArenaExitDescriptor("Bowl BTR Gate", 51.0f, 0.1f, -31.0f),
-                new ArenaExitDescriptor("Bowl Army Gate", -51.0f, 0.1f, -49.0f),
+                new ArenaExitDescriptor("Bowl BTR Gate", 49.3f, 0.1f, -11.1f),
+                new ArenaExitDescriptor("Bowl Army Gate", -57.4f, 0.2f, -60.8f),
             },
             // The two GateEntity roots of Arena_Bowl_TeamFight_DesignStuff (both at the origin): DOORS_SPAWN_A holds
             // Bowl_Gates_Respawn_01 (gate + rail) and BTR_82_closed, DOORS_SPAWN_B holds Gates_Army_01 (gate + two Telfer

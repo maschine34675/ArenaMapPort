@@ -1,5 +1,5 @@
 {
-  "_comment": "bowl PLAN-BOWL item 5 (docs/progress/bowl-release.md, 2026-10-18): optional sidecar read by tools/server/make_base_json.py next to tools/maps/bowl.json. OFFLINE DRAFT, not walked on the host yet: the first Bowl raid (item 11) must confirm every point with uibridge_teleport dryRun=true. Player spawns are the world positions (parent chain) of four of Arena's 20 original SPAWNS/'Bear house' markers in Arena_Bowl_TeamFight_DesignStuff: markers (5) and (8) in the east pocket (x 46..56, z -11..-3, yaws 217 / 238) and markers (1) and (12) in the west pocket (x -58..-49, z -69..-61, yaw 51); the other 16 stay unused until ArenaMode places teams. Bot spawns are 17 of Arena's 19 AICorePoints (tools/maps/bowl.ai.json): core 7 lies inside the west pocket and core 17 on the east gate line, both skipped so no bot starts inside a team box. All 19 core points and all 20 markers sit on Arena's own 4,987 m2 NavMesh main component (world frame, oracle 2026-10-18). Waves and PMC boss waves copied from airpit.bots.json.",
+  "_comment": "bowl PLAN-BOWL item 5 (docs/progress/bowl-release.md, 2026-10-18): optional sidecar read by tools/server/make_base_json.py next to tools/maps/bowl.json. OFFLINE DRAFT, not walked on the host yet: the first Bowl raid (item 11) must confirm every point with uibridge_teleport dryRun=true. Player spawns are the world positions (parent chain) of four of Arena's 20 original SPAWNS/'Bear house' markers in Arena_Bowl_TeamFight_DesignStuff: markers (5) and (8) in the east pocket (x 46..56, z -11..-3, yaws 217 / 238) and markers (1) and (12) in the west pocket (x -58..-49, z -69..-61, yaw 51); the other 16 stay unused until ArenaMode places teams. Bot spawns are 17 of Arena's 19 AICorePoints (tools/maps/bowl.ai.json): core 7 lies inside the west pocket and core 17 on the east gate line, both skipped so no bot starts inside a team box. All 19 core points and all 20 markers sit on Arena's own 4,987 m2 NavMesh main component (world frame, oracle 2026-10-18). Waves and PMC boss waves copied from airpit.bots.json. 2026-11-12 (spawn-count change, user request after the ArenaMode session; docs/progress/bowl-release.md): four Bot rows are appended after the 17 originals, which stay byte-identical (rule R1: id, position, radius, order; ArenaMode pins bot-core-02 by id and exact floats, so none of them is touched). Why more rows (R2): ArenaMode's burst selector uses only Bot rows at least 25 m (3D) from the player, Tactical wants five of them from wherever the leader stands, pickups at least six usable rows. Bowl is already saturated by that rule: the 17 rows leave every walkable cell of the main component at least 8 distant rows (median 15, none without), and the four new rows lift the minimum to 12 (median 17) and the worst gap to the nearest row from 26.8 m to below 24.4 m; they are a margin, not a repair. Sources: bot-born-16 and bot-born-27 are Arena's AI born points p1 (16) and p1 (27) moved 1.41 m and 1.69 m to floor with 2.4 m / 2.1 m of border clearance (the authored points stand 1.7 m from the border and are the fallbacks); bot-fill-01 (36, -48) and bot-fill-02 (-40, -27) are mesh fill points with no native marker within 6 m (clearance 2.1 m / 3.1 m). All four lie on the built NavMesh main component, have standing room (spawn_placement_probe), stand at least 17 m from every pocket gate, 27 m from the nearest pocket marker and 30 m or more from every Player row, and 7 m or more from every other row; y 0.1 is the pocket marker height. Rule R5: Bowl's old rows keep their original rules, the appended rows are held to the measured ones in tools/tests/test_bowl_spawns.py. OFFLINE, host check pending: each new row needs a uibridge_teleport dryRun=true and a plain-raid spawn check on the host.",
   "zone": "BotZone_Main",
   "max_bots": 8,
   "player_spawns": [
@@ -275,6 +275,58 @@
         -28.18,
         0.09,
         -11.95
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_bowl-bot-born-16",
+      "position": [
+        21.0,
+        0.1,
+        4.0
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_bowl-bot-born-27",
+      "position": [
+        28.0,
+        0.1,
+        -64.0
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_bowl-bot-fill-01",
+      "position": [
+        36.0,
+        0.11,
+        -48.0
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_bowl-bot-fill-02",
+      "position": [
+        -40.0,
+        0.1,
+        -27.0
       ],
       "radius": 25,
       "categories": [
