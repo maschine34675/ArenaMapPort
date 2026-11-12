@@ -266,3 +266,5 @@ Equator regression (17:59): three `[RoofShadow] registered ... equator_floor_0N_
 `warnings 0 from mods, 4 Unity Log` (the known `refrigerator_drink` lines). The hideout opened (6.7 s). No Warning from the mod in the session.
 
 Not checked: the openings of the OUTDOOR hull at other sun angles, and the Iceberg interior proxies the census lists (report only).
+
+Python gate on `e5fe721` (PowerShell, `PYTHONUTF8=1`): `python -m unittest discover -s tools/tests -p "test_*.py"` ran 3,121 tests, OK (68 skipped); .NET 3,294 of 3,294.
