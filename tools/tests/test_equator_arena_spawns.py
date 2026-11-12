@@ -79,7 +79,38 @@ class EquatorArenaSpawnTests(unittest.TestCase):
         for x in range(-25, 26):
             for z in range(-46, 51):
                 usable = sum(math.dist((x, 0.1, z), p) >= 25 for p in positions)
-                self.assertGreaterEqual(usable, 5, f"Only {usable} distant points from ({x}, {z})")
+                self.assertGreaterEqual(usable, 6, f"Only {usable} distant points from ({x}, {z})")
+
+    def test_new_rows_stand_on_the_built_play_component_with_room(self):
+        # The appended rows measure 1.45 m or more of mesh clearance on 2026-11-12 (the generic 0.5 m floor of
+        # test_spawn_navmesh_clearance covers every row); a drift of a row toward the border fails here. Skips without the ignored
+        # built bundle (the worktree reads it through ARENAMAPPORT_WORK_DIR) or numpy/UnityPy.
+        import os
+        import sys
+        work = Path(os.environ.get("ARENAMAPPORT_WORK_DIR", REPO / "work"))
+        bundle = work / "build/full/arena_equator_navmesh.bundle"
+        if not bundle.is_file():
+            self.skipTest(f"no built NavMesh bundle {bundle}")
+        sys.path.insert(0, str(REPO / "tools/validate"))
+        try:
+            import numpy as np
+            import navmesh_diff as nd
+            mesh = nd.load_bundle_mesh(bundle)
+        except ImportError:
+            self.skipTest("numpy or UnityPy is not installed")
+        finally:
+            sys.path.remove(str(REPO / "tools/validate"))
+        reference = np.array([self.bots["bot_spawns"][0]["position"]], dtype=float)
+        polygons, _ = mesh.locate(reference, max_dy=1.5)
+        self.assertGreaterEqual(polygons[0], 0)
+        play = int(mesh.labels[polygons[0]])
+        for row in self.bots["bot_spawns"][10:]:
+            xyz = np.array([row["position"]], dtype=float)
+            polygons, surface = mesh.locate(xyz, max_dy=1.5)
+            self.assertGreaterEqual(polygons[0], 0, row["id"])
+            self.assertEqual(int(mesh.labels[polygons[0]]), play, row["id"])
+            clearance = float(mesh.clearance(np.array([[xyz[0][0], surface[0], xyz[0][2]]]), dy=1.2)[0])
+            self.assertGreaterEqual(clearance, 1.4, f"{row['id']} is only {clearance:.2f} m from the NavMesh border")
 
     def test_new_rows_keep_their_distance_to_every_other_row(self):
         # Measured 2026-11-12: at least 9.8 m to any other row, 19.8 m to any Player row (the proposal's stricter checks).
@@ -88,7 +119,7 @@ class EquatorArenaSpawnTests(unittest.TestCase):
             for other in self.bots["bot_spawns"] + players:
                 if other["id"] == row["id"]:
                     continue
-                limit = 19.0 if other in players else 9.5
+                limit = 19.5 if other in players else 9.5
                 self.assertGreaterEqual(math.dist(row["position"], other["position"]), limit, f"{row['id']} / {other['id']}")
 
     def test_bot_spawns_do_not_overlap_player_respawn_coordinates(self):
