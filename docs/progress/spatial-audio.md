@@ -211,3 +211,40 @@ records the original and the repaired SHA-256 under `bake_repair` in the graph J
 "the original bake", that is true of Equator, Bay5, AirPit and Bowl only; for Iceberg say "Arena's bake with one duplicated portal ID corrected". The
 10 mirrored `AudioTriggerArea` volumes of two Iceberg rooms keep their negative scale (`AcousticVolumeRules`).
 
+## Follow-up - Iceberg's route twins: what they do at run time, and why 66 -> 30 is not physically exact, 2026-11-12
+
+Question (user, 2026-11-12): is a fix of Iceberg's room acoustics sensible? SPT-SEB's checker found 510 routes in 153 of 1,003 room pairs of the repaired bake whose portal list equals another route of the same pair, with a different stored cost and distance; Arena's original has none. Result: no change. Facts are separated from inferences below.
+
+**1. What a twin does at run time (EFT 0.16.9.5 decompile, read in full).**
+- Facts. `RoomPair.Route.Read` (RoomPair.cs) keeps only the portal IDs, the stored `HeuristicCost` and `TraverseDistance`. `SpatialAudioDataContainer.FinalizeRoutesData` and `FinalizePortalIndicesData` flatten every route of a pair into one array, in file order. `SoundPropagationJobScheduler.Schedule` runs `PropagationJob` once per route. The job takes only `PortalDataLength`, `StartIndex` and `NodeStartIndex` from the route data. `Execute` rebuilds the polyline from the scene's portal geometry (`ComputeClosestPointOnPortal`) and `GetRouteCostAndDistance` computes cost and distance from it. The file's stored cost and distance are not read by this job; the stored `AudioRouteData.HeuristicCost` is unused in the job. `PropagationEffectCalculationJob.Execute` reduces to ONE value per pair, the minimum cost with a 0.01 tie rule and then the minimum distance. It is not a sum.
+- So a route with the same portal list computes the same cost and distance as its twin. Nothing is doubled and the minimum is unchanged. The only cost is one extra job index per twin (510 of 17,751, 2.9 percent).
+- The route-count cut `num = max(min(350,len), ceil(len*q))` always covers every route, because the largest pair has 180 routes (max_routes_count 180, below 350). No twin is ever skipped or crowds out a distinct route. The node buffer is `maxRoutePortalsCount + 2*maxRoutesCount` and the file's caps (180 / 1,015) are the maxima including the twins, so they fit.
+- `ShortestRouteLength` (used only in `GetIsolationFactor` and `InteractiveObjectOccluder`) is the minimum route length. A twin has the same length, so it changes nothing.
+- The old `SoundPropagationCalculator`, the only reader of `Route.HeuristicCost` (as a prune), is not referenced anywhere in the decompile. Nothing live reads the stored cost.
+- Limit: the job is Burst-compiled. I read its managed source, which is the code Burst compiles; I did not read native code.
+
+**2. What the twins are.**
+- Facts. Arena's file has 876 routes with ID 66 and 1,309 with 30; the repaired file has 380 and 1,842. In Arena's original no pair has a repeated portal list. The 533 rewritten positions split into 510 routes that become a twin of an existing route ending in or passing 30, and 23 that have no twin. The twins show the pattern 'route A: ..., 4, 30' and 'route B: ..., 4, 66' with different stored costs and distances. Example, pair 10 (rooms 1 to 11): 72.36 m via 30 and 69.89 m via 66.
+- Scene geometry (graph, world transforms). Portal 30 (elevators to boiler, room 11) sits at (33.28, 4.32, -83.09). Portal 66 (elevators to 'boiler (2)', room 24) sits at (29.60, 4.32, -83.09): the same wall, 3.68 m apart, the same size and depth. Room 11's volume centre is at x 33.4, room 24's at x 29.8. Both doorways are real and separate in the scene.
+- Measurement. For the 510 twin groups, the difference between the stored distances of the two routes correlates r = 0.98 with the difference in polyline length obtained by moving that hop from portal 30 to the scene's portal 66. Mean absolute error of that prediction is 0.58 m; using portal 30's position for both gives 1.75 m (i.e. no difference). A grid fit of the unknown portal position puts it at (30.1, -82.6), about 0.7 m from portal 66 (rms 0.33 m; rms 0.65 m at portal 66; 2.28 m at portal 30).
+- Inference (not proven): in Arena's bake the ID 66 on those 533 hops names the doorway that the scene still calls portal 66, at x about 29.6. The bake saw that doorway as joining elevators and boiler (11), while the shipped scene joins it to 'boiler (2)' (24). The graph check refuses the route because of that room link, not because of the doorway itself. The old bake-time scene is not available.
+- So the true defect is the repair target, not duplicates: 66 -> 30 relabels a hop that physically goes through x 29.6 as a hop through x 33.3. It is valid against the graph, and it creates the twins wherever the bake also contained a genuine route through 30.
+
+**3. Decision: leave it.**
+- Run-time effect of the twins: none beyond 2.9 percent extra jobs (section 1).
+- Run-time effect of the wrong target. Model: my Python port of `PropagationJob` with EFT's default `PropagationSettings` and scene portal data. 157 pairs contain a rewritten route; 10 uniformly random source/listener positions per pair inside the two room volumes, 3 seeds (4,710 samples), comparing the best cost of the repaired file with Arena's original bytes (positive = repaired is more occluded): mean +0.006 to +0.008; difference > 0.01 in 6.0 to 7.3 percent; > 0.05 in 4.4 to 5.4 percent; > 0.2 in 0.6 to 0.9 percent; max +0.33 to +0.40; negative values rare (-0.18 at worst). This is a model estimate (inference), limited to pairs involving the elevators and boiler rooms (15.7 percent of pairs), i.e. well below 1 percent of all pair-position combinations.
+- Options weighed.
+  - Remove the costlier twin per pair: both twins compute the same cost at run time, so nothing is gained; it breaks the scene's `routes_count` (17,751) and possibly `max_routes_count` (180) pinned against the graph and the exporter (every validator strict), changes pair aggregates, and does not restore the lost doorway.
+  - Correct the repair so the 533 positions keep ID 66 (Arena's original bytes, the 'bake_repair' goes away): this is the only option that recovers Arena's run-time geometry and gets rid of the twins. It needs a reviewed, pinned exception in `parse_bake`'s route-walk check (portal 66 additionally joins rooms 27 and 11), and the SEB scene-walk check ('doors that don't join their rooms') then fails for exactly 533 routes (its documented negative control). It changes the released map's acoustics and needs a re-export, a client DllOnly build, validate_distribution, a deploy and a host check.
+  - Benefit does not justify that. Revisit only if a listening check in the boiler or elevators area (rooms 11, 24, 27) finds something wrong.
+
+**4. Wording corrections for the docs (for the lead).**
+- spatial-audio.md, this follow-up: 'the repaired file keeps 510 routes as portal-list twins of another route of the same pair (153 pairs); EFT's job recomputes cost from the portal list and takes the minimum, so a twin changes nothing; the rewrite moves 533 hops from the doorway at x about 29.6 (scene portal 66) to portal 30 at x 33.3.'
+- iceberg-release.md and spt-seb-compatibility.md: the open item 'leave or de-duplicate' is decided: leave.
+
+Not done: no export, no test change, no deploy, no host use. Scratch files are under work/tmp/iceberg-routes/ only.
+
+Lead's check (2026-11-12): `Audio.SpatialSystem/PropagationJob.cs` lines 72-98 compute each route's cost from `StaticPortalData` through
+`RoutePortalIndices` and write it to `LowestCosts[index]`; `PropagationEffectCalculationJob.Execute` (lines 24-37) starts from `float.MaxValue` and keeps the
+lower cost, with the 0.01 tie rule on distance. Read by the lead as well; it matches section 1. The review of this analysis raised no finding. Decision
+recorded: **no change to Iceberg's bake**; the Arena-faithful variant (original bytes plus a pinned portal-66 exception) stays an option on request.

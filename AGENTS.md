@@ -346,7 +346,7 @@ path: Unity resolves relative descriptor paths from its project directory.
 Native spatial acoustics use separate ignored `work/extract/spatial-audio/<map>` inputs, regenerated
 by `python tools/extract/extract_spatial_audio.py`. Release/DllOnly builds require and stage their
 graph JSON, original bake and room-tone WAV (Iceberg's bake is NOT byte-identical to Arena's file: 533 bytes differ, the reviewed pinned repair
-of one duplicated portal ID, 66 to 30, recorded under `bake_repair` in its graph JSON; never call it "the original bake, unmodified"). Do not rebuild scene bundles for this runtime graph port.
+of one duplicated portal ID, 66 to 30, recorded under `bake_repair` in its graph JSON; never call it "the original bake, unmodified"; the rewrite leaves 510 routes in 153 pairs as portal-list twins of another route, which are harmless because EFT's `PropagationJob` recomputes every route's cost from the portal geometry and `PropagationEffectCalculationJob` takes the minimum per pair, decided 2026-11-12: no change, [spatial-audio.md](docs/progress/spatial-audio.md)). Do not rebuild scene bundles for this runtime graph port.
 The native loader needs portal endpoints wired before room initialization; `RoutesDataCount` counts
 pair ranges, not individual routes. Start room tones only after `GameStatus.Started` or the raid audio
 reset stops them. See [spatial-audio.md](docs/progress/spatial-audio.md).
@@ -721,6 +721,7 @@ the log; the user uses it to point at things.
   purpose (an active static twin, planks and a fence in their doorways; Arena moves neither), and so does `Door_01 (3)` since
   2026-10-24 (user decision: Arena authors no motion and no sound for it, a tarp with a carton stack stands in its doorway; it
   is no opened barrier and a baked wall again; the 2026-10-23 borrowed lift of (4) is gone).
+- Distant sun shadows (2026-11-12, [lighting-followup.md](docs/progress/lighting-followup.md); host-verified on GPU-2 with a live control): Unity's cascades end at `QualitySettings.shadowDistance` (55 m on GPU-2, StableFit: a sphere ahead of the camera), beyond it only EFT's `DistantShadow` keeps the sun out, and it builds its list from LODGroups only (the second-to-last LOD or an earlier one, bounds edge at least 1 m). A shadow-only proxy that no LODGroup references is invisible to it, so a hall wider than the shadow distance shows a sun-lit patch with a curved edge on its far walls that follows the view (Chop Shop's "round shadow"). `RoofShadowRepairs.cs` (the former `EquatorRoofShadowRepairs.cs`) enrols the descriptor's `DistantShadowCasterPaths` in owned LODGroups for every map that lists some: Equator's three ceiling proxies with `DistantShadowTwoSided` true (their soffits face down), Chop Shop's two hall hulls with Arena's own one-sided material; developer key `Lighting (<key>)/RoofDistantShadows`, live. A new hall-sized map: run the census of that record before the first host raid.
 - Meta XR Audio is process-global: `MetaXRAcousticSettings.Instance.AcousticModel` and the one shoebox room
   (`MetaXRAudioRoomAcousticProperties`, two native calls per frame while enabled) belong to the whole process, not to a
   scene, and the plugin's managed model value does not vouch for the native side after an audio reset. `RoomShotAcoustics`

@@ -244,3 +244,25 @@ active up the chain, is an enabled ShadowsOnly MeshRenderer with a MeshFilter, h
   `Sanatorium_Cafe_ground_floor` 33.6 x 4.7 x 23.3 m, `Sanatorium_Cafe_constructions` 31.4 x 0.4 x 13.8 m (roof deck), `Sanatorium_hallway_big_02` 19.5 x 4.9 x 9.3 m, `Sanatorium_library_second_floor` 19.4 x 6.2 x 16.1 m,
   `Sanatorium_library_ground_floor` 18.7 x 5.2 x 15.4 m, `Sanatorium_library_dome` 10.4 x 4.7 x 10.4 m, `Sanatorium_Ventilation_Shaft` 3.5 x 19.2 x 1.7 m, a 15.4 x 9.7 x 10.4 m `STENCIL/STENCIL_TUNNEL` box and railing/fence meshes. Whether any of them lets sun through a ceiling
   beyond 55 m needs the same normals analysis and a host look; they are candidates, not findings.
+
+### Host check on GPU-2 (2026-11-12, build `e5fe721`, both DLLs deployed, 16/16 identical)
+
+Before (the previous build, raid clock 15:30, weather clear, sun direction (-0.409, 0.819, 0.403)): from (-382.5, 1.9, 469.5), yaw 20, pitch -12 the far
+right of the east wall and its banner are sun-lit with a curved edge; `DistantShadow._renderList.Count` 1082.
+
+After, same raid settings (`gpu-run raid --map "chop shop" --bots none --clock 15:30 --clock-speed 0 --weather clear`, `warnings 0; errors 0`):
+`[RoofShadow] registered '.../Arena_AutoService_OUTDOOR/AutoService_Building_OUTDOOR_SHADOW_LOD0' mesh=8e145d0004cb92d8 shader=shadow bounds=(-373.39, 7.25,
+489.25)/(58.41, 24.11, 47.67)` and the INDOOR line (`mesh=9abe5334daa96264 shader=shadow bounds=(-373.39, 5.99, 489.25)/(58.41, 21.60, 47.67)`);
+`_renderList.Count` 1084, `_objectsToRenderCount` 884 falling to 0 within about 8 s. Same position and view: the east wall is as dark as the rest, the
+banner grey, only the wall lamp's own glow is left.
+
+Control, live: `Lighting (arena_autoservice)/RoofDistantShadows` = false (`persist=false`) logs `[RoofShadow] disabled; removed owned LOD groups=2`, the
+list is 1082 again and after the rebuild the sun patch is back on the same wall; true again logs `[DistantShadowCache] map=arena_autoservice original roof
+proxies registered: invalidated=1; native shadow cache rebuild queued.` and the patch goes. So the one-sided stock material is enough here
+(`DistantShadowTwoSided` stays false) and the patch was the cascade sphere's edge: both inferences of the section above are confirmed. The west wall
+(yaw 300) shows no patch either.
+
+Equator regression (17:59): three `[RoofShadow] registered ... equator_floor_0N_SHADOW_LOD0 ... shader=shadow_2sided` lines with the bounds of before,
+`warnings 0 from mods, 4 Unity Log` (the known `refrigerator_drink` lines). The hideout opened (6.7 s). No Warning from the mod in the session.
+
+Not checked: the openings of the OUTDOOR hull at other sun angles, and the Iceberg interior proxies the census lists (report only).

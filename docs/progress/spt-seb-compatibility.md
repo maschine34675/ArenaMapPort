@@ -62,3 +62,9 @@ the four points it is.
 - The user's listening test with SEB installed (above), then the README sentence.
 - Autoservice: run SEB's `check_live_acoustics.py` against the new map's bake as a second opinion when its spatial acoustics are exported
   (plan item in [PLAN-AUTOSERVICE.md](../PLAN-AUTOSERVICE.md)); the same check on Iceberg's repaired bake is cheap and still open.
+
+## 2026-11-12 - Iceberg's duplicate routes: decided, leave
+
+The checker's "same route twice" finding on Iceberg's repaired bake (510 routes in 153 pairs, 2026-11-11) was followed up: EFT's run-time job recomputes
+route costs from portal geometry and takes the minimum per pair, so twins are harmless. No change to the file; see
+[spatial-audio.md](spatial-audio.md), 2026-11-12.

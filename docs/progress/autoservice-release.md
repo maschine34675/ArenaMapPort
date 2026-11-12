@@ -595,3 +595,22 @@ y 2.04 on the west ledge. Screenshot from the yard (-384, -3.8, 494): fans visib
 gallery; from straight below the gallery parapets hide them, which is Arena's placement. Not listened to.
 
 Python gate on the merged state (`79a1bb5`, PowerShell, `PYTHONUTF8=1`): `python -m unittest discover -s tools/tests -p "test_*.py"` ran 3,121 tests, OK (68 skipped).
+
+## 2026-11-12 - Round "shadow" on the hall walls; Iceberg's route twins
+
+User (2026-11-12): "mir fiel auf Chop Shop ein seltsamer runder schatten an den waenden auf, der wandert mit der blickrichtung, wird mal groesser/kleiner und
+ist an allen vier waenden zu sehen" (screenshot `D:/SPT41/Development/Screenshot 2026-11-12 164520.png`), and "falls der fix der raumakustik auf Iceberg
+sinnvoll waere gerne umsetzen".
+
+**Chop Shop.** It was sunlight, not a shadow: the hall (58 x 48 m) is wider than the 55 m cascade sphere, and the hall building's two shadow hulls sit
+under no LODGroup, so EFT's DistantShadow never drew them and the sun lit the far walls beyond the sphere, whose edge follows the view. The lead measured
+it on GPU-2 (shadowDistance 55.33, StableFit, `_renderList.Count` 1082, the hulls ShadowsOnly without a group). `e5fe721` makes the Equator repair
+descriptor-driven (`RoofShadowRepairs`, `DistantShadowCasterPaths` for AutoService, `DistantShadowTwoSided` false here and true on Equator, key
+`Lighting (arena_autoservice)/RoofDistantShadows`). Host: list 1084, patch gone, back with the key off, gone again with it on; Equator unchanged. Mechanism,
+census and host evidence: [lighting-followup.md](lighting-followup.md), 2026-11-12. .NET 3,294 of 3,294.
+
+**Iceberg.** No change. EFT recomputes every route's cost from the portal geometry and takes the minimum per room pair
+(`PropagationJob`, `PropagationEffectCalculationJob`), so the 510 twin routes cannot double anything; they cost 2.9 percent more job indices. The analysis
+also found that the 2026-10-30 repair relabels 533 hops from the doorway at x 29.6 (scene portal 66) to portal 30 at x 33.3, 3.7 m away on the same wall:
+valid against the scene graph, not exactly Arena's geometry; modelled effect small and limited to the elevators and boiler rooms. Record:
+[spatial-audio.md](spatial-audio.md), 2026-11-12. This closes the open item of the 2026-11-11 acoustics section ("leave as is, or de-duplicate").
