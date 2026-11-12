@@ -268,3 +268,154 @@ Equator regression (17:59): three `[RoofShadow] registered ... equator_floor_0N_
 Not checked: the openings of the OUTDOOR hull at other sun angles, and the Iceberg interior proxies the census lists (report only).
 
 Python gate on `e5fe721` (PowerShell, `PYTHONUTF8=1`): `python -m unittest discover -s tools/tests -p "test_*.py"` ran 3,121 tests, OK (68 skipped); .NET 3,294 of 3,294.
+
+## 2026-11-12 (evening) - Iceberg: the interior shadow proxies outside any LODGroup (no patch on GPU-2, nothing changed)
+
+Follow-up of the census note above: Iceberg (`arena_iceberg`, package `work/extract/iceberg-native-v2`, released in 0.5.0) has storey-sized
+ShadowsOnly proxies that no LODGroup references. Question: can the sun reach the interior through them beyond the cascades, and is a patch
+visible on GPU-2? **Result: no patch is visible on GPU-2, and Iceberg's descriptor, client and bundles are unchanged** (`DistantShadowCasterPaths`
+stays empty, nothing was deployed). The reason is structural: the building's roof and facades ARE in EFT's list, so the interior shells add
+nothing against a sun from above. One residue exists only in the model: low morning sun through the cafe's east glazing (08:00-10:00), which
+could show for a client with a shorter cascade than GPU-2's; it is described under "Open" and is not a finding of the host check.
+
+### The cascade distance is not a constant 55 m (read from the 0.16.9.5 decompile, confirmed on GPU-2)
+
+`EnvironmentManager.Update` writes `QualitySettings.shadowDistance = GetLongShadowCorrectionFactor() * OutdoorShadowDistance` every frame.
+`OutdoorShadowDistance = max(ShadowMinDistance 30, Graphics.Settings.ShadowDistance)` and `ShadowDistance = GetMaxShadowVisibility(ShadowsQuality)`,
+which is 30, 40, 60 or 80 m for the shadow quality 0 to 3. The factor is 1 for a player inside an IndoorTrigger and outside two intervals; for an
+outdoor player it rises from 1/3 to 1 over `ShadowInterval1` (5, 10) and falls from 1 to 1/3 over `ShadowInterval2` (17, 23)
+(`ShadowDecreaseFactor` 3). Both maps' EnvironmentManager carry these class defaults (read on the host).
+
+Measured on GPU-2 (shadow quality 3): Iceberg 80.0 at 15:30 outdoors and indoors, 58.67 at 08:00 outdoors (east pocket, plaza), 53.33 at
+07:30 on the plaza, 80.0 at 08:00 inside the cafe and inside the east pocket's gate building (Indoor); Chop Shop 80.0 at 15:30 (pocket
+Outdoor, hall Indoor). Inferred: the 55.33 of the Chop Shop record above is 80 x 0.6917, the outdoor value at 07:41 or 19:46 game time, not
+the value of a 15:30 raid. A client with shadow quality 0, 1 or 2 has 30, 40 or 60 m (times the same factor outdoors, so down to 10 m).
+
+The cascades hand over to the distant map INSIDE that nominal distance. Chop Shop control repeated at a nominal 80 m (19:23 raid, clock
+15:30, from (-382.5, 1.9, 469.5), yaw 20, pitch -12, player Indoor): `Lighting (arena_autoservice)/RoofDistantShadows` false (`persist=false`,
+19:24:16, `[RoofShadow] disabled; removed owned LOD groups=2`) and the banner wall, about 48.5 m away and about 33 degrees right of the view
+axis, is sun-lit again; true (19:24:37, `original roof proxies registered: invalidated=1`) and it is dark. Where exactly the hand-over lies is
+in EFT's deferred shader and was not read; "within the nominal distance" is therefore no proof that a surface is cascade-shadowed.
+
+Sun: `TOD_Sky` has latitude 46, longitude 84, UTC 7.24 and the fixed cycle date 2018-08-01 on both maps. Readings of `SunDirection`:
+(0.93, 0.086, -0.358) at 07:00, (0.949, 0.257, -0.18) at 08:00, (-0.409, 0.819, 0.403) at 15:30 (+x east, +z south). A plain solar model
+(declination 18 degrees, solar noon 13.81 h) reproduces all three within 0.004: sunrise about 06:32, sunset about 21:05, highest elevation
+62 degrees. After a clock jump by `uibridge_hook time` the light's transform eases to the new direction over about a minute
+(`Components.LightTransform.forward.y` went from -0.171 to -0.250 in 65 s): wait for it before judging a screenshot.
+
+### Offline census (`tools/validate/distant_shadow_census.py`, new; six scene files)
+
+The census of the Chop Shop section is now a tool. It mirrors `DistantShadow.InvalidateRenderers` (picked LOD, casting, material, hierarchy
+activity, mesh, bounds edge of 1 m, one record per submesh) and counts **1,485 renderers = 1,571 draw records**, exactly the
+`DistantShadow._renderList.Count` 1571 read on GPU-2 in the Iceberg raids. 6,168 LODGroups; 981 casters sit in a LOD the walk does not
+pick (rocks, mountains, the crane: by design); **59 are referenced by no LODGroup**, all ShadowsOnly (58 with the `shadow` shader, the tunnel box
+with `Standard`), 28 with a bounds edge of 3 m or more, 19 of 5 m or more: the cafe (`Sanatorium_Cafe_second_floor` 42.7 x 4.8 x 19.5 m,
+`_ground_floor` 33.6 x 4.7 x 23.3 m, `_constructions` 31.4 x 0.4 x 13.8 m, the bar, pillars, arches, columns), `Sanatorium_hallway_big_01`
+33.8 x 4.8 x 21.7 m and `_02`, the library (`_second` 19.4 x 6.2 x 16.1 m, `_ground_floor`, the dome 10.4 x 4.7 x 10.4 m, railing, ladder,
+bookshelf), `Sanatorium_Shower_Room_03`, `Sanatorium_Ventilation_Shaft`, and `STENCIL/STENCIL_TUNNEL` (a 15.4 x 9.7 x 10.4 m box at
+(127.2, -5.3, -89.8) in the Light scene); the remaining 31 are ceiling lamps, TV and wall-mount shadow meshes, plywood boards and signs under 3 m.
+
+Listed, in single-LOD groups whose LOD 0 the walk picks: `MAIN_BUILDING/sanatorium_roof` (98.1 x 0.6 x 99.3 m at y 13.5, over the whole
+building, the dome included), the facades `sanatorium_facade_01`, `_02`, `_03`, `_05`, `_06` (each with an `_indoor` shell) and `_entrance`, the
+pool room, the theatre ceilings and walls, the reception, the balcony slabs. The cafe, hallway and library shells are the storeys UNDER that roof.
+
+### Coverage: which candidate is the first blocker of a sun ray that no listed caster stops
+
+Method (same tool): for a sun direction everything is projected across the sun into depth buffers at 0.25 m; a candidate texel is uncovered
+when it is the first blocker of its ray and the next listed caster lies at least 0.5 m behind it or nowhere. Faces count as the shaders cull
+them (`shadow` by front faces, `shadow_backside` by back faces, an enrolled two-sided proxy by both). Controls: Chop Shop's outdoor hull is
+3,150 of 3,288 m2 uncovered at 15:30 without its sidecar rows and nothing is uncovered with them; Equator's three floor proxies are 426 to
+1,224 m2 uncovered without their rows and gone with them (two-sided). Areas are measured across the sun; rows of 1 m2 or more.
+
+| raid clock | sun elevation | building proxies, total | of that the cafe | tunnel box |
+|---|---|---|---|---|
+| 07:00 | 4.8 | 20.0 m2 | 20.0 | 102.2 |
+| 07:30 | 9.7 | 19.8 | 17.7 | 125.4 |
+| 08:00 | 14.8 | 43.4 | 42.2 | 117.9 |
+| 09:00 | 25.1 | 49.9 | 39.8 | 93.1 |
+| 10:00 | 35.5 | 33.6 | 27.2 | 40.1 |
+| 12:00 | 54.1 | 9.1 | 4.6 | 0 |
+| 13:48 | 62.0 | 19.1 | 7.6 | 1.6 |
+| 15:30 | 55.0 | 4.4 | 0 | 1.4 |
+| 17:00 | 41.7 | 1.1 | 1.1 | 9.2 |
+| 18:00 | 31.6 | 2.5 | 0 | 11.1 |
+| 19:00 | 21.2 | 19.4 | 0 | 2.8 |
+| 20:00 and later | under 11 | 0 | 0 | 0 |
+
+For comparison the building proxies' sun-facing area is 1,400 to 2,500 m2: 96.7 % of it lies under a listed caster at 08:00 and 09:00,
+98.3 % at 10:00, 99 % or more from noon to 18:00 and 98.9 % at 19:00; the largest single proxy residue from noon on is 6.5 m2 (slivers at
+wall openings). A sweep over 60 directions (every 30 degrees of azimuth at 20 to 80 degrees of elevation, real or not) gives the same
+picture: every storey shell at least 98 % covered on average, worst single case the cafe's second-floor shell with 39.5 m2 for a sun in the
+east at 35 degrees.
+
+The morning residue is one mechanism: the sun shines through the window bays of `sanatorium_facade_entrance` (x about 41, z -82 to -72) and
+meets the cafe shell's slab tops at y 7.2 and y 11.0 between x 31 and 41, in stripes between the mullions. In the cascades those slabs stop
+it. In the distant map the rays go on into the storey below; projected onto the floors (until the next listed caster): 08:00 ground floor x 5
+to 24, z -74.5 to -65 (about 60 m2 of floor) and first floor x 20 to 27 (45 m2); 09:00 ground floor x 21 to 33, z -82.5 to -72 (40 m2) and
+first floor x 29 to 33 (35 m2); 10:00 x 33 to 36 (25 and 19 m2). Enrolling three rows (`.../SOO_LOD0/CAFE/Sanatorium_Cafe_second_floor/
+Sanatorium_Cafe_second_floor_SHADOW_LOD0`, `.../SOO_LOD0/CAFE/Sanatorium_Cafe_ground_floor/Sanatorium_Cafe_ground_floor_SHADOW_LOD0`,
+`.../OO/CAFE/PROPS/Sanatorium_Cafe_constructions/Sanatorium_Cafe_constructions_SHADOW_LOD0`, all under `SBG_Arena_Sanatorium_Main`, Arena's
+one-sided material: the stopping faces are slab tops) removes the cafe rows from the table in the model; what is left is at most 6.9 m2.
+This is computed, not seen.
+
+`STENCIL_TUNNEL` is no part of the building: the box fills the tunnel under the east terrace (y -10 to -0.5, the terrace is at 0.8). Low
+morning sun enters it from the open east side. A ray from the plaza toward it meets the ground slab after 12.8 m (host raycast, 21 hits), from
+the east pocket's parapet it is 25 to 40 m away: no sightline from the play space reaches it beyond the cascades of shadow quality 3.
+
+### Host check on GPU-2 (2026-11-12, 19:04 to 19:45 host time; `feature/autoservice` 8dcb6c9, 16/16 identical, nothing deployed)
+
+EFT instance f2bdd2c4 (started 17:56:52), shadow quality 3, `shadowProjection` StableFit, 4 cascades, camera FOV 50. Every raid by
+`gpu-run raid --mode pmc --map iceberg --bots none --clock <t> --clock-speed 0 --weather clear`, each `warnings 0; errors 0`;
+`gpu-run log --level warning --source ArenaMapPort`: 0 entries for the session. Raids are 15 minutes, so four were needed. Screenshots:
+ignored `analysis/screenshots/iceberg-distant-shadow-2026-11-12/` (13 files, numbered as below).
+
+- **15:30** (raid 19:04:41; sun (-0.409, 0.819, 0.403), shadowDistance 80.0, `_renderList.Count` 1571): cafe ground floor from
+  (20, 3.2, -72), yaw 270 (01, player Indoor) and library from (-14, 2.8, -72.7), yaw 90, pitch -25 (02): lamp light only, no sun patch. The model
+  has at most 3.4 m2 per proxy uncovered at this sun. Raid 19:42:39, plaza (78, 1.9, -92), Outdoor 80.0: the east facade is in shade, the cafe front
+  centred (yaw 286.1, 12) and 35 degrees off the axis (yaw 257, 13) shows lamp-lit rooms, no sun patch.
+- **07:30** (raid 19:15:42, clock set by hook; plaza (78, 1.9, -92), Outdoor, shadowDistance 53.33): the east facade is in the shadow of the
+  eastern rocks (sun 9.7 degrees), nothing reaches the glazing (03).
+- **08:00** (same raid and raid 19:28:28; Outdoor 58.67): the facade is sun-lit. Far view from (78, 1.9, -92), yaw 286.1 (04), near view from
+  (58, 2.0, -86.2), 16 m in front of the facade (05), far view with the cafe front 35 degrees off the axis, yaw 257 (06): the first-floor
+  room behind the glazing and the ground-floor door show the same lighting in all three (crops 10 and 11); the one diagonal light edge on the
+  first-floor side wall is in the near view too, so it is cascade-drawn sun through the window. Lobby from (38, 3.2, -73), yaw 270, Indoor 80
+  (07): sun on the floor behind the glazing with mullion and leaf shadows, as the cascades draw it.
+- **No vantage on this host shows the modelled stripes beyond the cascades.** Inside, the CheckPoint barricades (metal shutters right behind
+  the lobby) cut the sightlines short and no standpoint on the ground floor is more than 38 m from the modelled zones; the cafe's first floor
+  carries no NavMesh. From the plaza the ground floor is behind shutters and frosted glass (a line from (78, -92) to the cafe at
+  (14, 4.5, -73.5) ends after 38.9 m at `SBG_Arena_Sanatorium_CheckPoint/SOO/BARRICADE_10/Metal_shutter_02 (3)`) and the first floor's floor
+  cannot be seen from below.
+
+### Decision
+
+Nothing is changed for Iceberg: no descriptor row, no client change, no deploy, and therefore no before/after, no regression raid and no
+hideout run. Measured: the list count, the cascade distances, the views above. Inferred from the model: that the roof and facades make the
+interior shells redundant from 10:00 on, and that the 08:00 to 10:00 stripes exist in the distant map.
+
+### Open (the user's decision)
+
+- The morning stripes for a shorter cascade. With shadow quality 2, 1 or 0 the cascades end at 60, 40 or 30 m indoors and at 44 to 60, 29 to
+  40 or 22 to 30 m outdoors between 08:00 and 10:00, and the hand-over lies inside those numbers; the modelled zones on the cafe floors are
+  then beyond the cascades from standpoints inside the cafe. Not checked: it needs GPU-2's shadow quality lowered in EFT's graphics settings
+  (a host setting, not changed without the user's word). If it shows there, the three cafe rows above are the fix, with the usual host
+  before/after on `Lighting (arena_iceberg)/RoofDistantShadows`, an Equator and a Chop Shop raid and the hideout.
+- The `RoofShadowRepairs` class comment and older lines of this file still say "about 55 m"; read them with the rule above.
+- Bay5's ground slab `Bay5_floor_SHADOW_LOD0` and Bowl's TV shadow meshes (the earlier report) were not looked at again; the tool runs on
+  every accepted package.
+
+### Tool, tests, gates
+
+`tools/validate/distant_shadow_census.py <package> [--map-descriptor tools/maps/<stem>.json] [--two-sided] [--hours ...] [--sun x,y,z]
+[--clusters] [--fail-above M2]` prints the list count to compare with the host, the unreferenced casters, and per sun the uncovered area per
+candidate (with `--clusters` where the rays enter and where they meet the next listed caster). A sidecar's `distant_shadow_caster_paths`
+count as listed, resolved like `RoofShadowRepairs.Find`; a path the client would not enrol is reported. About 10 s per package and two suns.
+`tools/tests/test_distant_shadow_census.py` (25 tests): the LOD pick rule, the filters, the enrolment and the coverage test on synthetic
+quads, the sun and cascade model against the host readings, and on the accepted packages (skipped without `work/extract`, 7 tests) Iceberg's
+1,571 records, its 59 candidates, the listed roof and facades, the covered midday, the recorded morning rows as a pin, and Chop Shop and
+Equator clean with their sidecar rows and defective without. No C# file changed.
+
+Python gate (git worktree, `PYTHONUTF8=1`, `ARENAMAPPORT_WORK_DIR` and the extract overrides pointing at the main checkout's `work/`):
+`python -m unittest discover -s tools/tests -p "test_*.py"` ran 3,146 tests in 946 s, 127 skipped (inputs the worktree lacks), 1 failure:
+`test_score_monitors.SidecarTests.test_the_sidecar_text_is_what_the_cli_writes` on CRLF working copies of the five older monitors sidecars,
+which this checkout had written before the `.gitattributes` rule arrived by fast-forward. After a fresh checkout of those five files the
+module passes (`test_score_monitors` and `test_distant_shadow_census` together: 112 tests OK). .NET tests not run: no C# file changed.

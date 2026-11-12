@@ -316,7 +316,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 - [lighting-followup.md](lighting-followup.md) — live MultiFlare strength,
   verified exposure, Techlight ceiling and adjacent Bay5 barricade shadows,
-  optional SmajlecLights exclusion and BrighterInteriors assessment (2026-09-28).
+  optional SmajlecLights exclusion and BrighterInteriors assessment (2026-09-28); 2026-11-12: Chop Shop's sun patch beyond the cascades
+  (DistantShadow lists LODGroup renderers only; `RoofShadowRepairs`), what the cascade distance really is, and the Iceberg census with
+  `tools/validate/distant_shadow_census.py` (no patch on GPU-2, nothing changed; morning stripes in the cafe open for shorter cascades).
 
 - [native-multiflare.md](native-multiflare.md) — original Equator/Bay5 lamp sprites,
   source atlas, isolated native rendering and visible/occluded off/on comparisons (2026-09-28). Bowl section
