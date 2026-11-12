@@ -99,11 +99,41 @@ public sealed class AutoServiceMapTests
             Assert.Equal(100, exit.GetProperty("Chance").GetDouble());
             Assert.Equal(point.GetProperty("exfiltration_time").GetDouble(), exit.GetProperty("ExfiltrationTime").GetDouble());
         }
-        // the plan's values: positions (-349.0, -3.77, 488.5) and (-393.0, -3.79, 501.0), 4 x 3 x 4 m boxes, 8 s
-        Assert.Equal(new[] { -349.0f, -3.77f, 488.5f }, new[] { map.Exits[0].X, map.Exits[0].Y, map.Exits[0].Z });
-        Assert.Equal(new[] { -393.0f, -3.79f, 501.0f }, new[] { map.Exits[1].X, map.Exits[1].Y, map.Exits[1].Z });
+        // 4 x 3 x 4 m boxes, 8 s. No literal positions (rule R6): the mirror above is the pin, and the rule below (R3, 2026-11-12) says where an exit may stand.
+        Assert.All(map.Exits, e => Assert.Equal(new[] { 4.0f, 3.0f, 4.0f }, new[] { e.SizeX, e.SizeY, e.SizeZ }));
         Assert.Empty(ArenaMapRegistration.ExitNameMismatches(
             shipped.Select(e => e.GetProperty("Name").GetString()), map));
+    }
+
+    // R3 (2026-11-12): every team pocket holds exactly one exit, its centre inside the pocket's spawn-bound footprint of autoservice.modes.json, so that the
+    // green signal flare marks the team's start area in ArenaMode's team modes. Replaces "the exits stand outside the pockets, beyond the gates".
+    [Fact]
+    public void EachPocketHoldsOneExitInsideItsSpawnBoundFootprint()
+    {
+        using var modes = JsonDocument.Parse(File.ReadAllText(Sidecar("autoservice.modes.json")));
+        var bounds = modes.RootElement.GetProperty("spawn_bounds").EnumerateArray().ToArray();
+        var map = ArenaMapRegistry.AutoService;
+        Assert.Equal(2, bounds.Length);
+        Assert.Equal(bounds.Length, map.Exits.Length);
+        foreach (var exit in map.Exits)
+        {
+            var holders = bounds.Where(b => MarginInside(b, exit.X, exit.Y, exit.Z) >= 0.0).Select(b => b.GetProperty("name").GetString()).ToArray();
+            Assert.True(holders.Length == 1, $"{exit.Name} lies inside {holders.Length} pockets");
+        }
+        Assert.Equal(bounds.Length, map.Exits.Select(e => bounds.Single(b => MarginInside(b, e.X, e.Y, e.Z) >= 0.0).GetProperty("name").GetString()).Distinct().Count());
+    }
+
+    /// <summary>Smallest distance from a point to a face of a spawn-bound box, along the box axes (negative = outside); the Python twin is extract_mode_objects.box_margin.</summary>
+    private static double MarginInside(JsonElement bound, float x, float y, float z)
+    {
+        var q = bound.GetProperty("rotation").EnumerateArray().Select(v => v.GetDouble()).ToArray();
+        var c = bound.GetProperty("center").EnumerateArray().Select(v => v.GetDouble()).ToArray();
+        var size = bound.GetProperty("size").EnumerateArray().Select(v => v.GetDouble()).ToArray();
+        double qx = -q[0], qy = -q[1], qz = -q[2], w = q[3];           // conjugate: world -> box frame
+        double dx = x - c[0], dy = y - c[1], dz = z - c[2];
+        double tx = 2.0 * (qy * dz - qz * dy), ty = 2.0 * (qz * dx - qx * dz), tz = 2.0 * (qx * dy - qy * dx);
+        var local = new[] { dx + w * tx + (qy * tz - qz * ty), dy + w * ty + (qz * tx - qx * tz), dz + w * tz + (qx * ty - qy * tx) };
+        return Enumerable.Range(0, 3).Min(i => size[i] / 2.0 - Math.Abs(local[i]));
     }
 
     [Fact]
@@ -118,10 +148,14 @@ public sealed class AutoServiceMapTests
         var players = bots.GetProperty("player_spawns").EnumerateArray().ToArray();
         var botSpawns = bots.GetProperty("bot_spawns").EnumerateArray().ToArray();
 
-        // Four player rows on pocket markers (an All and a side row at each end) and seven bot rows from the 7 AI core points
+        // Four player rows on pocket markers (an All and a side row at each end), seven original bot rows from the AI scene's points and nine rows
+        // appended on 2026-11-12 (R1: the first seven are unchanged; ArenaMode pins core-03 by id and exact floats)
         Assert.Equal(4, players.Length);
-        Assert.Equal(7, botSpawns.Length);
-        Assert.Equal(11, shipped.Length);
+        Assert.Equal(16, botSpawns.Length);
+        Assert.Equal(20, shipped.Length);
+        Assert.DoesNotContain(botSpawns, b => b.GetProperty("id").GetString()!.Contains("tdm-v1"));
+        var donor = botSpawns.Single(b => b.GetProperty("id").GetString() == "arena_autoservice-bot-core-03");
+        Assert.Equal(new[] { -367.44f, -3.79f, 492.11f }, Floats(donor.GetProperty("position")));
         Assert.Equal(players.Length + botSpawns.Length, shipped.Length);
         Assert.Equal(shipped.Length, shipped.Select(p => p.GetProperty("Id").GetString()).Distinct().Count());
 
@@ -268,9 +302,9 @@ public sealed class AutoServiceMapTests
         var map = ArenaMapRegistry.AutoService;
         Assert.Equal(map.Key, location!.Id);
         Assert.Equal(map.IdField, location.IdField.ToString());
-        Assert.Equal(11, location.SpawnPointParams!.Count());
+        Assert.Equal(20, location.SpawnPointParams!.Count());
         Assert.Equal(4, location.SpawnPointParams!.Count(p => p.Categories!.Contains("Player")));
-        Assert.Equal(7, location.SpawnPointParams!.Count(p => p.Categories!.Contains("Bot")));
+        Assert.Equal(16, location.SpawnPointParams!.Count(p => p.Categories!.Contains("Bot")));
         Assert.Equal(2, location.Exits.Count());
         Assert.Equal(5, location.Waves!.Count);
         Assert.Equal(4, location.BossLocationSpawn!.Count);

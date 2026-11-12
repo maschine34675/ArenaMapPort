@@ -1,12 +1,12 @@
 {
-  "_comment": "PLAN-AUTOSERVICE item 6 (docs/progress/autoservice-release.md, 2026-11-11): optional sidecar read by tools/server/make_base_json.py next to tools/maps/autoservice.json; emits base.json 'exits'. The client authors the ExfiltrationPoint objects at runtime from the descriptor's Exits (ArenaMapPort.Shared/ArenaMapDescriptor.cs, added with the lock-step promotion): names, positions and box sizes there must equal this file. OFFLINE DRAFT, not walked on the host yet. Arena authors no extraction on this map; one gate outside each pocket, in the yard between them. The East gate stands west of the east pocket's big gate (the gate leaf at x -344.1 slides +4.4 m along z; the box centre is 9.9 m from the gate root (-344.09, 479.86) and 4.8 m from the gate's swept footprint, so the box edge keeps 2.8 m from the leaf's whole travel), the West gate east of the west pocket's two roller shutters (x -402.3; the centre is 9.3 m from the nearer shutter root (-402.26, 501.22), the box edge 7.0 m from the swept footprint). Both boxes (4 x 3 x 4 m) lie on Arena's own 1,915.6 m2 NavMesh main component (sharedassets63.assets path 2, identity placement) with 3.49 m / 3.37 m of border clearance at the centre against the 2.83 m half-diagonal of the box, no port solid inside the box above the floor, 10.7 m / 13.7 m from the nearest pocket marker and 10 m or more from every player and bot row, so nobody spawns inside a trigger box. The east centre moved from the plan's (-349.0, 489.0), which keeps 3.30 m of clearance (below the 3.33 m bar), to (-349.0, 488.5) (3.49 m). Both are outside the gates, so a team held behind its gate (ArenaMode hold) cannot extract before the release. EntryPoints is always the map's infiltration name; names double as locale keys.",
+  "_comment": "PLAN-AUTOSERVICE item 6 (docs/progress/autoservice-release.md, 2026-11-11): optional sidecar read by tools/server/make_base_json.py next to tools/maps/autoservice.json; emits base.json 'exits'. The client authors the ExfiltrationPoint objects at runtime from the descriptor's Exits (ArenaMapPort.Shared/ArenaMapDescriptor.cs, added with the lock-step promotion): names, positions and box sizes there must equal this file. OFFLINE DRAFT, not walked on the host yet. Arena authors no extraction on this map. HISTORY, superseded by the 2026-11-12 paragraph below: on 2026-11-11 the two boxes stood in the yard OUTSIDE the pockets, beyond the gates, (-349.0, -3.77, 488.5) and (-393.0, -3.79, 501.0), 10 m or more from every Player and Bot row and pocket marker, so that nobody spawns inside a trigger box. EntryPoints is always the map's infiltration name; names double as locale keys. 2026-11-12 (user request: the green signal flare of ExfilSignals should mark the team spawn areas in ArenaMode's team modes, where extraction is disabled; offline, NOT host-checked): rule R3 replaces the 2026-11-11 placement above, 'outside the gates, 10 m from every row'. Each pocket now holds one exit: the box (4 x 3 x 4 m, rotation 0, name, time and type unchanged) stands INSIDE its pocket, its centre inside the pocket's spawn-bound footprint of tools/maps/autoservice.modes.json, so the flare marks the team's start area. East: (-340.5, -3.60, 485.0), just inside the big gate (centre 3.7 m inside SPAWN_BOUND_Fighter, the whole box inside, 3.55 m from the closed gate leaf and 1.54 m from the open leaf's parked footprint, so a team walking out through the gate crosses the box corner), no pocket marker inside, 3.47 m from the box edge to the 'All' Player row, floor under all 81 samples of the built NavMesh. West: (-406.5, -3.70, 478.5), the south end of the roofed warehouse pocket (centre 4.0 m inside SPAWN_BOUND_Fighter (1), the whole box inside, 2.0 m from the south-east roller shutter's footprint), no pocket marker inside, 6.59 m from the box edge to the Bear Player row, 79 of 81 floor samples on the built NavMesh (the pocket is narrow and full of props, 1.97 m of border clearance at the centre; of 66 solid-free spots with the 2.5 m margin only four have no marker inside, all at the south end). No port solid stands in either box from floor + 0.3 m to + 2.5 m. Every Player row keeps at least 2.5 m to the box EDGE (the Equator booth precedent, docs/progress/equator-booth-spawns.md): a plain-raid spawn must not start inside a trigger. Accepted consequences (rule R4): neither pocket has a held gate, so in a plain SPT raid a player spawns a few steps from an 8 s exit and can extract at once, and with the developer gate hold a held team can reach its own exit; bots never trigger exits (empty EntryPoint). Both pockets are reachable in a plain raid. The exit names are locale keys and stay 'Chop Shop East Gate' and 'Chop Shop West Gate' although the boxes no longer stand at a gate; the 'Chop Shop East Gate' box lies beside the big gate. Whether the green smoke is visible in the roofed west pocket and whether the east box feels right is for the host to say; a nudge touches only this file and the descriptor.",
   "exits": [
     {
       "name": "Chop Shop East Gate",
       "position": [
-        -349.0,
-        -3.77,
-        488.5
+        -340.5,
+        -3.6,
+        485.0
       ],
       "box_size": [
         4.0,
@@ -21,9 +21,9 @@
     {
       "name": "Chop Shop West Gate",
       "position": [
-        -393.0,
-        -3.79,
-        501.0
+        -406.5,
+        -3.7,
+        478.5
       ],
       "box_size": [
         4.0,
