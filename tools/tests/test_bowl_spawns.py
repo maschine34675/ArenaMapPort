@@ -235,9 +235,14 @@ class BowlSidecarTests(SidecarData, unittest.TestCase):
             self.assertTrue(x0 + 2.0 < e["position"][0] < x1 - 2.0 and z0 + 2.0 < e["position"][2] < z1 - 2.0, e["name"])
 
     def test_the_old_exit_rule_is_retired_in_the_comments(self):
-        # the sentence "one gate beyond each pocket" described the 2026-10-18 positions only
-        self.assertIn("INSIDE its pocket", self.exits["_comment"])
-        self.assertIn("OFFLINE, host-unchecked", self.exits["_comment"])
+        # the retired rule of 2026-10-18 must not be stated as current any more; its history sits behind a dated "OLD positions"
+        comment = self.exits["_comment"]
+        for phrase in ("nobody spawns inside a trigger box", "10 m from every Player row", "beyond the gates"):
+            self.assertNotIn(phrase, comment)
+        self.assertEqual(comment.count("one gate beyond each pocket"), 1)
+        self.assertIn("OLD positions (one gate beyond each pocket)", comment)
+        self.assertIn("INSIDE its pocket", comment)
+        self.assertIn("OFFLINE, host-unchecked", comment)
 
 
 def mesh_available():

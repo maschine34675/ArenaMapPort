@@ -192,10 +192,11 @@ class BowlProfileMirrorTests(unittest.TestCase):
         self.assertTrue(self.profile["relative"])
         self.assertEqual(self.profile["heights"], (-.5, 1.2))
 
-    def test_exit_sidecar_matches_the_synthetic_fixture_and_lies_inside_the_drawing(self):
+    def test_exits_lie_inside_the_drawing_and_keep_the_fixture_names(self):
         # 2026-11-12: both exits stand inside their team pockets; the drawing bounds (-66,-82)..(62,11) must still hold them
         exits = self.sidecar("bowl.exits.json")["exits"]
-        self.assertEqual([(e["name"], e["position"]) for e in exits], [(e["name"], e["position"]) for e in EXITS])
+        # EXITS is built from this sidecar (R6), so a position comparison would be a tautology; the names are locale keys and fixed
+        self.assertEqual([e["name"] for e in exits], ["Bowl BTR Gate", "Bowl Army Gate"])
         x0, z0, x1, z1 = self.profile["bounds"]
         for item in exits:
             self.assertTrue(x0 < item["position"][0] < x1 and z0 < item["position"][2] < z1, item["name"])
