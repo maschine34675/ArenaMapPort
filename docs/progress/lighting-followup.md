@@ -158,3 +158,89 @@ unaided views; previous optic/NVG/eyewear evidence limits remain unchanged.
 
 The gate ledger and detailed command fingerprints remain ignored under
 `.unlazy/lighting-followup/`.
+
+## 2026-11-12 - Chop Shop: sun through the hall roof beyond the cascades
+
+User report (2026-11-12): on Chop Shop (`arena_autoservice`) "a strange round shadow on the walls that moves with the view direction, grows and
+shrinks, on all four walls" (screenshot `D:/SPT41/Development/Screenshot 2026-11-12 164520.png`, right half). Measured by the lead on GPU-2 the same
+day (raid clock 15:30, weather clear): `QualitySettings.shadowDistance` 55.33, `shadowProjection` StableFit, 4 cascades; TOD sun direction
+(-0.409, 0.819, 0.403), intensity 0.8, soft shadows; EFT's `FPS Camera/DistantShadow` enabled (`_renderList.Count` 1082, `_objectsToRenderCount` 332). The
+two hall proxies `.../Arena_AutoService_OUTDOOR/AutoService_Building_OUTDOOR_SHADOW_LOD0` and `.../Arena_AutoService_INDOOR/AutoService_Building_INDOOR_SHADOW_LOD0`
+are active ShadowsOnly renderers with the `shadow` shader, their parents carry no LODGroup, and a sun-lit patch with a curved edge shows on the far east
+wall from (-382.5, 1.9, 469.5), yaw 20, pitch -12.
+
+### Mechanism (read from `D:/SPT41/Development/_decompiled/DistantShadow.cs`, 0.16.9.5)
+
+`DistantShadow.InvalidateRenderers()` builds `_renderList` from `FindObjectsOfTypeAll<LODGroup>()` only. Per group it takes the LOD array, skips the LAST
+LOD (`num = Length - 1`, then `num = max(0, num - 1)`), and walks down from there to the first LOD that has at least one renderer with
+`shadowCastingMode != Off`; of that LOD's renderers it keeps those that are not null, cast (not Off), have a `sharedMaterial`, are `activeInHierarchy`, have a
+MeshFilter with a mesh and a `bounds.size` maximum edge of at least `ObjectSizeFilter` (1 m), and adds one draw record per submesh. A renderer that no
+LODGroup references is therefore never drawn into the distant map, and neither is a renderer that only sits in a LOD the walk does not pick. The list is
+rebuilt only when both per-cycle counters are zero and `InvalidateRenderersOnNextUpdate` is set, which happens at start and after
+`DistantShadowCache.Invalidate`. The distant map covers what lies beyond the Unity cascades; Unity's own cascades draw every ShadowsOnly renderer
+regardless of LODGroups. The hall (58.4 x 47.7 m) is wider than the 55 m StableFit sphere, so the far walls lie where only the distant map can keep the sun out.
+This is the Equator defect (see "Source diagnosis" above) in a second map. Measured: the lead's numbers above. Inferred: that the round patch is the
+sphere edge of the cascade (the curved edge, its growth and shrinkage with view direction); the mechanism is consistent with every measured value, no A/B has been run.
+
+### Offline census (package `work/extract/autoservice-native-v2`, all four scene files)
+
+Method: world transform through the parent chain (rotation, scale, translation), hierarchy-active and enabled MeshRenderer with MeshFilter, `cast_shadows != Off`,
+maximum bounds edge >= 1 m, and not a member of the LOD that `DistantShadow` would pick (rules above). Control: the same script on `equator-native-v5` returns exactly the three
+`equator_floor_0N_SHADOW_LOD0` proxies the repair already lists (74 x 1.3 x 75 m, 74 x 1.0 x 71.4 m, 74 x 1.0 x 71.4 m).
+
+- 1,214 renderers are not in a picked LOD; 1,200 of them are LOD0/LOD1/LOD3 members of groups that draw a different LOD by design. Only **14** are referenced by no LODGroup at all:
+  - `AutoService_Building_OUTDOOR_SHADOW_LOD0` - ShadowsOnly, 48 vertices / 58 triangles, bounds 58.4 x 24.1 x 47.7 m, lowest corner (-402.6, -4.8, 465.4). **IN.**
+  - `AutoService_Building_INDOOR_SHADOW_LOD0` - ShadowsOnly, 3,631 vertices / 5,821 triangles, bounds 58.4 x 21.6 x 47.7 m. **IN** (the lead's pair; see the geometry below for what it adds).
+  - `SBG_Arena_AutoService/SOO/Background/Buildings/warehouse01/Shadow_LOD1` - 20.6 x 13.6 x 39.2 m at (-355, 3, 446), south of the hall. **OUT:** the group `warehouse01` has one LOD
+    holding `Shadow_LOD0`, which the walk picks; `Shadow_LOD1` is the unused lower variant and it is background, not part of the play space.
+  - `STENCIL SHADOW` (scene `Arena_AutoService_Light`, a root with a BoxCollider) - 22.7 x 4.8 x 2.9 m, 24 vertices, y -5.7..-0.9 inside the hall. **OUT:** a low stencil box that no LODGroup of Arena's data references; it is no roof or wall.
+  - `vandalized_vehicle_01_closed_SHADOW_LOD3` (4.3 x 1.4 x 1.7 m, last LOD of a group), `DOORS/big_gate_metal/gate/Vishel_Plane` (On, a flat 4.4 x 4.4 m plane), and eight TV/wall-mount shadow meshes of `Arena_AutoService_DesignStuff` (0.2 to 3.3 m). **OUT:** props, none keeps sun out of the play space.
+- **The pocket buildings are not in the 14**: `Autoservice_Spawn_Warehouse_Outdoor/Indoor`, `Autoservice_Office_Main_Outdoor/Indoor`, `Autoservice_Little_Office_Outdoor/Indoor` and `Autoservice_Shop_Outdoor/Indoor` each
+  sit under a LODGroup whose picked LOD holds a ShadowsOnly proxy (for example Spawn_Warehouse_Indoor picks `SHADOW_LOD1`, Little_Office_Indoor `SHADOW_LOD2`, Spawn_Warehouse_Outdoor `SHADOW_LOD0`). They are already in the native list, so they need no row.
+- Roof- or wall-sized casters elsewhere in the package (Background `City_construction_base_concrete`, `Building_P68`, `Ceh_Complex_6`, tribune scaffolding) all belong to groups and are drawn natively.
+
+### Geometry of the two hall hulls (face normals from the winding, Unity's `cross(b - a, c - a)` as the front side; the shadow shader culls back faces)
+
+| | OUTDOOR | INDOOR |
+|---|---|---|
+| signed volume / bbox volume | +59,200 / 67,124 (outward) | -72,126 / 60,136 (inward) |
+| share of area whose normal points away from the bbox centre | 100 % | 7 % |
+| faces with n.y > 0.7 (up) / n.y < -0.7 (down) | 2,784 m2 / 0 m2 (the whole roof: 58.4 x 47.7 = 2,786 m2) | 3,116 m2 / 5,688 m2 (floor up, ceiling down: 5,517 m2 at y 10..20) |
+| mesh edges used by one triangle only (openings and the open bottom) | 44, at y -4.81, -1.7, 0.88, 9.7, 11.3, 11.4 | 1,763 |
+| area facing the lead's sun direction | 69 % | 41 % |
+
+The OUTDOOR hull is a one-sided outward shell with a closed roof: against a sun from above or from any side, the faces toward the sun are the front faces, so the original back-face-culling shader blocks the sun
+correctly. It is also the shape that, inferred from the user seeing the patch only on the far walls, already shades the near side of the hall in the cascades. The INDOOR hull is the inverted inner shell: its ceiling faces down, so for a sun from above
+those faces are back faces and the stock shader draws nothing there; it is inert against the roof sun and adds only floor and detail faces that lie under the OUTDOOR hull. Equator needed `shadow_2sided` because its soffit
+faces point only down and nothing else shades them; Chop Shop's roof is covered by an outward hull.
+
+### Decision
+
+Enrolled both hall hulls in owned LODGroups, **without** the two-sided material (`DistantShadowTwoSided` false): the distant map then draws exactly what the cascades draw, from Arena's own shader. Measured: the geometry above. Inferred, for the host check: that the stock material
+suffices (the OUTDOOR hull is the roof blocker, the INDOOR hull is redundant but harmless and matches the lead's list). If the patch persists with the key on, flip the descriptor flag and re-test; the openings in the OUTDOOR walls (44 open edges) are Arena's own and stay.
+Nothing else is enrolled. Other released maps are untouched (report below).
+
+### Implementation
+
+`EquatorRoofShadowRepairs.cs` is now `RoofShadowRepairs.cs` (git rename): it installs for every `ArenaMapRegistry.All` map with a non-empty `DistantShadowCasterPaths`, binds
+`Lighting (<key>)/RoofDistantShadows` (default true, developer-only; Equator's key, default and text are unchanged, the other maps get a generic text), keeps the owner map for deferred cleanup and logs with `[RoofShadow]`. `ArenaMapDescriptor` gains
+`DistantShadowTwoSided` (Equator true, default false) and the Chop Shop paths (mirrored in `tools/maps/autoservice.json distant_shadow_caster_paths`). A path that resolves nowhere once every scene of the map is loaded is one Warning per raid
+(`'<path>' not found in any loaded scene of <key>; not registered`); a path that resolves but is inactive or already under a LODGroup is skipped silently, as before. No scene-wide search outside the developer probe.
+
+### Tests
+
+`DistantShadowCasterTests` (7): descriptor rows (Equator three paths and two-sided, Chop Shop two paths and one-sided, all other catalog maps empty), the sidecar mirror, a real-data test on the extracted package (skips when absent: each path exists once, is
+active up the chain, is an enabled ShadowsOnly MeshRenderer with a MeshFilter, has no LODGroup ancestor and is referenced by no group), source pins (descriptor-driven, one Bind with the unchanged key, default and Equator text, tag, install and probe calls, key absent from `CompactConfiguration` and
+`MapConfigVisibility`, scene-wide searches only inside the developer probe, no Update or coroutine). `Bay5MapTests.DistantCeilingCastersMatchSidecar` allows the Chop Shop rows. Release client build 0 warnings; server tests 3,294 passed, 0 skipped
+(baseline 3,285 + 2 skipped; the two Arena-dependent tests ran on this checkout); `validate_map_descriptors.py` OK for 14 descriptors.
+
+### Other released maps (report only, nothing changed; same census on the accepted packages, casters referenced by no LODGroup, bounds edge >= 5 m)
+
+- Equator (control): only the three listed floor proxies (plus `SHADOW_PLUG`, a flat On plane).
+- Bay5 (`bay5-native-v5`): `Bay5_floor_SHADOW_LOD0`, 311.6 x 39.2 x 358.8 m, 50 vertices, y -43..-4: a ground-level slab, not a roof; open question whether its absence from the distant map matters.
+- AirPit (`airpit-native-v10`): none beyond the known layer-0 white ShootOut `Cube (10) Group` panels (On, 14 x 3.3 x 0.2 m and two 12.7 m ones).
+- Bowl (`bowl-native-v2`): none roof-sized; eight TV/wall-mount shadow meshes whose world bounds read 9 to 21 m (a parent scale, to be checked) and 40 `log_01_SHADOW_LOD0` variants of 6.5 x 0.2 x 0.2 m.
+- Iceberg (`iceberg-native-v2`): the open question. Unreferenced ShadowsOnly proxies of building-interior size in `Arena_Sanatorium`: `Sanatorium_Cafe_second_floor` 42.7 x 4.8 x 19.5 m, `Sanatorium_hallway_big_01` 33.8 x 4.8 x 21.7 m,
+  `Sanatorium_Cafe_ground_floor` 33.6 x 4.7 x 23.3 m, `Sanatorium_Cafe_constructions` 31.4 x 0.4 x 13.8 m (roof deck), `Sanatorium_hallway_big_02` 19.5 x 4.9 x 9.3 m, `Sanatorium_library_second_floor` 19.4 x 6.2 x 16.1 m,
+  `Sanatorium_library_ground_floor` 18.7 x 5.2 x 15.4 m, `Sanatorium_library_dome` 10.4 x 4.7 x 10.4 m, `Sanatorium_Ventilation_Shaft` 3.5 x 19.2 x 1.7 m, a 15.4 x 9.7 x 10.4 m `STENCIL/STENCIL_TUNNEL` box and railing/fence meshes. Whether any of them lets sun through a ceiling
+  beyond 55 m needs the same normals analysis and a host look; they are candidates, not findings.

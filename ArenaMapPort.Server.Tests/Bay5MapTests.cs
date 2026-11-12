@@ -49,14 +49,15 @@ public sealed class Bay5MapTests
     }
 
     [Fact]
-    public void DistantCeilingCastersMatchSidecarAndRemainEquatorOnly()
+    public void DistantCeilingCastersMatchSidecar()
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("equator.json")));
         var paths = doc.RootElement.GetProperty("distant_shadow_caster_paths").EnumerateArray().Select(e => e.GetString()).ToArray();
         Assert.Equal(3, paths.Length);
         Assert.Equal(paths, ArenaMapRegistry.Equator.DistantShadowCasterPaths);
         Assert.All(paths, path => Assert.EndsWith("_SHADOW_LOD0", path));
-        foreach (var map in ArenaMapRegistry.Catalog.Where(m => m != ArenaMapRegistry.Equator))
+        // Chop Shop joined on 2026-11-12 (DistantShadowCasterTests); every other map still enrols nothing.
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => m != ArenaMapRegistry.Equator && m != ArenaMapRegistry.AutoService))
             Assert.Empty(map.DistantShadowCasterPaths);
     }
 

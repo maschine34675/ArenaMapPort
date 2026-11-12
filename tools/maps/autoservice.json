@@ -56,6 +56,10 @@
   "puddle_water_material_names": [
     "0877f2335044042e"
   ],
+  "distant_shadow_caster_paths": [
+    "SBG_Arena_AutoService/SOO_LOD0/Autoservice_Main_Building/Arena_AutoService_OUTDOOR/AutoService_Building_OUTDOOR_SHADOW_LOD0",
+    "SBG_Arena_AutoService/SOO_LOD0/Autoservice_Main_Building/Arena_AutoService_INDOOR/AutoService_Building_INDOOR_SHADOW_LOD0"
+  ],
   "shader_fallback_names": [
     "Custom/Billboard_FogSheet_Simple",
     "Cloth/ClothShader",

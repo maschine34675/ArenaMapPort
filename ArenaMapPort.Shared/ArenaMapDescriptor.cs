@@ -353,6 +353,7 @@ namespace ArenaMapPort.Shared
         public int[] NavMeshBakeLayers { get; }        // layers the bake may collect from; empty = every layer but Water
         public string[] RestoredShadowCasterRoots { get; } // exact active LOD roots with source-disabled shadow proxies to restore
         public string[] DistantShadowCasterPaths { get; } // active shadow proxies missing native LOD registration
+        public bool DistantShadowTwoSided { get; }        // true: the enrolled proxies are cloned onto the native two-sided shadow shader (Equator's soffits); false: Arena's own material stays
         public string[] PuddleWaterMaterialNames { get; } // exact imported water-puddle material names; excludes oil decals
         // Puddle footsteps (PuddleFootstepRepairs, docs/progress/puddle-footsteps-all-maps.md): the repair turns a native ground
         // result of Concrete/Asphalt into the Puddle set inside the visible mask of the listed water materials. PuddleExtraSurfaces
@@ -416,6 +417,7 @@ namespace ArenaMapPort.Shared
             string[]? PuddleWaterMaterialNames = null,
             string[]? PuddleExtraSurfaces = null,
             string[]? DistantShadowCasterPaths = null,
+            bool DistantShadowTwoSided = false,
             bool InheritIndoorFloorDetails = false,
             ArenaNeonFixture[]? NeonFixtures = null,
             ArenaNightAccent[]? NightAccents = null,
@@ -466,6 +468,7 @@ namespace ArenaMapPort.Shared
             this.BackgroundSceneNames = BackgroundSceneNames ?? new string[0];
             this.RestoredShadowCasterRoots = RestoredShadowCasterRoots ?? new string[0];
             this.DistantShadowCasterPaths = DistantShadowCasterPaths ?? new string[0];
+            this.DistantShadowTwoSided = DistantShadowTwoSided;
             this.Dust = Dust;
             this.LampFill = LampFill;
             this.FixedDayHour = FixedDayHour;
@@ -609,6 +612,7 @@ namespace ArenaMapPort.Shared
                 "SBG_Arena_Equator/SOO_LOD0/STRUCTURES/Floors/equator_floor_02/equator_floor_02_SHADOW_LOD0",
                 "SBG_Arena_Equator/SOO_LOD0/STRUCTURES/Floors/equator_floor_03/equator_floor_03_SHADOW_LOD0"
             },
+            DistantShadowTwoSided: true, // the soffit faces point only down; the original back-face-culling shadow shader cannot block the sun from above
             // Arena's sliding booth doors (2026-10-23, tools/maps/equator.doors.json, docs/progress/door-poses.md "DotAnimator"):
             // the four assemblies under SPAWN_DOORS (their DotAnimator end poses; the two unnumbered ones are told apart by
             // the world position of their root) plus the fifth door under Respawn_2, which Arena gives no motion (borrowed).
@@ -1242,6 +1246,17 @@ namespace ArenaMapPort.Shared
             // 74 percent of the samples under them, Soil 0.9, so no extra surface). The wet mold decal atlas (aa54d9752ed43430) sits on four inactive
             // Heating_register renderers and is not listed. Mirrors tools/maps/autoservice.json puddle_water_material_names.
             PuddleWaterMaterialNames: new[] { "0877f2335044042e" },
+            // Distant sun shadows (docs/progress/lighting-followup.md, 2026-11-12; mirrors tools/maps/autoservice.json distant_shadow_caster_paths).
+            // The hall building's two active ShadowsOnly hulls (the 58 x 48 m hall is wider than the 55 m cascade sphere) have no LODGroup parent,
+            // so EFT's DistantShadow never draws them and the sun lights the far walls through the roof. The OUTDOOR hull is a one-sided outward
+            // shell (roof 2,784 m2 facing up), the INDOOR hull faces inward (ceiling faces down); both keep Arena's material (DistantShadowTwoSided
+            // stays false: the distant map then draws what the cascades draw). The pocket buildings, the office and the shop are registered by their
+            // own LODGroups and are not listed.
+            DistantShadowCasterPaths: new[]
+            {
+                "SBG_Arena_AutoService/SOO_LOD0/Autoservice_Main_Building/Arena_AutoService_OUTDOOR/AutoService_Building_OUTDOOR_SHADOW_LOD0",
+                "SBG_Arena_AutoService/SOO_LOD0/Autoservice_Main_Building/Arena_AutoService_INDOOR/AutoService_Building_INDOOR_SHADOW_LOD0"
+            },
             // Native advancing server time (user, 2026-11-08): no Directional light exists in the imported scenes, the WeatherRig supplies it.
             UsesServerTime: true,
             // PLAN-AUTOSERVICE item 6/12 (docs/progress/autoservice-release.md, 2026-11-11). Exits mirror tools/maps/autoservice.exits.json

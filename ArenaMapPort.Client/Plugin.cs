@@ -129,7 +129,7 @@ namespace ArenaMapPort.Client
             ShaderRebind.Install();
             NativeDustRepairs.Install(); // native animation after real shaders are rebound; preserve generated meshes
             ShadowCasterRepairs.Install(); // restore only descriptor-listed authored shadow proxies
-            EquatorRoofShadowRepairs.Install(); // register existing structural ceilings for native distant sun shadows
+            RoofShadowRepairs.Install(); // register existing structural roof/ceiling shadow proxies (descriptor DistantShadowCasterPaths) for native distant sun shadows
 
             // weather-rig-stage0 — harvests a vanilla donor scene's Weather rig and activates it per
             // raid. Must install BEFORE ArenaLightingRepairs: both subscribe to the same static
