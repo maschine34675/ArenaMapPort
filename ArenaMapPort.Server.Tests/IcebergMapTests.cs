@@ -112,10 +112,13 @@ public sealed class IcebergMapTests
         var players = bots.GetProperty("player_spawns").EnumerateArray().ToArray();
         var botSpawns = bots.GetProperty("bot_spawns").EnumerateArray().ToArray();
 
-        // Four player rows on pocket markers (an All and a side row at each end) and nine bot rows from the 11 AI core points (the two within
-        // 10 m of a gate leaf are skipped)
+        // Four player rows on pocket markers (an All and a side row at each end) and 17 bot rows: nine from the 11 AI core points (the two within
+        // 10 m of a gate leaf are skipped) and, appended after them on 2026-11-12, eight more (seven CheckPoint stage markers and one fill point)
+        // for ArenaMode's 25 m burst selector. The first nine ids stay in this order (ArenaMode pins bot-core-01 by id and exact floats).
         Assert.Equal(4, players.Length);
-        Assert.Equal(9, botSpawns.Length);
+        Assert.Equal(17, botSpawns.Length);
+        Assert.All(botSpawns.Take(9), b => Assert.StartsWith("arena_iceberg-bot-core-", b.GetProperty("id").GetString()));
+        Assert.All(botSpawns.Skip(9), b => Assert.Matches("^arena_iceberg-bot-(stage-(bear|usec)-[0-9]+|fill-[0-9]+)$", b.GetProperty("id").GetString()));
         Assert.Equal(players.Length + botSpawns.Length, shipped.Length);
         Assert.Equal(shipped.Length, shipped.Select(p => p.GetProperty("Id").GetString()).Distinct().Count());
 
@@ -227,9 +230,9 @@ public sealed class IcebergMapTests
         var map = ArenaMapRegistry.Iceberg;
         Assert.Equal(map.Key, location!.Id);
         Assert.Equal(map.IdField, location.IdField.ToString());
-        Assert.Equal(13, location.SpawnPointParams!.Count());
+        Assert.Equal(21, location.SpawnPointParams!.Count());
         Assert.Equal(4, location.SpawnPointParams!.Count(p => p.Categories!.Contains("Player")));
-        Assert.Equal(9, location.SpawnPointParams!.Count(p => p.Categories!.Contains("Bot")));
+        Assert.Equal(17, location.SpawnPointParams!.Count(p => p.Categories!.Contains("Bot")));
         Assert.Equal(2, location.Exits.Count());
         Assert.Equal(5, location.Waves!.Count);
         Assert.Equal(4, location.BossLocationSpawn!.Count);

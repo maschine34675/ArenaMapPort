@@ -1579,12 +1579,15 @@ namespace ArenaMapPort.Shared
             IconX: 215,
             IconY: 608,
             DbBaseJsonPath: "arena_iceberg/base.json",
-            // PLAN-ICEBERG item 7/12 (docs/progress/iceberg-release.md, 2026-10-30). Exits mirror tools/maps/iceberg.exits.json (IcebergMapTests):
-            // one gate outside each pocket as seen from the pocket, on Arena's own NavMesh main component. Offline draft, not walked on the host.
+            // PLAN-ICEBERG item 7/12 (docs/progress/iceberg-release.md, 2026-10-30; positions moved 2026-11-12). Exits mirror tools/maps/iceberg.exits.json (IcebergMapTests):
+            // since 2026-11-12 (lead rule R3, user request) one exit per team pocket, the box INSIDE its pocket's spawn-bound footprint (East: the Bear pocket behind
+            // GATES_A, upper west part of the ramp; West: the Usec pocket behind GATES_B), so that the green signal flare marks the team's spawn area in ArenaMode's team
+            // modes. Every Player row keeps 2.5 m to the box edge. In a plain raid a player now spawns a few metres from an 8 s exit and a team held by the developer gate
+            // hold can reach its exit. Offline, host-unchecked. (2026-10-30: one gate outside each pocket, 72.0/-94.0 and -30.5/-85.0.)
             Exits: new[]
             {
-                new ArenaExitDescriptor("Iceberg East Gate", 72.0f, 1.95f, -94.0f),
-                new ArenaExitDescriptor("Iceberg West Gate", -30.5f, 2.92f, -85.0f),
+                new ArenaExitDescriptor("Iceberg East Gate", 90.88f, 1.67f, -86.34f),
+                new ArenaExitDescriptor("Iceberg West Gate", -38.79f, 3.2f, -85.6f),
             },
             // The five sliding respawn gates (two at x 82.4 for the Bear pocket, three at x -36.0 for the Usec pocket) and the rotating
             // Sanatorium_CheckPoint_Gate of Arena_Sanatorium_CheckPoint_DesignStuff's DOORS: one barrier per GATE, not per group, because
