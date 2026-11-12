@@ -1272,12 +1272,16 @@ namespace ArenaMapPort.Shared
             // Native advancing server time (user, 2026-11-08): no Directional light exists in the imported scenes, the WeatherRig supplies it.
             UsesServerTime: true,
             // PLAN-AUTOSERVICE item 6/12 (docs/progress/autoservice-release.md, 2026-11-11). Exits mirror tools/maps/autoservice.exits.json
-            // (AutoServiceMapTests): one gate in the yard outside each pocket, on Arena's own NavMesh main component. Offline draft, not walked on
-            // the host; Arena authors no extraction on this map.
+            // (AutoServiceMapTests); Arena authors no extraction on this map. 2026-11-12 (rule R3, offline, not host-checked): one exit per team
+            // pocket, the box (4 x 3 x 4 m) INSIDE its pocket's spawn-bound footprint so that the green signal flare marks the team's start area
+            // in ArenaMode's team modes (extraction is off there). East: just inside the big gate; West: the south end of the roofed warehouse.
+            // Every Player row keeps 2.5 m to the box edge. Consequences (R4): in a plain raid a player spawns a few steps from an 8 s exit; with
+            // the developer gate hold a held team can reach its own exit. The names are locale keys and stay although the boxes no longer stand at
+            // a gate. Until 2026-11-12 the boxes stood in the yard outside the pockets, (-349.0, 488.5) and (-393.0, 501.0).
             Exits: new[]
             {
-                new ArenaExitDescriptor("Chop Shop East Gate", -349.0f, -3.77f, 488.5f),
-                new ArenaExitDescriptor("Chop Shop West Gate", -393.0f, -3.79f, 501.0f),
+                new ArenaExitDescriptor("Chop Shop East Gate", -340.5f, -3.6f, 485.0f),
+                new ArenaExitDescriptor("Chop Shop West Gate", -406.5f, -3.7f, 478.5f),
             },
             // Shader stand-ins (PLAN-AUTOSERVICE item 11/12; mirrors tools/maps/autoservice.json shader_fallback_names). All 28 shader names of the
             // package exist in EFT 0.16.9.5; these four live only in scene shared assets (fog sheet sharedassets13, the two cloth shaders

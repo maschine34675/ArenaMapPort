@@ -98,10 +98,12 @@ DECIDED_SIDECAR_KEYS = {
 # (the strongest emissive material is 3.88), no native water (the map has no water surface: decision "No native water").
 OMITTED_SIDECAR_KEYS = ("puddle_extra_surfaces", "authored_borders", "emission_cap", "emission_floor", "has_native_water")
 
-# Anchors outside the package markers. The capture point is Arena's CapturePointEntity 33001; the two exits are the DRAFTS of the plan
-# (item 12 decides them): on Arena's main component, outside the gates.
+# Anchors outside the package markers. The capture point is Arena's CapturePointEntity 33001; the two exits are read from the exits sidecar
+# (since 2026-11-12 they stand INSIDE the team pockets, rule R3; until then this file kept a copy of the 2026-11-11 drafts, which stood in the yard
+# outside the gates). R6: no literal copy, so that a nudge of an exit touches only the sidecar and the descriptor.
 CAPTURE_POINT = (-369.29, -3.80, 499.49)
-EXIT_DRAFTS = {"exit_east": (-349.0, -3.78, 489.0), "exit_west": (-393.0, -3.79, 501.0)}
+EXIT_DRAFTS = {"exit_east": tuple(json.loads((REPO / "tools" / "maps" / "autoservice.exits.json").read_text(encoding="utf-8"))["exits"][0]["position"]),
+               "exit_west": tuple(json.loads((REPO / "tools" / "maps" / "autoservice.exits.json").read_text(encoding="utf-8"))["exits"][1]["position"])}
 
 
 def sidecar(name="autoservice.json"):
@@ -531,10 +533,16 @@ class PackageAnchorTests(unittest.TestCase):
         self.assertGreaterEqual(arr[:, 1].min() - y0, 1.0)         # floors at -3.72..-3.84, the box floor at -5
         self.assertGreaterEqual(y1 - arr[:, 1].max(), 4.0)
 
-    def test_the_exit_drafts_lie_outside_both_pockets_and_beyond_the_gates(self):
-        # east exit x -349 < the east big gate at x -344.09 < the pocket markers x > -341; west exit x -393 > the west rollers at x -402.26 > the pocket x < -405
-        self.assertLess(EXIT_DRAFTS["exit_east"][0], -344.09 - 4.0)
-        self.assertGreater(EXIT_DRAFTS["exit_west"][0], -402.26 + 8.0)
+    def test_the_exits_lie_inside_their_pockets(self):
+        # R3 (2026-11-12), replacing "outside both pockets and beyond the gates": the east exit lies inside the east pocket (SPAWN_BOUND_Fighter,
+        # past the big gate at x -344.09), the west exit inside the west pocket (SPAWN_BOUND_Fighter (1), past the rollers at x -402.26). The full
+        # rule (one exit per footprint, 2.5 m from every row) is in test_autoservice_spawns.
+        import extract_mode_objects as M
+        bounds = {b["name"]: b for b in sidecar("autoservice.modes.json")["spawn_bounds"]}
+        self.assertGreaterEqual(M.box_margin(bounds["SPAWN_BOUND_Fighter"], EXIT_DRAFTS["exit_east"]), 0.0)
+        self.assertGreaterEqual(M.box_margin(bounds["SPAWN_BOUND_Fighter (1)"], EXIT_DRAFTS["exit_west"]), 0.0)
+        self.assertGreater(EXIT_DRAFTS["exit_east"][0], -344.09)
+        self.assertLess(EXIT_DRAFTS["exit_west"][0], -402.26)
 
 
 @unittest.skipUnless(HAVE_PACKAGE, "work/extract/autoservice-native-v2 is not available (set ARENAMAPPORT_WORK_DIR)")
@@ -870,14 +878,25 @@ class OracleTests(unittest.TestCase):
         with_cubes = route_lengths(decided, ROUTES)
         without = route_lengths(nocubes, ROUTES)
         self.assertEqual(with_cubes, without)
+        # The exit routes depend on where the exits stand (R6: no literal copy of an exit position or of a length that follows from it): since
+        # 2026-11-12 the exits stand inside the pockets (R3), so a pocket marker reaches its own pocket's exit within a short walk and the exits
+        # reach each other; the lengths were 35.2 / 26.8 / 62.8 m for the 2026-11-11 yard drafts and 7.6 / 16.2 / 82.2 m for the 2026-11-12 positions.
+        exit_routes = {k: with_cubes.pop(k) for k in ("Usec_house_(1)>exit_east", "Usec_house_(5)>exit_west", "exit_east>exit_west")}
+        self.assertTrue(all(v is not None for v in exit_routes.values()), exit_routes)
+        # a route may not detour: the lattice length is Manhattan-like (up to 1.42 x the straight line), so the bar is 1.5 x the straight line + 10 m
+        # (measured 7.6 / 16.2 / 82.2 m against straight lines of 5 / 12 / 66 m); a border cube that lengthened a route past that would fail here
+        points = {p["name"]: p["position"] for p in oracle_points()}
+        for route, length in exit_routes.items():
+            a, b = route.split(">")
+            straight = math.dist(points[a], points[b])
+            self.assertLessEqual(length, 1.5 * straight + 10.0, f"{route}: {length} m for a straight line of {straight:.1f} m")
         self.assertEqual(with_cubes, {
             "Usec_house_(1)>Usec_house_(5)": 106.0, "Usec_house_(1)>capture": 59.2, "Usec_house_(5)>capture": 56.4,
-            "Usec_house_(1)>exit_east": 35.2, "Usec_house_(5)>exit_west": 26.8, "exit_east>exit_west": 62.8,
             "Usec_house_(16)>Usec_house_(8)": 33.2, "Usec_house_(13)>Usec_house_(12)": 26.4})
         # ... and they equal the lengths on Arena's own mesh (every sample passable): the model loses no metre of any route
         graph = decided["_graph"]
         arena_like = dict(decided, _verdicts={"port": mock.Mock(blocked=np.zeros(graph.n, bool), unsupported=np.zeros(graph.n, bool))})
-        self.assertEqual(route_lengths(arena_like, ROUTES), with_cubes)
+        self.assertEqual(route_lengths(arena_like, ROUTES), {**with_cubes, **exit_routes})
 
     def test_the_pockets_are_sealed_without_the_gate_rows_and_open_with_them(self):
         closed = oracle("closed")

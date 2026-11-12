@@ -6,8 +6,8 @@ pattern of test_iceberg_spawns.py).
 
 1. Data only (the repository): the sidecars have the shape the released maps' have and the generator turns them into the
    base.json fields; the player rows are four of the 20 pocket markers of autoservice.modes.json, the bot rows are Arena's AI
-   core points and born points under a stated rule (checked both ways), nothing stands inside a team box, both exits lie outside
-   their gates and 10 m or more from every row.
+   core points and born points under a stated rule (checked both ways; nine rows appended on 2026-11-12), nothing stands inside a team
+   box, each pocket holds one exit (since 2026-11-12, see below) that keeps 2.5 m from every row.
 2. Arena's NavMesh (the installed Arena 0.6.2, level63, ``sharedassets63.assets`` path 2, identity placement, 30 tiles, 695
    polygons): all 20 markers, the capture point, the 7 core points, the 16 born points and all 59 patrol points lie on the
    1,915.6 m2 main component; every row and exit stands on it with the documented clearance; 21 of the 23 mine points do.
@@ -16,6 +16,20 @@ pattern of test_iceberg_spawns.py).
    passes, the exit boxes hold no solid above the floor, and the swept footprints of the four gates are the ones the rule uses.
 
 The C# half (descriptor Exits mirror, server parse) is the lead's promotion test (item 12).
+
+2026-11-12 (more spawn points and exits inside the pockets; offline, host check pending): nine Bot rows are appended after the seven original
+ones and the two exits moved into their team pockets. Rules, replacing the retired ones where they changed:
+
+* R1: the seven original rows stay byte-identical and first (ArenaMode pins ``core-03`` by id and floats); the appended rows follow in order.
+* R5: the 2026-11-11 conventions (10 m to a gate's swept footprint and to every pocket marker, 5 m outside both spawn bounds, 10 m to every Player
+  row) hold for the ORIGINAL rows only. The yard is 58 m long and ArenaMode's burst selector wants Bot rows 25 m or more from the player, so the
+  appended rows stand at the yard's ends under the weaker rule: 2.5 m from a gate's swept footprint, 1.5 m outside both bounds, 5 m from every
+  Player row, 4 m from every other row (what the decided rows measure, with a small margin).
+* R3: the retired rule "exits stand outside the pockets, 10 m from every row, beyond the gates" is replaced by: every pocket holds exactly one exit
+  whose centre lies inside the pocket's spawn-bound footprint of autoservice.modes.json (the green signal flare then marks the team's start area),
+  every Player and Bot row keeps 2.5 m to the box EDGE (the Equator booth precedent), the box holds floor and no solid, and it never touches a
+  gate's swept volume (it may stand 1.4 m from the footprint: the east box lies beside the big gate).
+* R6: no literal exit coordinates here, only rules and mirrors; the C# tests pin descriptor == sidecar == base.json.
 """
 import importlib.util
 import json
@@ -52,8 +66,29 @@ PLAYER_MARKERS = {
 BOT_CORE_POINTS = {f"core-{n:02d}": n for n in (1, 2, 3, 4, 5, 7)}
 BOT_BORN_POINTS = {"born-00": "p1"}
 MOVED_FROM_POINT = {"core-01": 0.75, "core-03": 0.6, "core-04": 2.0, "born-00": 0.75}
-# Candidates that are not rows, and why (the rule is in autoservice.bots.json's comment): core 6 and the born points beside a pocket
-# marker or a gate are skipped by the 10 m rule; born point 1 duplicates born point 0 (1.8 m); born points 7 and 8 have no spot with
+# R1: the seven original rows, in file order, then the nine rows appended on 2026-11-12 (decision order). Appended rows: id suffix -> (source, largest
+# move in metres). The LastHero markers are Arena's free-for-all spawn points (Arena_AutoService_LastHero_DesignStuff, not part of the package):
+# their world positions are pinned here so that the move can be checked; the fill rows have no Arena source.
+ORIGINAL_BOT_SUFFIXES = ["core-01", "core-02", "core-03", "core-04", "core-05", "core-07", "born-00"]
+APPENDED_BOT_SUFFIXES = ["lasthero-04", "lasthero-13", "fill-01", "core-06", "lasthero-03", "lasthero-10", "fill-02", "fill-03", "fill-04"]
+LASTHERO_MARKERS = {"lasthero-04": ("Usec house (4)", (-350.260, -3.759, 510.330)),
+                    "lasthero-13": ("Usec house (13)", (-391.440, -3.800, 469.530)),
+                    "lasthero-03": ("Usec house (3)", (-346.522, -3.805, 495.476)),
+                    "lasthero-10": ("Usec house (10)", (-399.624, -3.805, 498.342))}
+APPENDED_MOVE = {"lasthero-04": 1.0, "lasthero-13": 0.5, "lasthero-03": 0.51, "lasthero-10": 0.51, "core-06": 1.0}
+# ArenaMode pins this donor row by id and exact floats (R1): never touch it.
+DONOR_ROW = ("arena_autoservice-bot-core-03", [-367.44, -3.79, 492.11])
+# R5, the rules of the appended rows (the decided rows measure 2.79 m, 2.67 m, 9.63 m and 6.0 m)
+APPENDED_GATE_DISTANCE = 2.5
+APPENDED_BOUND_DISTANCE = 1.5
+APPENDED_PLAYER_DISTANCE = 5.0
+APPENDED_MARKER_DISTANCE = 7.0         # to a pocket marker (the decided rows measure 8.0 m at the least; the original rule was 10 m)
+# R1, the literal point of this pin: the seven original rows as they stood at e4b1d04, byte for byte (id, position, radius, categories)
+ORIGINAL_ROWS = [("core-01", [-372.74, -3.79, 503.03]), ("core-02", [-368.43, -3.79, 501.75]), ("core-03", [-367.44, -3.79, 492.11]),
+                 ("core-04", [-385.94, -3.79, 493.88]), ("core-05", [-384.98, -3.79, 476.7]), ("core-07", [-354.41, -3.79, 499.38]),
+                 ("born-00", [-383.73, -3.79, 507.89])]
+# Candidates the ORIGINAL 10 m rule skipped, and why (the rule is in autoservice.bots.json's comment; core 6 is used by an appended row under R5):
+# core 6 and the born points beside a pocket marker or a gate are skipped by the 10 m rule; born point 1 duplicates born point 0 (1.8 m); born points 7 and 8 have no spot with
 # 1.5 m of clearance within 3.5 m.
 SKIPPED_CORE_POINTS = (6,)
 SKIPPED_BORN_POINTS = (2, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16)
@@ -70,10 +105,14 @@ GATES = {
     "DOORS/roller_shutters_techlight_01 (1)": {"closed": (-402.47, -402.05, 475.16, 479.86), "y": (-3.78, 0.92), "drive": (0.0, 4.11, 0.0)},
 }
 MIN_PLAYER_CLEARANCE = 1.7         # border clearance in Arena's mesh (west-all is the tightest, 1.74 m)
-MIN_BOT_CLEARANCE = 1.35           # the Iceberg bar; the rows keep 1.50 m or more
-EXIT_HALF_DIAGONAL = 2.0 * math.sqrt(2.0)
-MIN_EXIT_DISTANCE = 10.0
-MIN_EXIT_GATE_EDGE = 2.5           # metres between the box edge and the swept footprint of a gate
+MIN_BOT_CLEARANCE = 1.35           # the Iceberg bar; the original rows keep 1.50 m or more
+# R5: Arena's own mesh gives three LastHero rows 1.32 to 1.35 m (the built mesh 1.37 m, MIN_BOT_CLEARANCE holds there for every row)
+MIN_APPENDED_ARENA_CLEARANCE = 1.30
+MIN_EXIT_ROW_EDGE = 2.5            # R3: metres between an exit box edge and any Player or Bot row
+MIN_EXIT_GATE_EDGE = 1.4           # R3: metres between the box edge and a gate's swept footprint (was 2.5 until 2026-11-12: the east box lies beside the big gate)
+MIN_EXIT_ARENA_CLEARANCE = 1.9     # border clearance of an exit centre in Arena's mesh (west 1.99 m, east 3.20 m)
+EXIT_HALF_WIDTH = 2.0              # boxes are 4 x 3 x 4 m with rotation 0
+MIN_EXIT_FLOOR_SHARE = 0.95        # share of a 0.5 m lattice under the box that has NavMesh (measured: east 100 %, west 79 of 81 = 97.5 %, the narrow warehouse)
 # Mine points that lie off Arena's mesh (AMinePlace_15 and AMinePlace_44; the plan expected only _15)
 OFF_MESH_MINES = ("AMinePlace_15", "AMinePlace_44")
 
@@ -101,6 +140,17 @@ def nearest_gate(point):
     return min(rect_distance(point, swept_rect(g)) for g in GATES.values())
 
 
+def box_edge_distance(point, exit_point):
+    """Horizontal distance from a point to the EDGE of an exit box (4 x 4 m footprint, rotation 0); 0 inside the footprint."""
+    return math.hypot(max(abs(point[0] - exit_point["position"][0]) - EXIT_HALF_WIDTH, 0.0),
+                      max(abs(point[2] - exit_point["position"][2]) - EXIT_HALF_WIDTH, 0.0))
+
+
+def exit_pocket(exit_point, bounds):
+    """The spawn bounds whose footprint holds the exit's centre (R3: exactly one per exit)."""
+    return [name for name, bound in bounds.items() if M.box_margin(bound, exit_point["position"]) >= 0.0]
+
+
 class SidecarData:
     """The five tracked Autoservice sidecars, loaded once per test class."""
 
@@ -111,6 +161,7 @@ class SidecarData:
         cls.players, cls.bot_points = cls.bots["player_spawns"], cls.bots["bot_spawns"]
         cls.markers = {m["name"]: m for side in cls.modes["spawn_markers"].values() for m in side}
         cls.bounds = {b["name"]: b for b in cls.modes["spawn_bounds"]}
+        cls.original_rows, cls.appended_rows = cls.bot_points[:7], cls.bot_points[7:]
         cls.core = {c["id"]: c["position"] for c in cls.ai["core_points"]}
         cls.born = {b["name"]: b["position"] for b in cls.ai["born_points"]}
 
@@ -126,14 +177,25 @@ class AutoserviceSidecarTests(SidecarData, unittest.TestCase):
 
     # ------------------------------------------------------------------ shape
     def test_counts_and_ids(self):
-        self.assertEqual((len(self.players), len(self.bot_points)), (4, 7))
+        self.assertEqual((len(self.players), len(self.bot_points)), (4, 16))
         self.assertEqual((len(self.bots["waves"]), len(self.bots["boss_waves"]), len(self.exits["exits"])), (5, 4, 2))
         self.assertEqual((self.bots["zone"], self.bots["max_bots"]), ("BotZone_Main", 8))
         ids = [p["id"] for p in self.players + self.bot_points]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual({p["id"] for p in self.players}, {f"arena_autoservice-player-{s}" for s in PLAYER_MARKERS})
-        self.assertEqual({p["id"] for p in self.bot_points},
+        self.assertEqual({p["id"] for p in self.original_rows},
                          {f"arena_autoservice-bot-{s}" for s in list(BOT_CORE_POINTS) + list(BOT_BORN_POINTS)})
+        # R1: the seven original rows come first and unchanged, the nine appended rows follow in the decided order
+        self.assertEqual([p["id"] for p in self.original_rows], [f"arena_autoservice-bot-{s}" for s in ORIGINAL_BOT_SUFFIXES])
+        self.assertEqual([p["id"] for p in self.appended_rows], [f"arena_autoservice-bot-{s}" for s in APPENDED_BOT_SUFFIXES])
+        self.assertFalse([i for i in ids if "tdm-v1" in i])          # ArenaMode's own ids are never reused
+        donor = next(p for p in self.bot_points if p["id"] == DONOR_ROW[0])
+        self.assertEqual(donor["position"], DONOR_ROW[1])
+
+    def test_the_seven_original_rows_are_unchanged(self):
+        """R1: existing rows never move (ArenaMode pins six donor rows by id and exact floats, one of them here). The point of this test is the literal."""
+        self.assertEqual(self.original_rows,
+                         [{"id": f"arena_autoservice-bot-{s}", "position": pos, "radius": 25, "categories": ["Bot", "BotPmc"]} for s, pos in ORIGINAL_ROWS])
 
     def test_schema_matches_the_released_maps(self):
         equator = load("equator.bots.json")
@@ -147,6 +209,8 @@ class AutoserviceSidecarTests(SidecarData, unittest.TestCase):
         self.assertEqual(set(self.exits["exits"][0]), set(bay5_exits["exits"][0]))
         self.assertIn("2026-11-11", self.bots["_comment"])
         self.assertIn("2026-11-11", self.exits["_comment"])
+        self.assertIn("2026-11-12", self.bots["_comment"])
+        self.assertIn("2026-11-12", self.exits["_comment"])
 
     def test_waves_and_pmc_squads_are_the_released_maps(self):
         airpit, bowl, iceberg = load("airpit.bots.json"), load("bowl.bots.json"), load("iceberg.bots.json")
@@ -165,7 +229,7 @@ class AutoserviceSidecarTests(SidecarData, unittest.TestCase):
         self.assertEqual(set(base), {"SpawnPointParams", "waves", "OpenZones", "BotMax", "OfflineOldSpawn", "OfflineNewSpawn",
                                      "BossLocationSpawn", "exits"})
         self.assertEqual((len(base["SpawnPointParams"]), len(base["waves"]), len(base["BossLocationSpawn"]), len(base["exits"])),
-                         (11, 5, 4, 2))
+                         (20, 5, 4, 2))
         self.assertEqual((base["BotMax"], base["OpenZones"]), (8, "BotZone_Main"))
         for point in base["SpawnPointParams"]:
             if "Player" in point["Categories"]:
@@ -192,7 +256,6 @@ class AutoserviceSidecarTests(SidecarData, unittest.TestCase):
             self.assertEqual((exit_point["type"], exit_point["chance"], exit_point["exfiltration_time"], exit_point["rotation"]),
                              ("Individual", 100, 8, 0.0))
         self.assertEqual([e["name"] for e in self.exits["exits"]], ["Chop Shop East Gate", "Chop Shop West Gate"])
-        self.assertEqual([e["position"] for e in self.exits["exits"]], [[-349.0, -3.77, 488.5], [-393.0, -3.79, 501.0]])
         self.assertGreater(self.exits["exits"][0]["position"][0], self.exits["exits"][1]["position"][0])
 
     # ------------------------------------------------------------------ player rows
@@ -226,7 +289,7 @@ class AutoserviceSidecarTests(SidecarData, unittest.TestCase):
 
     # ------------------------------------------------------------------ bot rows
     def test_bot_rows_sit_on_their_point_except_the_four_documented_moves(self):
-        by_id = {p["id"]: p for p in self.bot_points}
+        by_id = {p["id"]: p for p in self.original_rows}
         sources = {**{k: self.core[n] for k, n in BOT_CORE_POINTS.items()}, **{k: self.born[born_name(int(k[-2:]))]
                                                                               for k in BOT_BORN_POINTS}}
         for suffix, source in sources.items():
@@ -241,7 +304,26 @@ class AutoserviceSidecarTests(SidecarData, unittest.TestCase):
                 # y is Arena's NavMesh surface at the row: the point's own within 4 cm, within 8 cm after a move (born-00: 0.07 m)
                 self.assertAlmostEqual(row[1], source[1], delta=0.08 if suffix in MOVED_FROM_POINT else 0.04)
 
+    def test_appended_rows_come_from_arena_markers_or_are_mesh_fill_points(self):
+        by_id = {p["id"].split("bot-")[1]: p["position"] for p in self.appended_rows}
+        for suffix, (_name, source) in LASTHERO_MARKERS.items():
+            moved = math.dist(xz(by_id[suffix]), xz(source))
+            with self.subTest(row=suffix):
+                self.assertGreater(moved, 0.4)
+                self.assertLessEqual(moved, APPENDED_MOVE[suffix] + 0.005)
+                self.assertAlmostEqual(by_id[suffix][1], source[1], delta=0.05)
+        moved = math.dist(xz(by_id["core-06"]), xz(self.core[6]))
+        self.assertGreater(moved, 0.9)
+        self.assertLessEqual(moved, APPENDED_MOVE["core-06"] + 0.005)
+        self.assertAlmostEqual(by_id["core-06"][1], self.core[6][1], delta=0.05)
+        # the fill rows have no Arena source: they stand on a 2 m lattice of the mesh
+        for suffix in ("fill-01", "fill-02", "fill-03", "fill-04"):
+            self.assertEqual(by_id[suffix][0] % 2.0, 0.0, suffix)
+            self.assertEqual(by_id[suffix][2] % 2.0, 0.0, suffix)
+
     def test_the_skip_rule_no_bot_spawn_within_ten_metres_of_a_gate_or_a_pocket_marker(self):
+        # R5: the 10 m rule is the rule of the ORIGINAL rows; core point 6 still fails it (9.0 m from the east big gate) and is now used
+        # by an appended row that moved 1.0 m (test above) under the weaker rule of test_appended_rows_obey_the_weaker_rule.
         pocket = [m["position"] for m in self.markers.values()]
 
         def nearest(position):
@@ -254,7 +336,7 @@ class AutoserviceSidecarTests(SidecarData, unittest.TestCase):
         self.assertEqual(skipped_born, set(SKIPPED_BORN_POINTS))
         for number in set(self.core) - set(SKIPPED_CORE_POINTS):
             self.assertGreaterEqual(nearest(self.core[number]), BOT_SKIP_RADIUS, f"core {number} is on a gate approach")
-        for row in self.bot_points:
+        for row in self.original_rows:
             self.assertGreaterEqual(nearest(row["position"]), BOT_SKIP_RADIUS, row["id"])
         # the 16 born points are 10 in the pockets (skipped), 6 in the yard: one row, one duplicate, two without room, two at the gate
         self.assertEqual(len(self.born), 16)
@@ -263,29 +345,43 @@ class AutoserviceSidecarTests(SidecarData, unittest.TestCase):
         self.assertEqual(set(self.core) - set(SKIPPED_CORE_POINTS), set(BOT_CORE_POINTS.values()))
 
     def test_the_duplicate_born_point_is_within_four_metres_of_the_row_it_duplicates(self):
-        row0 = next(p for p in self.bot_points if p["id"].endswith("born-00"))
+        row0 = next(p for p in self.original_rows if p["id"].endswith("born-00"))
         self.assertLess(math.dist(xz(self.born["p1 (1)"]), xz(self.born["p1"])), BOT_DUPLICATE_RADIUS)
         self.assertLess(math.dist(xz(self.born["p1 (1)"]), xz(row0["position"])), BOT_DUPLICATE_RADIUS)
         for number in (7, 8):          # the other two kept candidates are far from every row: they were dropped for room, not as duplicates
-            for row in self.bot_points:
+            for row in self.original_rows:
                 self.assertGreater(math.dist(xz(self.born[born_name(number)]), xz(row["position"])), BOT_DUPLICATE_RADIUS)
 
-    def test_no_row_core_point_or_exit_lies_inside_a_team_box(self):
+    def test_no_row_or_core_point_lies_inside_a_team_box(self):
         pockets = list(self.bounds.values())
         for number, position in self.core.items():
             for bound in pockets:
                 self.assertLess(M.box_margin(bound, position), 0.0, f"core {number} inside {bound['name']}")
-        for row in self.bot_points:
+        for row in self.original_rows:
             for bound in pockets:
                 self.assertLess(M.box_margin(bound, row["position"]), -5.0, row["id"])
-        for exit_point in self.exits["exits"]:
-            for bound in pockets:    # the 4 x 4 m box must clear the bound too
-                self.assertLess(M.box_margin(bound, exit_point["position"]), -2.0, exit_point["name"])
+        # R5: the appended rows keep 1.5 m outside both bounds (the original 5 m cannot hold at the yard's ends)
+        for row in self.appended_rows:
+            for bound in pockets:
+                self.assertLess(M.box_margin(bound, row["position"]), -APPENDED_BOUND_DISTANCE, row["id"])
+        # R3 successor of "the exits clear the bounds": see test_every_pocket_holds_one_exit_inside_its_footprint
+
+    def test_appended_rows_obey_the_weaker_rule(self):
+        """R5: what the nine appended rows keep, stated once (the original seven keep the stricter rules above and below)."""
+        pocket = [m["position"] for m in self.markers.values()]
+        for row in self.appended_rows:
+            position = row["position"]
+            with self.subTest(row=row["id"]):
+                self.assertGreaterEqual(nearest_gate(position), APPENDED_GATE_DISTANCE)
+                self.assertGreaterEqual(min(math.dist(xz(position), xz(m)) for m in pocket), APPENDED_MARKER_DISTANCE)
+                for player in self.players:
+                    self.assertGreaterEqual(math.dist(position, player["position"]), APPENDED_PLAYER_DISTANCE, player["id"])
 
     def test_spacing_between_rows(self):
         for bot in self.bot_points:
-            for player in self.players:
-                self.assertGreaterEqual(math.dist(bot["position"], player["position"]), 10.0, f"{bot['id']} / {player['id']}")
+            for player in self.players:       # R5: 10 m for the original rows, 5 m for the appended ones
+                need = 10.0 if bot in self.original_rows else APPENDED_PLAYER_DISTANCE
+                self.assertGreaterEqual(math.dist(bot["position"], player["position"]), need, f"{bot['id']} / {player['id']}")
             for other in self.bot_points:
                 if other is not bot:
                     self.assertGreaterEqual(math.dist(bot["position"], other["position"]), BOT_DUPLICATE_RADIUS,
@@ -296,28 +392,31 @@ class AutoserviceSidecarTests(SidecarData, unittest.TestCase):
                     self.assertGreaterEqual(math.dist(a["position"], b["position"]), 4.0, f"{a['id']} / {b['id']}")
 
     # ------------------------------------------------------------------ exits
-    def test_exits_lie_outside_their_gates_and_far_from_every_row(self):
-        east, west = self.exits["exits"]
-        self.assertLess(east["position"][0], -344.2 - 4.0)         # 4 m or more west of the east pocket's big gate
-        self.assertGreater(west["position"][0], -402.05 + 8.0)     # 8 m or more east of the west pocket's shutters
+    def test_every_pocket_holds_one_exit_inside_its_footprint(self):
+        """R3 (2026-11-12): one exit per team pocket, its centre inside the pocket's spawn-bound footprint, so that the signal flare marks
+        the team's start area. Replaces 'the exits stand outside the pockets, beyond the gates' of 2026-11-11."""
+        self.assertEqual(len(self.exits["exits"]), len(self.bounds))
+        by_name = {}
         for exit_point in self.exits["exits"]:
-            edge = nearest_gate(exit_point["position"]) - 2.0      # half the box width
-            self.assertGreaterEqual(edge, MIN_EXIT_GATE_EDGE, f"{exit_point['name']}: the box edge is {edge:.2f} m from a gate's travel")
-            for player in self.players:
-                self.assertGreaterEqual(math.dist(exit_point["position"], player["position"]), MIN_EXIT_DISTANCE,
-                                        f"{player['id']} too close to {exit_point['name']}")
-            for bot in self.bot_points:
-                self.assertGreaterEqual(math.dist(xz(exit_point["position"]), xz(bot["position"])), MIN_EXIT_DISTANCE - 0.01,
-                                        f"{bot['id']} too close to {exit_point['name']}")
-            for marker in self.markers.values():
-                self.assertGreaterEqual(math.dist(xz(exit_point["position"]), xz(marker["position"])), MIN_EXIT_DISTANCE)
+            holders = exit_pocket(exit_point, self.bounds)
+            self.assertEqual(len(holders), 1, f"{exit_point['name']} is inside {holders}")
+            by_name[exit_point["name"]] = holders[0]
+            for dx in (-EXIT_HALF_WIDTH, EXIT_HALF_WIDTH):             # the whole 4 x 4 m footprint lies inside as well (measured, not demanded by R3)
+                for dz in (-EXIT_HALF_WIDTH, EXIT_HALF_WIDTH):
+                    corner = (exit_point["position"][0] + dx, exit_point["position"][1], exit_point["position"][2] + dz)
+                    self.assertGreaterEqual(M.box_margin(self.bounds[holders[0]], corner), 0.0, exit_point["name"])
+        self.assertEqual(set(by_name.values()), set(self.bounds))
+        self.assertEqual(by_name, {"Chop Shop East Gate": "SPAWN_BOUND_Fighter", "Chop Shop West Gate": "SPAWN_BOUND_Fighter (1)"})
 
-    def test_the_exit_distances_per_box(self):
-        # distances are stated per box (the plan: east 10.4 m before the move, west 9.3 m): to the gate ROOT objects of DesignStuff DOORS
-        roots = {"east": (-344.09, 479.86), "west": (-402.26, 501.22)}
-        east, west = self.exits["exits"]
-        self.assertAlmostEqual(math.dist(xz(east["position"]), roots["east"]), 9.94, delta=0.01)
-        self.assertAlmostEqual(math.dist(xz(west["position"]), roots["west"]), 9.26, delta=0.01)
+    def test_no_row_starts_inside_an_exit_box_and_the_box_keeps_clear_of_the_gates(self):
+        """R3: every Player and Bot row keeps 2.5 m to the box EDGE (a plain-raid spawn must not start inside a trigger; the Equator booth
+        precedent), and the box stays off every gate's swept footprint by 1.4 m (2.5 m until 2026-11-12)."""
+        for exit_point in self.exits["exits"]:
+            for row in self.players + self.bot_points:
+                self.assertGreaterEqual(box_edge_distance(row["position"], exit_point), MIN_EXIT_ROW_EDGE,
+                                        f"{row['id']} too close to {exit_point['name']}")
+            edge = nearest_gate(exit_point["position"]) - EXIT_HALF_WIDTH            # conservative: centre distance minus the half width
+            self.assertGreaterEqual(edge, MIN_EXIT_GATE_EDGE, f"{exit_point['name']}: the box edge is {edge:.2f} m from a gate's travel")
 
     def test_the_gate_table_is_consistent(self):
         self.assertEqual(len(GATES), 4)
@@ -409,8 +508,12 @@ class AutoserviceArenaMeshTests(SidecarData, unittest.TestCase):
 
     def test_rows_and_exits_stand_on_the_main_component_with_room(self):
         rows = [(p["id"], p["position"], MIN_PLAYER_CLEARANCE, 0.3) for p in self.players]
-        rows += [(p["id"], p["position"], MIN_BOT_CLEARANCE, 0.05) for p in self.bot_points]
-        rows += [(e["name"], e["position"], EXIT_HALF_DIAGONAL + 0.5, 0.05) for e in self.exits["exits"]]
+        rows += [(p["id"], p["position"], MIN_BOT_CLEARANCE, 0.05) for p in self.original_rows]
+        rows += [(p["id"], p["position"], MIN_APPENDED_ARENA_CLEARANCE, 0.05) for p in self.appended_rows]      # R5: 1.32 m is the least
+        # R3: the exit boxes stand in the pockets, where Arena's mesh leaves less room than in the yard (west: 1.99 m at the centre, the box is not
+        # clear of the border); the floor under the whole box is checked on the built mesh (AutoserviceBuiltMeshTests). The east centre y is the
+        # built mesh's interpolated surface (-3.60), 0.19 m above Arena's (-3.79), so only the east exit has the dy bar 0.25; the west one keeps 0.05.
+        rows += [(e["name"], e["position"], MIN_EXIT_ARENA_CLEARANCE, 0.25 if "East" in e["name"] else 0.05) for e in self.exits["exits"]]
         for (name, position, need, dy), (label, sy, clearance) in zip(rows, self.locate([r[1] for r in rows])):
             self.assertEqual(label, 0, f"{name} is not on Arena's main component")
             self.assertLessEqual(abs(sy - position[1]), dy, f"{name} is {sy - position[1]:+.2f} m off Arena's surface")
@@ -418,7 +521,7 @@ class AutoserviceArenaMeshTests(SidecarData, unittest.TestCase):
 
     def test_the_bot_moves_were_needed_and_the_dropped_candidates_have_no_room_nearby(self):
         # a row moves only when its point keeps less than 1.35 m of clearance; the points that stay keep more
-        by_id = {p["id"].split("bot-")[1]: p for p in self.bot_points}
+        by_id = {p["id"].split("bot-")[1]: p for p in self.original_rows}
         for suffix in by_id:
             source = self.core[BOT_CORE_POINTS[suffix]] if suffix in BOT_CORE_POINTS else self.born[born_name(int(suffix[-2:]))]
             clearance = self.locate([source])[0][2]
@@ -426,30 +529,78 @@ class AutoserviceArenaMeshTests(SidecarData, unittest.TestCase):
                 self.assertLess(clearance, 1.35, suffix)
             else:
                 self.assertGreaterEqual(clearance, 1.35, suffix)
-        # the core point at the gate and the two born points without room: no spot within 3.5 m that obeys the rows' rules (10 m from
-        # every gate's travel, pocket marker and exit centre) keeps 1.5 m of clearance
+        # the core point at the gate and the two born points without room: no spot within 3.5 m that obeys the ORIGINAL rows' rules (10 m from
+        # every gate's travel and pocket marker) keeps 1.5 m of clearance. The 2026-11-11 clause "and 10 m from an exit centre" is retired with
+        # the old exit positions (R3: the exits moved into the pockets); the clause never excluded a spot there (core 6 is 10.4 m from the old east exit).
         np = self.np
         pocket = [m["position"] for m in self.markers.values()]
-        exits = [e["position"] for e in self.exits["exits"]]
         for label, source in (("core 6", self.core[6]), ("born 7", self.born["p1 (7)"]), ("born 8", self.born["p1 (8)"])):
             grid = [(source[0] + dx, source[2] + dz) for dx in np.arange(-3.5, 3.51, 0.25) for dz in np.arange(-3.5, 3.51, 0.25)
                     if math.hypot(dx, dz) <= 3.5]
             grid = [(x, z) for x, z in grid if nearest_gate((x, 0.0, z)) >= BOT_SKIP_RADIUS
-                    and min(math.dist((x, z), xz(m)) for m in pocket) >= BOT_SKIP_RADIUS
-                    and min(math.dist((x, z), xz(e)) for e in exits) >= MIN_EXIT_DISTANCE]
+                    and min(math.dist((x, z), xz(m)) for m in pocket) >= BOT_SKIP_RADIUS]
             best = max((c for lab, _s, c in self.locate([(x, source[1], z) for x, z in grid]) if lab == 0), default=0.0) if grid else 0.0
             self.assertLess(best, 1.5, f"{label} has an admissible spot with {best:.2f} m of clearance within 3.5 m")
             self.assertLess(self.locate([source])[0][2], 0.9, label)
 
-    def test_the_east_exit_moved_half_a_metre_for_clearance(self):
-        # the plan's (-349.0, 489.0) keeps 3.30 m, below the 3.33 m bar; the sidecar's (-349.0, 488.5) keeps 3.49 m
-        planned = self.locate([(-349.0, -3.78, 489.0)])[0]
-        self.assertEqual(planned[0], 0)
-        self.assertLess(planned[2], EXIT_HALF_DIAGONAL + 0.5)
-        self.assertAlmostEqual(planned[2], 3.30, delta=0.02)
-        moved = self.locate([tuple(self.exits["exits"][0]["position"])])[0]
-        self.assertAlmostEqual(moved[2], 3.49, delta=0.02)
-        self.assertAlmostEqual(self.locate([tuple(self.exits["exits"][1]["position"])])[0][2], 3.37, delta=0.02)
+    def test_the_appended_rows_keep_the_least_clearance_of_arenas_mesh_but_core_6_moved_for_room(self):
+        # R5: core point 6 keeps 0.83 m in Arena's mesh; its row moved 1.0 m onto open floor (1.5 m); three LastHero rows keep 1.32 to 1.35 m
+        self.assertLess(self.locate([self.core[6]])[0][2], 0.9)
+        by_id = {p["id"].split("bot-")[1]: p["position"] for p in self.appended_rows}
+        self.assertGreaterEqual(self.locate([by_id["core-06"]])[0][2], 1.5)
+        for suffix in ("fill-01", "fill-02", "fill-03", "fill-04"):
+            self.assertGreaterEqual(self.locate([by_id[suffix]])[0][2], 1.6, suffix)
+
+
+def built_navmesh_path():
+    return WORK / "build" / "autoservice" / "arena_autoservice_navmesh.bundle"
+
+
+@unittest.skipUnless(built_navmesh_path().is_file(), "no built Autoservice NavMesh bundle (set ARENAMAPPORT_WORK_DIR)")
+class AutoserviceBuiltMeshTests(SidecarData, unittest.TestCase):
+    """The NavMesh the player's raid uses (work/build/autoservice, baked from the port's colliders), not Arena's own."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import numpy as np
+            import navmesh_diff as nd
+            import navmesh_oracle as no
+        except ImportError:
+            raise unittest.SkipTest("numpy or UnityPy is not installed")
+        cls.np = np
+        cls.mesh = nd.load_bundle_mesh(built_navmesh_path())
+        cls.main_label = int(max(no.component_summary(cls.mesh), key=lambda c: c["polygons"])["label"])
+        cls.load_data()
+
+    def locate(self, position):
+        np = self.np
+        poly, surf = self.mesh.locate(np.array([position], dtype=float), max_dy=1.5)
+        if poly[0] < 0:
+            return None, None, None
+        clearance = float(self.mesh.clearance(np.array([[position[0], surf[0], position[2]]]), dy=1.2)[0])
+        return int(self.mesh.labels[poly[0]]), float(surf[0]), clearance
+
+    def test_every_bot_row_stands_on_the_play_component_with_room(self):
+        for row in self.bot_points:
+            label, surf, clearance = self.locate(row["position"])
+            with self.subTest(row=row["id"]):
+                self.assertEqual(label, self.main_label)
+                self.assertLessEqual(abs(surf - row["position"][1]), 0.05)
+                self.assertGreaterEqual(clearance, MIN_BOT_CLEARANCE)
+
+    def test_every_exit_box_has_floor_under_it(self):
+        """R3: NavMesh under the centre (on the play component) and under at least 90 % of a 0.5 m lattice below the 4 x 4 m footprint."""
+        np = self.np
+        for exit_point in self.exits["exits"]:
+            x, y, z = exit_point["position"]
+            label, surf, _clearance = self.locate(exit_point["position"])
+            self.assertEqual(label, self.main_label, exit_point["name"])
+            self.assertLessEqual(abs(surf - y), 0.05, exit_point["name"])
+            lattice = np.array([[x + dx, y, z + dz] for dx in np.arange(-2.0, 2.01, 0.5) for dz in np.arange(-2.0, 2.01, 0.5)], dtype=float)
+            poly, _surf = self.mesh.locate(lattice, max_dy=1.5)
+            share = float((poly >= 0).sum()) / len(lattice)
+            self.assertGreaterEqual(share, MIN_EXIT_FLOOR_SHARE, f"{exit_point['name']}: floor under {share:.0%} of the box")
 
 
 @unittest.skipUnless((PACKAGE / "scenes").is_dir() and (PACKAGE / "meshes").is_dir(), "no autoservice-native-v2 package")
@@ -480,7 +631,7 @@ class AutoservicePlacementTests(SidecarData, unittest.TestCase):
     def test_every_row_and_ai_point_stands_on_a_floor_and_passes_the_placement_probe(self):
         rows = [(p["id"], p["position"]) for p in self.players + self.bot_points]
         rows += [(f"core {n}", p) for n, p in self.core.items()] + [(f"born {n}", p) for n, p in self.born.items()]
-        self.assertEqual(len(rows), 4 + 7 + 7 + 16)
+        self.assertEqual(len(rows), 4 + 16 + 7 + 16)
         for name, position in rows:
             verdict = self.probe.check(position)
             with self.subTest(row=name):
@@ -522,7 +673,8 @@ class AutoservicePlacementTests(SidecarData, unittest.TestCase):
             for got, want in ((lo[0], x0), (hi[0], x1), (lo[2], z0), (hi[2], z1), (lo[1], gate["y"][0]), (hi[1], gate["y"][1])):
                 self.assertAlmostEqual(got, want, delta=0.02, msg=name)
 
-    def test_the_gate_roots_are_where_the_exit_distances_say(self):
+    def test_the_gate_roots_are_where_the_gate_table_says(self):
+        # (until 2026-11-12 these roots were the reference of the exit distances 9.94 / 9.26 m, a rule R3 retired)
         scene = M.SceneGraph("DesignStuff", json.loads(
             (PACKAGE / "scenes" / "Arena_AutoService_TeamFight_DesignStuff.json").read_text(encoding="utf-8")))
         roots = {scene.path(o): scene.position(o) for o in scene.objects if scene.path(o).count("/") == 1
