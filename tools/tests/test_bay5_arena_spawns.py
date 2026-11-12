@@ -1,4 +1,5 @@
 """Bay5 data contract; native reachability/standing room is tested separately."""
+import hashlib
 import importlib.util
 import json
 import math
@@ -29,6 +30,10 @@ APPENDED_BOT_IDS = [
     "arena_bay5-bot-core-08", "arena_bay5-bot-core-07", "arena_bay5-bot-core-03",
     "arena_bay5-bot-core-06", "arena_bay5-bot-fill-01", "arena_bay5-bot-fill-02",
 ]
+# R1 pin: sha256 of the canonical JSON ({"player": player_spawns, "bot": first ten bot_spawns}, sort_keys, compact separators) as
+# they stood before 2026-11-12. This literal is the point of the test (rule R6): ArenaMode pins bot-west-centre by id and exact
+# floats and the first release line's other rows are what players have spawned on; change it only on a deliberate decision.
+ORIGINAL_ROWS_SHA256 = "229dd1dc1556e8b0bcf780099e847390394dbd4e3238de84444950748f525886"
 EXIT_BOX = 4.0
 EXIT_PLAYER_EDGE_MIN = 2.5          # a plain-raid spawn must not start inside a trigger (the Equator booth precedent)
 BURST_ROWS_NEEDED = 5               # ArenaMode's Tactical mode: five Bot rows at least 25 m from wherever the leader stands
@@ -85,6 +90,12 @@ class Bay5ArenaSpawnTests(unittest.TestCase):
             self.assertEqual(point["categories"], ["Bot", "BotPmc"])
         self.assertEqual(len(self.bots["player_spawns"]), 4)
 
+    def test_the_original_rows_are_byte_identical(self):
+        # R1: id, position, radius, categories/sides and order of the four Player rows and the ten original Bot rows.
+        canonical = json.dumps({"player": self.bots["player_spawns"], "bot": self.bots["bot_spawns"][:len(ORIGINAL_BOT_IDS)]},
+                               sort_keys=True, separators=(",", ":"))
+        self.assertEqual(hashlib.sha256(canonical.encode()).hexdigest(), ORIGINAL_ROWS_SHA256)
+
     def test_appended_rows_keep_their_distance_from_every_other_row_and_the_capture_point(self):
         # Measured on 2026-11-12: nearest other row 10.1 m (fill-02, which is also the nearest to a Player row), capture-point
         # light 12.5 m (fill-01), none in a pocket. The floors below leave a small margin.
@@ -96,6 +107,11 @@ class Bay5ArenaSpawnTests(unittest.TestCase):
             self.assertGreaterEqual(math.hypot(point["position"][0] - capture[0], point["position"][2] - capture[2]), 12.0, point["id"])
             for foot in pocket_footprints(self.modes):
                 self.assertFalse(inside_footprint(foot, point["position"][0], point["position"][2]), f"{point['id']} stands in the {foot[0]} pocket")
+            # Measured 25.3 m (core-03) and more from every opened gate part's parked footprint; the bots comment says "at least 15 m".
+            for name, box in self.PARKED_FOOTPRINTS.items():
+                gap = math.hypot(max(box[0] - point["position"][0], 0.0, point["position"][0] - box[1]),
+                                 max(box[2] - point["position"][2], 0.0, point["position"][2] - box[3]))
+                self.assertGreaterEqual(gap, 15.0, f"{point['id']} is within 15 m of {name}")
 
     def test_respawns_do_not_overlap_ai_arrivals(self):
         for player in self.bots["player_spawns"]:
