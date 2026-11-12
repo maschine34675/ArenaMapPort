@@ -1,5 +1,5 @@
 {
-  "_comment": "bots-stage1 (docs/progress/bots-stage1.md): optional sidecar read by tools/server/make_base_json.py next to the map descriptor. Positions are navmesh-verified in-game (UiBridge teleports / player positions, 2026-09-19). Radii follow Factory's SpawnSphereParams (bots 25-35 m). Kept out of equator.json so the Unity editor's JsonUtility reader never sees these fields. Only the ground floor is playable on Equator; the upper rings are decoration (user, 2026-09-20), so no spawn goes above y 0.2 (the former ring2-west point at y 10.8 was a NavMesh island). bots-stage3 (2026-09-20): PMCs come from BossLocationSpawn entries (BossName pmcUSEC/pmcBEAR), not from waves — Factory ships four such entries; SPT's PmcWaveGenerator only replaces them for maps listed in pmc.json customPmcWaves, so ours survive untouched. boss_zone names the zone explicitly (BossLocationSpawn.FindZoneWithCorrectName searches every BotZone), and the bot spawns carry the BotPmc category so BotZone.HasPmcBotSpawns is true as well. Equator ArenaMode integration (2026-09-20): two additional bot points at each end preserve the 25 m Arena bot-distance floor with at least three distant candidate points (the injector requests two bots per burst). All four additions passed UiBridge NavMesh, zone, full path and standing-room checks from the atrium and Usec niche on the 10404-vertex/4572-triangle bake. South-east uses the verified snapped point (8.7, 0.1, -28.4). Four other tested candidates were rejected during independent review because they overlapped player spawn coordinates. The extra All player marker gives both PMC sides a southern entry; ArenaMode respawns use all Player markers. 2026-10-23 (user, docs/progress/equator-booth-spawns.md): the four player spawns stand on four of Arena's 20 TeamFight spawn markers (equator.modes.json spawn_markers, same coordinates) behind the booth doors: north booth All = marker 19 (-4.897, 45.44) and Usec = marker 6 (6.52, 48.589), south booth Bear = marker 15 (4.974, -39.087) and South_All = marker 12 (-4.346, -39.087), yaw 180 north and 0 south = facing the doors, each on its own half of the booth (one behind the west door pair, one behind the east pair) and 2.5 m or more outside the exit boxes. Before, the Usec point stood in the FCK hall (-11.7, 48.6), a port choice: all 20 Arena markers lie in the booths and LevelBorder (83) walls the hall off. The FCK roller shutter is a wall again (equator.json opened_barriers is empty), which cuts the hall (x -35..-10, z 34.6..49.6, 246 m2) off the NavMesh, so bot north-hall moved from (-11.5, 37.0) inside the hall to (-5.5, 0.1, 33.0) on the field (3.7 m of mesh clearance, 12.5 m from the nearest player marker). No spawn, bot spawn or exit lies in the FCK hall. 2026-10-25 (docs/progress/equator-booth-spawns.md): bot-south-west moved (-9, -28) -> (-7.5, -28.0) and bot-south-east (8.7, -28.4) -> (7.5, -29.0) because both stood on the very edge of the NavMesh (0.00 m and 0.05 m of clearance, so the placement repair had to push them in); the new points have 1.50 m and 1.27 m of clearance in the play component.",
+  "_comment": "bots-stage1 (docs/progress/bots-stage1.md): optional sidecar read by tools/server/make_base_json.py next to the map descriptor. Positions are navmesh-verified in-game (UiBridge teleports / player positions, 2026-09-19). Radii follow Factory's SpawnSphereParams (bots 25-35 m). Kept out of equator.json so the Unity editor's JsonUtility reader never sees these fields. Only the ground floor is playable on Equator; the upper rings are decoration (user, 2026-09-20), so no spawn goes above y 0.2 (the former ring2-west point at y 10.8 was a NavMesh island). bots-stage3 (2026-09-20): PMCs come from BossLocationSpawn entries (BossName pmcUSEC/pmcBEAR), not from waves — Factory ships four such entries; SPT's PmcWaveGenerator only replaces them for maps listed in pmc.json customPmcWaves, so ours survive untouched. boss_zone names the zone explicitly (BossLocationSpawn.FindZoneWithCorrectName searches every BotZone), and the bot spawns carry the BotPmc category so BotZone.HasPmcBotSpawns is true as well. Equator ArenaMode integration (2026-09-20): two additional bot points at each end preserve the 25 m Arena bot-distance floor with at least three distant candidate points (the injector requests two bots per burst). All four additions passed UiBridge NavMesh, zone, full path and standing-room checks from the atrium and Usec niche on the 10404-vertex/4572-triangle bake. South-east uses the verified snapped point (8.7, 0.1, -28.4). Four other tested candidates were rejected during independent review because they overlapped player spawn coordinates. The extra All player marker gives both PMC sides a southern entry; ArenaMode respawns use all Player markers. 2026-10-23 (user, docs/progress/equator-booth-spawns.md): the four player spawns stand on four of Arena's 20 TeamFight spawn markers (equator.modes.json spawn_markers, same coordinates) behind the booth doors: north booth All = marker 19 (-4.897, 45.44) and Usec = marker 6 (6.52, 48.589), south booth Bear = marker 15 (4.974, -39.087) and South_All = marker 12 (-4.346, -39.087), yaw 180 north and 0 south = facing the doors, each on its own half of the booth (one behind the west door pair, one behind the east pair) and 2.5 m or more outside the exit boxes. Before, the Usec point stood in the FCK hall (-11.7, 48.6), a port choice: all 20 Arena markers lie in the booths and LevelBorder (83) walls the hall off. The FCK roller shutter is a wall again (equator.json opened_barriers is empty), which cuts the hall (x -35..-10, z 34.6..49.6, 246 m2) off the NavMesh, so bot north-hall moved from (-11.5, 37.0) inside the hall to (-5.5, 0.1, 33.0) on the field (3.7 m of mesh clearance, 12.5 m from the nearest player marker). No spawn, bot spawn or exit lies in the FCK hall. 2026-10-25 (docs/progress/equator-booth-spawns.md): bot-south-west moved (-9, -28) -> (-7.5, -28.0) and bot-south-east (8.7, -28.4) -> (7.5, -29.0) because both stood on the very edge of the NavMesh (0.00 m and 0.05 m of clearance, so the placement repair had to push them in); the new points have 1.50 m and 1.27 m of clearance in the play component. 2026-11-12 (user request, ArenaMode session recommendation: more spawn points; rules R1/R2/R5 of the spawn-count change): six Bot rows are appended after the ten above, which stay byte-identical (id, position, radius, rotation, order; ArenaMode pins the donor row bot-atrium by id and exact floats): core-12 (-22.61, 0.06, 28.98), core-11 (-22.96, 0.06, -21.89), core-10 (-23.45, 0.06, 4.44) and core-02 (14.8, 0.07, 30.64) stand on Arena's own AICore points ID:12, 11, 10 and 2 of the TeamFight_AI scene, born-21 (27.0, 0.06, -15.57) and born-26 (24.52, 0.09, 29.72) on Arena's AI born points p1 (21) and (26), moved 1.0 m and 1.5 m onto open floor. Why: ArenaMode's burst selector uses only Bot rows at least 25 m (3D) from the player, and the ten rows left cells of the play component (2,815 cells of the play component, 1 m lattice) with as few as 3 such rows (median 7; depending on the cell definition about 83 to 85 % of the cells had at least 5 and about 26 to 32 % at least 8); with 16 rows every cell has at least 6 (minimum 6, median 11, 100 % at least 5, about 98.5 to 98.7 % at least 8). The new rows lie on the play component of the built NavMesh at y 0.06 to 0.09 (never above 0.2), keep at least 9.7 m to every other row, 19.7 m to every Player row, 1.45 m of mesh clearance and 11 m to the booth doors, and carry no rotation. Offline numbers from the proposal analysis, host check pending. No exit moves on this map: both exits already stand inside their booths.",
   "zone": "BotZone_Main",
   "max_bots": 8,
   "player_spawns": [
@@ -189,6 +189,84 @@
         -29.0
       ],
       "rotation": 0.0,
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_equator-bot-core-12",
+      "position": [
+        -22.61,
+        0.06,
+        28.98
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_equator-bot-born-21",
+      "position": [
+        27.0,
+        0.06,
+        -15.57
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_equator-bot-born-26",
+      "position": [
+        24.52,
+        0.09,
+        29.72
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_equator-bot-core-11",
+      "position": [
+        -22.96,
+        0.06,
+        -21.89
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_equator-bot-core-10",
+      "position": [
+        -23.45,
+        0.06,
+        4.44
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_equator-bot-core-02",
+      "position": [
+        14.8,
+        0.07,
+        30.64
+      ],
       "radius": 25,
       "categories": [
         "Bot",

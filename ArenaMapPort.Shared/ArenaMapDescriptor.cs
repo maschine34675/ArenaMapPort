@@ -577,6 +577,10 @@ namespace ArenaMapPort.Shared
                 // the booths (north z 45.4 and 48.6, south z -39.1), so the boxes share the booths with them. The nearest spawn
                 // point is 2.6 m outside a box (Usec, North Gate) and EFT places a player on the point itself, so nobody starts
                 // inside a trigger; walking out through the door crosses a box in well under its 8 s.
+                // 2026-11-12 (spawn-count change, rule R3; the "beyond the player spawns" and "10 m from the nearest spawn" sentences
+                // above are history): each box is centred inside its booth's initial spawn-bound footprint (equator.modes.json), so the
+                // green signal flare marks the team's spawn area in ArenaMode's team modes, where extraction is disabled. Consequence
+                // (R4): a plain-raid player spawns at least 2.5 m from the box edge and can extract within 8 s. No exit moved.
                 new ArenaExitDescriptor("Equator North Gate", 2.0f, 0.1f, 46.0f),
                 new ArenaExitDescriptor("Equator South Gate", 5.0f, 0.1f, -44.0f),
             },
