@@ -293,3 +293,12 @@ Runtime: nothing breaks (analysis of ArenaMode-ui-whitelist HEAD 99260275 and th
    done: Equator's exits were not part of the request, and ArenaMode lists the two Equator names.
 3. **Exit names** such as "Bay5 North Loading Bay" or "Bowl BTR Gate" no longer describe the place. They were kept because the name is the locale
    key and ArenaMode lists Equator's; renaming is a locale and descriptor change.
+
+## 2026-11-13 00:40 - the committed state on the host
+
+The records commit `160523d` changes comments and docs only, but both DLLs carry the commit, so they were rebuilt from it and deployed
+(2 files overwritten, 394 identical; `24 file(s) identical on the host after 65.3 s · server stopped · game restarted · build 16/16 identical`).
+Control raid, Chop Shop, no bots (`warnings 0; errors 0`): `00:40:58.534 [RaidFix] spawn placement: disabled 2 SPAWN_BOUND barrier collider(s); all
+spawn points already free`, `00:41:11.020 [BotSpawn] BotZone.Init 'BotZone_Main': markers=16 onNavMesh=16 points=16`, `00:41:25.502 [Exfil] authored exit
+'Chop Shop East Gate': ... at floor (-340.5, -3.7, 485.0) (NavMesh-sampled within 1 m, 0.1 m from authored)`, `'Chop Shop West Gate': ... (-406.5, -3.7, 478.5)
+(..., 0.0 m from authored)`. `validate_distribution.py`: `DISTRIBUTION_OK 6 maps 18 bundles 6 sidecars encrypted`. GPU-2 runs `160523d`; nothing is pushed.
