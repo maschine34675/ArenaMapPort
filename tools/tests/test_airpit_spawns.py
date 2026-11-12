@@ -136,7 +136,16 @@ class AirPitSidecarTests(unittest.TestCase):
         self.assertEqual([p["id"] for p in self.bot_points],
                          [f"arena_airpit-bot-{s}" for s in ORIGINAL_BOT_ORDER + APPENDED_BOTS])
         for pid in ids:
-            self.assertFalse(pid.startswith("arena_airpit-tdm-v1-"), pid)
+            self.assertFalse(pid.startswith(("arena_airpit-tdm-v1-", "arena-airpit-tdm-v1-")), pid)
+
+    def test_the_original_rows_are_byte_identical(self):
+        # R1 (2026-11-12): the four Player rows and the fourteen original Bot rows (id, position, radius, rotation, categories, order) never
+        # change; ArenaMode pins bot-center-east by id and floats. The literal digest IS the point of this test: a deliberate move of an
+        # original row updates it in the same commit as the decision that moves it. Hash of the canonical JSON of the rows as of e4b1d04.
+        import hashlib
+        rows = {"player_spawns": self.players, "bot_spawns": self.bot_points[:14]}
+        digest = hashlib.sha256(json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        self.assertEqual(digest, "6d1f34509581d1a88491c7db71479e58c0b63474aa8cc39412be1a5be7586b0b")
 
     def test_schema_matches_the_released_maps(self):
         equator = json.loads((REPO / "tools/maps/equator.bots.json").read_text(encoding="utf-8"))
@@ -294,8 +303,15 @@ class AirPitSidecarTests(unittest.TestCase):
         # R2: ArenaMode's Tactical burst needs five Bot rows at least 25 m (3D) from the player. 2026-11-12: the 14 originals already gave at least
         # 10 on the walkable lattice; with the appended rows every cell of the envelope keeps at least 5 on this (conservative, all cells) grid.
         points = [tuple(p["position"]) for p in self.bot_points]
-        worst = min(sum(math.hypot(x - p[0], z - p[2]) >= 25 for p in points) for x in range(-57, 34) for z in range(-79, 87))
+
+        def worst_count(rows):
+            return min(sum(math.hypot(x - p[0], z - p[2]) >= 25 for p in rows) for x in range(-57, 34) for z in range(-79, 87))
+
+        worst = worst_count(points)
         self.assertGreaterEqual(worst, 5)
+        # The bound above holds for the originals alone; this part pins the gain of the appended rows (measured 10 -> 15 on this grid).
+        self.assertGreaterEqual(worst, 12)
+        self.assertGreater(worst, worst_count(points[:14]))
 
     def test_no_spawn_stands_in_a_sealed_back_room(self):
         # The furnished shops leave their back rooms closed (old shell partitions, closed inside doors), like Arena's own

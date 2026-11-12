@@ -1,5 +1,5 @@
 {
-  "_comment": "Draft AirPit probe points for navmesh_diff.py (docs/PLAN-AIRPIT.md Appendix A, 2026-10-11). Player/bot spawns and exits are the drafted sidecar values of item 6 until tools/maps/airpit.bots.json and airpit.exits.json exist (then pass those with --points instead). The capture points are Arena's TeamFight Capture_Zone and the base-scene CAPTURE_ZONE. AI core points come from the live install with --live-core-points.",
+  "_comment": "Draft AirPit probe points for navmesh_diff.py (docs/PLAN-AIRPIT.md Appendix A, 2026-10-11). Player/bot spawns are the drafted sidecar values of item 6 and the two exits the 2026-11-12 sidecar positions (inside the team pockets) until tools/maps/airpit.bots.json and airpit.exits.json exist (then pass those with --points instead). The capture points are Arena's TeamFight Capture_Zone and the base-scene CAPTURE_ZONE. AI core points come from the live install with --live-core-points.",
   "points": [
     {"name": "capture_teamfight", "kind": "capture_point", "position": [-13.16, -0.14, 1.33]},
     {"name": "capture_base", "kind": "capture_point", "position": [-11.44, -0.07, 3.27]},
@@ -21,7 +21,7 @@
     {"name": "bot-plane-south", "kind": "bot_spawn", "position": [-15.51, 0.1, -37.64]},
     {"name": "bot-south-apron", "kind": "bot_spawn", "position": [-14.72, 0.1, -59.28]},
     {"name": "bot-south-end", "kind": "bot_spawn", "position": [-6.04, 0.1, -71.99]},
-    {"name": "exit-north-gate", "kind": "exit", "position": [-11.0, 0.1, 62.0]},
-    {"name": "exit-south-gate", "kind": "exit", "position": [-3.0, 0.1, -58.0]}
+    {"name": "exit-north-gate", "kind": "exit", "position": [-12.5, 0.1, 77.0]},
+    {"name": "exit-south-gate", "kind": "exit", "position": [-9.5, 0.1, -62.0]}
   ]
 }
