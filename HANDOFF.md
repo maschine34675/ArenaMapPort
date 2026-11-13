@@ -1,5 +1,15 @@
 # HANDOFF — dated working state
 
+## 0.6.0 prepared: version and texts - 2026-11-13 (NOT published)
+
+**Request (user, 2026-11-13):** "denke das passt alles, fehlt noch was fuer die veroeffentlichung? ansonsten schonmal version erhoehen und docs aktualisieren". The number 0.6.0 is the lead's choice (a new map is a minor version, as 0.3.0 and 0.5.0); the user can change it.
+Record: [release-preparation-20261113.md](docs/progress/release-preparation-20261113.md) (readiness table DONE / TO DO AT PUBLICATION / USER / RISK, what was written, the open verification items).
+
+1. **Done (texts, nothing built):** version 0.6.0 in both csproj files, `Plugin.PluginVersion`, `ModMetadata`, `test_dll_versions.py`; CHANGELOG 0.6.0 (headed "unreleased"); `docs/releases/v0.6.0.md` (placeholders, see its checklist comment); README, FORGE, `docs/dist-manifest.md`, the packer texts and their pins; AGENTS "Release configuration".
+2. **Needs the lead before a cut:** client Release build without DllOnly + server build (the staged DLLs say 0.5.0), gates, validators, `verify-keys` on every Arena build (Chop Shop's key file carries one wrap, 0.6.2.0.48473), deploy and a GPU-2 run of all six maps + hideout, cut, scan, upload, merge, tag, push (user's go).
+3. **User:** back up `work/release-keys` off the VM (the Chop Shop key of 2026-11-11), listen and look (Chop Shop ambience, gates, crowd; the -26 dBFS roar beds; Iceberg 4.6 / 1.8), Forge entry, the v0.5.0 GitHub release body (still says ArenaMode has not adopted the contracts), ArenaMode's whitelist pin (advisory) and its Chop Shop announcement after the release.
+4. **Unverified, stated as such in the note:** Iceberg 4.6 / 1.8 and both re-seeds (no host log), the roar level, Chop Shop mix / gates / crowd (not listened to), the spawn-row and exit items of `spawn-rows-and-pocket-exits.md` "Unverified".
+
 ## Autoservice (sixth map) started: surveys and plan - 2026-11-08
 
 **Request (user, 2026-11-08):** "dann wuerde ich gerne mit der naechsten map weitermachen: Autoservice" - a go without further constraints, as Iceberg's was. Branch `feature/autoservice` (from `main` = 52d0a4d). Plan [docs/PLAN-AUTOSERVICE.md](docs/PLAN-AUTOSERVICE.md), record [docs/progress/autoservice-release.md](docs/progress/autoservice-release.md). Four read-only surveys on Arena 0.6.2.0.48473 are done; nothing is built, deployed, committed or pushed, and Autoservice is registered in `ArenaMapRegistry.Catalog` only (not in `All`) until plan item 12.

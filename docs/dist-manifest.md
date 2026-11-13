@@ -1,4 +1,6 @@
-# Current distribution contract: Equator, Bay5, AirPit, Bowl and Iceberg (0.5.0, encrypted bundles; the 0.4.0 four-map contract below is kept as history)
+# Current distribution contract: Equator, Bay5, AirPit, Bowl, Iceberg and Chop Shop (0.6.0, prepared, not published; encrypted bundles; the 0.5.0 five-map and 0.4.0 four-map contracts below are kept as history)
+
+2026-11-13: the six-map 0.6.0 contract is the last section, "Release 0.6.0 contract". The two paragraphs below (2026-11-11) describe the state of the promotion day, when Chop Shop was pending; that state is superseded (its bundles, key and shader sidecar exist and are staged, `--plan` reads 396 files).
 
 2026-11-11 (Autoservice joined the release lists, PENDING: NOT built, NOT staged as bundles, NOT released; PLAN-AUTOSERVICE item 12, record
 [progress/autoservice-release.md](progress/autoservice-release.md)): `ArenaMapRegistry.All`, `RELEASE_MAP_KEYS`, the csproj rows and the packer now expect a
@@ -21,7 +23,7 @@ list above that need no bundle; the five missing ones are the three bundles, the
 maps 18 bundles 6 sidecars encrypted` only after U1 and the first stage. `tools/deploy-to-spt.ps1` refuses the whole-dist deploy while the server mod holds
 `db/arena_autoservice` and the client plugin lacks the map's bundles and key file (Iceberg rule 6); nothing deploys before item 14.
 
-The current contract is the five-map one of release 0.5.0 (2026-11-07, see the last section, "Release 0.5.0 contract"). Every table and count between here and that section describes an earlier stage; the 256-file layout of 0.4.0 (published 2026-10-30) is history.
+The current contract is the six-map one of release 0.6.0 (prepared 2026-11-13, see the last section, "Release 0.6.0 contract"); the five-map one of release 0.5.0 (2026-11-07, section "Release 0.5.0 contract") is the last published one. Every table and count between here and that section describes an earlier stage; the 256-file layout of 0.4.0 (published 2026-10-30) is history.
 
 2026-10-31 (Iceberg overview): the current unpublished five-map staging adds
 `dynamicmaps/ArenaMapPort_Iceberg/ArenaMapPort_Iceberg.jsonc` and `Layers/Ground.svg`
@@ -580,3 +582,29 @@ The ZIP size, its SHA-256, the build commit, the download links and the VirusTot
 
 **Published 2026-11-07 as 0.5.0** (`maschine-ArenaMapPort-0.5.0.zip`, 5,370,649,086 B, SHA-256 `70d0777ec60d8b248d75a62511715851ff1c363b29b5a60e1b8f2957363b3f05`,
 build commit `a18ecd7`, Pixeldrain https://pixeldrain.com/l/VHbxKwMB): the 359-file five-map contract above is the released one.
+
+
+## Release 0.6.0 contract - 2026-11-13 (six maps, one whole ZIP; PREPARED, NOT PUBLISHED)
+
+Version 0.6.0 is the lead's choice by the project's pattern (a new map is a minor version, as 0.3.0 Bowl and 0.5.0 Iceberg); the user named no number and can still change it. The form is that of 0.4.0 and 0.5.0 unless the user says otherwise:
+ONE whole ZIP on Pixeldrain plus its one-line `.sha256`, a GitHub release with the notes and the checksum file as its only asset, tag `v0.6.0` on the publication commit. The cut is
+`python tools/release/make_release_zips.py --single --out work/releases/0.6.0/pixeldrain-<commit> --extract-check <empty scratch dir>` from a clean tree; the version comes from the two csproj files.
+Nothing is cut, scanned, uploaded, tagged or pushed. The ZIP size, its SHA-256, the build commit, the download links and the VirusTotal lines are not known here; they come from the cut and are entered in
+[releases/v0.6.0.md](releases/v0.6.0.md) then. The release record is [progress/release-preparation-20261113.md](progress/release-preparation-20261113.md).
+
+- **Files.** `make_release_zips.py --single --plan` on the staged dist of 2026-11-13 (HEAD `86d8b71`; its two DLLs still carry 0.5.0 until the client and server are rebuilt at 0.6.0): **396 files** (+4 generated), raw
+  6,378,924,543 B (6,083.4 MiB), estimated ZIP 6,348,651,635 B (6,054.5 MiB, about 5.9 GiB; 0.5.0 was about 5.0 GiB with 359 files). The multi-part plan (the packer's default mode, not the release form) reads
+  core 242, equator 24, bay5 30, airpit 22, bowl 26, iceberg 27, autoservice 25 (396); the single ZIP has no parts and records everything in `BepInEx/plugins/maschine-ArenaMapPort/parts/full.json`.
+- **Maps.** Six: Equator, Bay5, Air Pit, Bowl, Iceberg and Chop Shop (`arena_autoservice`, display name "AutoService" in the registry, "Chop Shop" in every player text and in the generated README.txt through `PROSE_NAMES`). 18 bundles, 6 key files, 6 shader sidecars.
+  Chop Shop's 25 files are listed in the 2026-11-11 paragraph at the top (bundles 3, key, acoustics 3, gate sounds 5, flares 3, AI sidecar, loading screens 5, shader sidecar, `db/arena_autoservice/base.json`, banner, and its crowd graph
+  `spectators/arena_autoservice/spectator.json.gz`). It has a flare package and a crowd, and no water and no DynamicMaps overview (`OVERVIEW_MAP_NAMES` and `NATIVE_WATER_MAP_KEYS` do not list it). Per map: crowd on five (`CROWDLESS_MAP_KEYS` is Iceberg only),
+  flares on Equator, Bay5, Bowl and Chop Shop, overview on five (not Chop Shop), native water on Bay5 and Iceberg.
+- **Spectators.** 135 shared PNGs (123 in 0.5.0; 12 new files, 249,714 B) and five crowd graphs; the four older graphs differ from their 0.5.0 bytes only in `texture_manifest_sha256`, so the graphs and the shared manifest ship together (a part of them
+  extracted over 0.5.0 would be refused by the runtime hash check). `spectator-audio/` still holds 91 files; the six roar beds were re-exported 6 dB louder (-26 dBFS RMS) on 2026-11-07 after the 0.5.0 cut and are new bytes.
+- **Keys.** Six key files, `keys/<map_key>.json`, schema 2: the five older ones carry wraps for 0.6.1.0.48206 and 0.6.2.0.48473, Chop Shop's carries one wrap, for 0.6.2.0.48473. `KEYS_BUILT_FOR` (pinned equal to `tools/bundle/key-sources.json`) stays 0.6.1.0.48206.
+  `verify-keys` is recorded OK for Chop Shop on 0.6.1.0.48206 (test host), 0.6.2.0.48473 (build machine) and 0.6.2.0.48598 (a second PC; the five older key files unlock there too). The 0.6.0.0.47752 check exists for the four maps of 0.4.0 only, none for Iceberg or Chop Shop.
+  The lead re-runs the key checks on the publication build. The content keys never leave `work/release-keys`; Chop Shop's was created on 2026-11-11 and its off-VM backup is the user's.
+- **Server and client data that changed since 0.5.0.** `db/<key>/base.json` of all six maps (appended Bot rows, exits in the team pockets), Air Pit's package v10 (two bundles), the DynamicMaps files of Bay5, Air Pit, Bowl and Iceberg (exit markers), both DLLs. The server DLL carries the Chop Shop
+  registration and a loader rule for the five-entry official-text pack, so the 0.5.0 server cannot be mixed with this ZIP.
+- **Generated README.txt.** Single-ZIP wording; `Included locations` names Chop Shop; the crowd sentence lists five maps; the audio paragraph says that the roar level and Chop Shop's mix, crowd and gate sounds are not listened to; the encryption paragraph states six maps on 0.6.2 and the four-map 0.6.0 check.
+- **Not part of this contract.** No new public F12 setting; the developer keys `Lighting (arena_autoservice)/RoofDistantShadows` and `Lighting (arena_iceberg)/RoofDistantShadows` are new and developer-only; SPT 4.1.6 / EFT 0.16.9.5 unchanged; the Arena installation check, the map notices and the mode-plugin contracts unchanged.

@@ -4,7 +4,7 @@ ArenaMapPort imports the maps of Escape from Tarkov: Arena (read from the user's
 install) into SPT 4.1.6 (EFT 0.16.9.5, Unity 2022.3.43f1; the server declares `~4.1.5`) as separate locations: a Python extractor,
 a Unity 2022.3.43f1 batch importer that rebuilds scenes, materials, colliders and a fresh NavMesh into
 asset bundles, a BepInEx client plugin that repairs everything a ported scene lacks at raid time, and an
-SPT server mod that registers the locations. Fourteen maps retain development inputs; **Equator, Bay5, AirPit and Bowl** are released and
+SPT server mod that registers the locations. **Status note 2026-11-13: the version is 0.6.0, PREPARED and NOT published** (six maps, Chop Shop is the sixth; the last published version is 0.5.0, see the first paragraph of "Release configuration"; the paragraphs of this introduction that call Iceberg or Autoservice "not released" describe the state before that and stay as history). Fourteen maps retain development inputs; **Equator, Bay5, AirPit and Bowl** are released and
 registered (the fifth map, Iceberg, is registered but not released: see its paragraph below; Equator and Bay5 were the first release; AirPit was added in 2026-10 on `feature/airpit` and shipped with 0.2.2/0.2.3; 0.2.0 was built
 and withdrawn on 2026-10-16; Bowl shipped with 0.3.0). All four have native playtest evidence. **Bowl** (the fourth map, on `main` since the 2026-10-18 fast-forward merge of `feature/bowl`; PLAN-BOWL item 8) was
 **released with 0.3.0 on 2026-10-24** (tag `v0.3.0`, GitHub release, Pixeldrain; the four-map release with Arena's door poses, the done signal
@@ -169,6 +169,19 @@ member name pinned in the client (`method_N`, `vmethod_N`) is verified there and
 `HarmonyPatches.Verify()`, which logs and skips a missing target instead of throwing.
 
 ## Release configuration
+
+**2026-11-13: 0.6.0 PREPARED, NOT PUBLISHED** (version number the lead's pick by the project's pattern, a new map is a minor version; the user named no number and can change it; record
+[release-preparation-20261113.md](docs/progress/release-preparation-20261113.md)): the first release with Chop Shop (`arena_autoservice`, the sixth map), the appended Bot spawn rows and in-pocket exits on all six maps,
+the roof/distant sun-shadow repairs (Chop Shop hall, Iceberg cafe), Air Pit package v10, the roar beds 6 dB louder and Iceberg's 4.6 / 1.8 lamp limits. Done in the preparation step (texts only, from HEAD `86d8b71`, no commit
+of the build yet): version 0.6.0 in both csproj files, `Plugin.PluginVersion`, `ModMetadata` and the stale-control literal of `test_dll_versions.py`; CHANGELOG "0.6.0 - unreleased"; `docs/releases/v0.6.0.md` with placeholders
+(grep `<[a-z-]+>` and `TBD-AT-PUBLICATION`); README, FORGE, `docs/dist-manifest.md` ("Release 0.6.0 contract") and the generated README.txt / `ENCRYPTION_TEXT` of `make_release_zips.py` (six maps, `PROSE_NAMES` maps the registry's
+"AutoService" to "Chop Shop") with their pins. Plan: 396 files, estimated single ZIP 6,348,651,635 B (about 5.9 GiB), parts core 242, equator 24, bay5 30, airpit 22, bowl 26, iceberg 27, autoservice 25. **Open, in this order, on
+the user's go:** client Release build WITHOUT DllOnly and server build (the staged DLLs still say 0.5.0; `test_dll_versions` stays red until then), the gates, `validate_distribution.py`, `validate_bundle_names.py`,
+`validate_port.py --map autoservice --distribution`, `verify-keys` on every Arena build at hand (Chop Shop's key file has ONE wrap, 0.6.2.0.48473; it was recorded OK on 0.6.1.0.48206, 0.6.2.0.48473 and 0.6.2.0.48598), deploy and
+a GPU-2 host run of all six maps and the hideout (include the Iceberg `[EmissionCap] ... cap=4.60 floor=1.80` line and the two re-seed lines), `make_release_zips.py --single --extract-check`, `--verify-only`, VirusTotal for both
+DLLs, `upload_pixeldrain.py` (dry run first), fill the placeholders, publication commit, fast-forward `main` (63 commits ahead, none behind), tag `v0.6.0`, push, GitHub release, refresh the stale body of the v0.5.0 release.
+User items: the off-VM backup of `work/release-keys` (the `arena_autoservice.key` of 2026-11-11 is new; no record says it was backed up), listening and looking (Chop Shop ambience, gates and crowd, the -26 dBFS roar beds, Iceberg
+at 4.6 / 1.8), the Forge entry, ArenaMode's whitelist pin (0.5.0; advisory only) and no ArenaMode announcement of Chop Shop before this ships. Nothing is cut, scanned, uploaded, tagged or pushed.
 
 **2026-11-07: 0.5.0 PUBLISHED** (Pixeldrain list https://pixeldrain.com/l/VHbxKwMB, ZIP https://pixeldrain.com/u/shfhQhBF, checksum https://pixeldrain.com/u/mJEWfZS3; tag `v0.5.0` on the publication commit, `main` fast-forwarded to it, GitHub release with the notes and the `.sha256` asset; prepared the same day (user decisions "0.5.0, Iceberg kommt rein, keys sind gesichert"; record
 [release-preparation-20261107.md](docs/progress/release-preparation-20261107.md)): the first release with Iceberg, the crowd reactions and the roar layer. Build

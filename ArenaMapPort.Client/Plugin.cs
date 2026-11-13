@@ -27,7 +27,7 @@ namespace ArenaMapPort.Client
     {
         public const string PluginGuid = "com.maschine.ArenaMapPort";
         public const string PluginName = "maschine-ArenaMapPort";
-        public const string PluginVersion = "0.5.0";
+        public const string PluginVersion = "0.6.0";
 
         public static ManualLogSource Log { get; private set; }
 

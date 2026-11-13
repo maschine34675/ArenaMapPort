@@ -20,6 +20,7 @@ dated state in one screen; read it before this index if you only have a minute.
 - [iceberg-dynamicmaps.md](iceberg-dynamicmaps.md) — Iceberg overview from the connected native routes, owned package integration, scoped deployment and GPU-2 marker/heading acceptance on 2026-10-31.
 
 - [release-preparation-20261029.md](release-preparation-20261029.md) — current 0.4.0 release notes,
+- [release-preparation-20261113.md](release-preparation-20261113.md) - **0.6.0 preparation (2026-11-13, NOT published)**: version bump to 0.6.0, the texts (CHANGELOG, release note with placeholders, README, FORGE, dist-manifest, packer texts), the readiness table (DONE / TO DO AT PUBLICATION / USER / RISK) and the open verification items; nothing cut, scanned, uploaded, tagged or pushed.
 - [release-preparation-20261107.md](release-preparation-20261107.md) - **0.5.0 preparation (2026-11-07)**: the commits (`8a407cf`, `f6fb5cb`, the merge `a18ecd7` with the Uninstall.exe tolerance), the gates before and after the merge, the host run on GPU-2 (five maps, Iceberg with a 20 s gate hold, an extraction at the West Gate and a Medium-bots raid, the hideout, 0 warnings), the cut (`maschine-ArenaMapPort-0.5.0.zip`, 5,370,649,086 B, extract-check and verify-only OK) and the VirusTotal scan (0/75 both DLLs); publication pending the user's go.
   five-part GitHub package plan, final rebuild/authentication requirements and explicit audio limits.
   Superseded in part by the 2026-10-29 evening fixes (`8941caa`, `52c8a28`): the release audit (no blocker), the crowd worker,
@@ -633,6 +634,7 @@ successor instead unless you're specifically investigating that cycle's history.
 | Why is there a short noise on Equator, and how is it recorded? | `equator-noise-bundle-block.md` (the cause: a compressed-flag UnityFS block played raw; the repair, the validator and the host recipe); `spectator-audio.md` ("NoiseProbe diagnostic (2026-10-29)" for the probe that recorded it, "Investigation 2026-10-29 (lead): ranked hypotheses" for the hypotheses it superseded) |
 | How do I know a built bundle has no block that Unity plays raw? | `equator-noise-bundle-block.md` sections 3, 4 and 7: `tools/validate/validate_bundle_blocks.py` (also run by `validate_distribution.py`), the repair `tools/bundle/fix_stored_blocks.py`; never ship a bundle without the validator |
 | Can 0.4.0 be published, and which package is host-verified? | `HANDOFF.md` (top two blocks); `release-preparation-20261029.md` ("Release audit, fixes and the corrected candidate" and "The 52c8a28 state: host run and the candidate"); `release-sweep-20261029.md` ("Correction after the release audit") |
+| What does the unpublished 0.6.0 still need? | `release-preparation-20261113.md` (readiness table, open items); `HANDOFF.md` (top block); `AGENTS.md` "Release configuration" (first paragraph) |
 
 ## Added 2026-09-20 — distribution repair and ArenaMode acceptance
 

@@ -754,6 +754,8 @@ class BuildTests(FakeRepoCase):
         self.assertIn("Included locations: Equator, Bay5, Air Pit.", readme)
         self.assertEqual(release.prose_name("AirPit"), "Air Pit")
         self.assertEqual(release.prose_name("Bowl"), "Bowl")
+        # Chop Shop's registry display is "AutoService"; every player text uses the in-game name.
+        self.assertEqual(release.prose_name("AutoService"), "Chop Shop")
         self.assertEqual(release.MapRelease("arena_airpit", "airpit", "AirPit").display, "AirPit")
 
     def test_the_multi_part_readme_tells_a_0_3_0_player_to_delete_the_old_single_zip_manifest(self):
@@ -2651,6 +2653,11 @@ class RealRepoTests(unittest.TestCase):
         sources = json.loads((REPO / "tools/bundle/key-sources.json").read_text(encoding="utf-8"))
         self.assertEqual(release.KEYS_BUILT_FOR, sources["arena_build"])
         self.assertIn(f"built for Arena {release.KEYS_BUILT_FOR}", release.ENCRYPTION_TEXT)
+        # 0.6.0: six maps; the 0.6.0 check stays four maps; Chop Shop's wrap is 0.6.2 and its checks are named.
+        self.assertIn("for all six maps", release.ENCRYPTION_TEXT)
+        self.assertNotIn("all five maps", release.ENCRYPTION_TEXT)
+        self.assertIn("Iceberg and Chop Shop", release.ENCRYPTION_TEXT)
+        self.assertIn("0.6.2.0.48598", release.ENCRYPTION_TEXT)
         spec = release.load_spec(REPO)
         for name in ("README.md", "FORGE.md", f"docs/releases/v{spec.version}.md"):
             text = (REPO / name).read_text(encoding="utf-8")

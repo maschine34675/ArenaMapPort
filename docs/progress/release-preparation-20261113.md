@@ -1,0 +1,95 @@
+# Release 0.6.0 preparation - 2026-11-13
+
+The first release with Chop Shop (the sixth map). The user's words of 2026-11-13: "denke das passt alles, fehlt noch was fuer die veroeffentlichung? ansonsten
+schonmal version erhoehen und docs aktualisieren". This record holds what the preparation step wrote and the readiness state. **Nothing is published:** no cut, no VirusTotal
+scan, no upload, no tag, no merge, no push, no GitHub call; the release date is unknown and publication waits for the user's explicit go. The number 0.6.0 is the lead's choice
+by the project's pattern (a new map is a minor version, as 0.3.0 Bowl and 0.5.0 Iceberg); the user named no number and can still change it, in which case the version
+strings, the file names `docs/releases/v0.6.0.md` and `work/releases/0.6.0/...` and the README links move together. The release form stays one whole ZIP on Pixeldrain plus a GitHub release
+with the notes and the checksum file (as 0.4.0 and 0.5.0) unless the user says otherwise.
+
+## Baseline
+
+HEAD `86d8b71` on `feature/autoservice` (tree clean at the start), 67 commits since the tag `v0.5.0` (`273a068`); `main` = `origin/main` = `52d0a4d` is an ancestor of HEAD (63 commits ahead, none behind, so `main`
+fast-forwards). Recorded gates on `160523d` (`86d8b71` only added records): .NET 3,300 of 3,300, Python 3,262 tests OK (68 skipped), `validate_map_descriptors.py` OK (14 descriptors),
+`DISTRIBUTION_OK 6 maps 18 bundles 6 sidecars encrypted`. The staged dist is complete: 396 files, 6 maps x 3 bundles, 6 key files, 6 shader sidecars.
+`make_release_zips.py --single --plan`: 396 files (+4 generated), raw 6,378,924,543 B (6,083.4 MiB), estimated ZIP 6,348,651,635 B (about 5.9 GiB; 0.5.0: 5,370,649,086 B, 359 files), parts core 242,
+equator 24, bay5 30, airpit 22, bowl 26, iceberg 27, autoservice 25.
+
+## What was bumped and written in this step (no commit, no build)
+
+- **Version 0.6.0:** `ArenaMapPort.Client.csproj`, `ArenaMapPort.Server.csproj`, `Plugin.PluginVersion`, `ModMetadata`; the stale-control literal of `tools/tests/test_dll_versions.py` (`'0.5.0'` to `'0.6.0'`).
+  The staged DLLs in `dist/` still carry 0.5.0: `test_dll_versions` and `validate_dll_versions.ps1` stay red until the client (Release, without DllOnly) and the server are rebuilt. History mentions of 0.5.0 stay.
+- **Texts:** `CHANGELOG.md` (0.6.0 headed "unreleased", the date and links come at publication; `test_changelog` allows that form on the newest section only), `docs/releases/v0.6.0.md` (placeholders, see below), `README.md`, `FORGE.md`,
+  `docs/dist-manifest.md` (section "Release 0.6.0 contract" and the two stale 2026-11-11 "pending" statements marked as superseded), AGENTS.md ("Release configuration" first paragraph and one status sentence in the introduction),
+  HANDOFF.md (top block), `docs/progress/INDEX.md`.
+- **Packer texts** (`tools/release/make_release_zips.py`): `PROSE_NAMES` maps the registry display "AutoService" to "Chop Shop" (the generated README.txt "Included locations" line would otherwise print AutoService), the crowd sentence lists
+  Chop Shop, the audio-limits paragraph says that the roar level, Chop Shop's mix, crowd and gate sounds are not listened to, the gate paragraph says that exits stand in the team start areas, `ENCRYPTION_TEXT` says six maps
+  and names Chop Shop's own checks and the maps without a 0.6.0 check. Pins added in `tools/tests/test_release_zips.py` (the Chop Shop prose name, "six maps", the 0.6.0 gap, the 0.6.2.0.48598 check).
+- **Per-map feature matrix used in every text:** crowd on Equator, Bay5, Air Pit, Bowl and Chop Shop (not Iceberg); per-light flares on Equator, Bay5, Bowl and Chop Shop (not Air Pit, Iceberg); DynamicMaps overview on five maps (not Chop Shop); native water on Bay5
+  and Iceberg; Chop Shop: no winter or snow set, summer only.
+
+## Readiness table
+
+| | Item |
+|---|---|
+| DONE | Staged dist complete (396 files, 18 bundles, 6 key files); code, bundles, deploy and GPU-2 host raids for all six maps (records of 2026-11-11 to 2026-11-13); recorded gates green on `160523d`; `main` fast-forwards; no stray branch carries unmerged work (`claude/cool-mclean-d3f849`, `claude/wonderful-hawking-613f6e`, `fix/spawngate-floor-probe` are ancestors of HEAD); the version bump and the texts above |
+| TO DO AT PUBLICATION (lead, on the user's go) | Client Release build WITHOUT DllOnly and server build at 0.6.0; .NET tests, Python suite, `validate_dll_versions.ps1`; `validate_distribution.py`, `validate_bundle_names.py`, `validate_port.py --map autoservice --distribution`; `verify-keys` against every Arena build at hand; deploy and a GPU-2 run of the exact build (all six maps, the hideout, 0 warnings, the Iceberg `[EmissionCap] ... cap=4.60 floor=1.80` line and the two re-seed lines); `make_release_zips.py --single --out work/releases/0.6.0/pixeldrain-<commit> --extract-check <empty dir>`, then `--verify-only`; `scan_virustotal.py --version 0.6.0` for both DLLs; `upload_pixeldrain.py` (dry run first; the ZIP is about 0.9 GiB larger than 0.5.0's, which Pixeldrain took); fill the placeholders of the note; publication commit; fast-forward `main`, tag `v0.6.0`, push; GitHub release with the note as body and the `.sha256` as its only asset; records say "published" |
+| USER | Confirm the number 0.6.0; back up `work/release-keys` off the VM (the new `arena_autoservice.key` of 2026-11-11: the user was asked to on that day and no record says it happened; losing it means `rotate-key`); listen and look (below); Forge entry; whether to delete 0.3.0 / 0.4.0 (decided to stay online so far); the stale v0.5.0 GitHub release body (HANDOFF's earlier next step, no record that it was done: it may still say ArenaMode has not adopted the contracts); the open options (more Player rows with sides All for Deathmatch variety; Equator South Gate to (0.5, 0.06, -41.65) to clear the elevator frames); ArenaMode: its whitelist row pins ArenaMapPort 0.5.0 (the check is advisory: a version difference gives a note, no refusal), the pin and its test follow after publication, and ArenaMode must not announce Chop Shop before this release ships |
+| RISK | (1) Key wording: Chop Shop's key file has one wrap, for 0.6.2.0.48473, while `KEYS_BUILT_FOR` (pinned equal to `tools/bundle/key-sources.json`) says 0.6.1.0.48206; the texts therefore say that Chop Shop's file is built for 0.6.2.0.48473 and was also checked on 0.6.1.0.48206 and 0.6.2.0.48598. The lead re-runs `verify-keys` on all three installs before the cut and decides whether to stage Chop Shop on 0.6.1 as well. (2) The one-time re-seeds (Iceberg 4.8/1.9 to 4.6/1.8, roar-bed volume 2.0 to 1.0) have unit tests and no host log. (3) The unverified spawn-row and exit items below. (4) Until the staged DLLs are rebuilt, the dist says 0.5.0. (5) A reader of the repo before this step would have seen dist-manifest and AGENTS call Chop Shop "pending / NOT built"; both are updated. (6) ArenaMode warns about the MapPort version on every session until its pin moves (a note only). |
+
+## Open verification items (stated as such in the release note)
+
+- Not listened to: Chop Shop's ambient mix (a computed start value, 3 dB, offset 0.2, range 3), its gate sounds and its crowd; the roar beds at -26 dBFS RMS (6 dB louder than 0.5.0); Iceberg's ambience, lamp loops and gate sounds (as in 0.5.0).
+- The one-time re-seeds (`iceberg-release.md` records "host check pending"; no `cap=4.60` line is quoted): the log lines of the moves were never captured (BepInEx logs them before UiBridge records). Lead's read of
+  GPU-2's configuration on 2026-11-13 (`uibridge_config`, build `160523d`): `Lighting (arena_iceberg) › EmissionCap = 4.6 (default 4.6 ...)`, `EmissionFloor = 1.8 (default 1.8 ...)`, `EmissionDefaultsRevision = 1 (default 0; Int32) · hidden,
+  protected`, `Spectators › ReactionBedVolume = 1 (default 1; 0–2; Single)`, `ReactionBedDefaultsRevision = 1 (default 0; Int32) · hidden, protected`. So both revision passes ran on that host and it plays with the new values (the Iceberg raids of
+  2026-11-12 included); whether its saved pair was exactly 4.8 / 1.9 before, that is whether a value actually MOVED there, cannot be read back.
+- Spawn rows and exits (`spawn-rows-and-pocket-exits.md`, "Unverified"): a respawn onto an in-box marker (Iceberg's Bear house (9)); Team Deathmatch on Chop Shop, Air Pit and Bay5 with the new exits; any Domination, Deathmatch, Zombies or
+  Tactical match with the new rows; the flares from across a map, at night or in rain, and their sound; bots spawning at each of the 39 new rows; walking to Chop Shop's west exit (teleport only).
+- Chop Shop item 15 (host iteration, still open in PLAN-AUTOSERVICE): the equator shutter's collider against its detail levels seen from the east shop, whether a player can climb the tribune decks, the rain-depth readback, a raid with ArenaMode run from this project, and the user's look
+  at the lamps. The selection marker at 743/428 was seen on GPU-2 on 2026-11-12 (`toggle "ARENA: CHOP SHOP" click 986,457 [849,441 275x32]` beside `"CUSTOMS" ... [696,415 163x33]`, screenshot
+  `analysis/screenshots/pocket-exits-20261112/selection-chopshop-743.png`; record `spawn-rows-and-pocket-exits.md`) and is pinned by the ink test. ArenaMode: the development build installed on GPU-2 offers ICEBERG and CHOP SHOP in its
+  menu (gpu-run, 2026-11-12: `catalog drift: menu offers ICEBERG, CHOP SHOP`), and ArenaMode's own notes (`D:/SPT41/Development/ArenaMode/artifacts/chop-shop-20261112`, read only) record its matches on Chop Shop with the earlier port build
+  `b7876d3`; none was run from here, and none with the appended rows and the moved exits.
+- Sun shadows: Iceberg checked at shadow quality Low and Ultra only; Medium, High and the evening hours not checked. Released 0.5.0 has the Iceberg cafe leak below Ultra.
+- Key checks: the 0.6.0.0.47752 check exists for the four maps of 0.4.0 only (not Iceberg, not Chop Shop); the sentence "the four older maps also open on 0.6.0" is not extended to them.
+
+## Decisions taken in this step for the user (the lead surfaces them)
+
+- 0.6.0 (see above); CHANGELOG headed "0.6.0 - unreleased" (the form `test_changelog` accepts without a date).
+- Wording of the limitations: "not listened to" for Chop Shop's mix, gates, crowd and the roar level; "checked on the test host's selection screen" for the marker (lead's correction: the first wording, "an ink test, not a screenshot",
+  missed the GPU-2 check of 2026-11-12); "not checked" for the unverified spawn and exit items; the Iceberg leak of 0.5.0 is named as such in the Fixed entry.
+- User judgements on record: "sieht ganz gut aus, die zuschauer fehlen aber noch oder?" (2026-11-11, after playing Chop Shop on GPU-2), "sieht gut aus." (2026-11-12, after the lead's report on the crowd, the marker at 870/428 and Air Pit's
+  board) and "denke das passt alles" (2026-11-13, after the lead's report on the spawn rows, the exits in the start areas and the marker at 743/428). What the author looked at or listened to himself before the last two is not recorded, so
+  the player texts quote none of them as an approval of a specific item.
+- The note leaves the contract of ArenaMode alone: the contracts are unchanged, "ArenaMode 0.4.0 and later has adopted" them as in the corrected 0.5.0 texts, and no promise about Chop Shop in ArenaMode or about lifting its Tactical refusal.
+- The developer-only items (doorway probe, `spawn_coverage.py`, `distant_shadow_census.py`) sit in CHANGELOG "Changed (internal)" and not in the release note's player text.
+
+## Placeholders left in `docs/releases/v0.6.0.md` (all set at publication)
+
+`<release-date>`, `<pixeldrain-list-link>`, `<zip-bytes>`, `<zip-gib>`, `<pixeldrain-zip-page-link>`, `<pixeldrain-zip-direct-link>`, `<zip-sha256>`, `<pixeldrain-checksum-link>`, `<build-commit>`, `<file-count>`, `<scan-date>`, `<virustotal-client>`,
+`<virustotal-client-result>`, `<virustotal-server>`, `<virustotal-server-result>`, `<final-gates>`, `<final-raids>`, and one `TBD-AT-PUBLICATION` paragraph note in "Verification and known limitations" (the development-state checks are replaced by those of the exact build).
+The checklist comment at the top lists them; grep the file for `<[a-z-]+>` and `TBD-AT-PUBLICATION` and delete the comment before publishing.
+
+## Not done in this step
+
+Client and server builds, the release cut, the extract-check, the VirusTotal scan, the upload, the GitHub release, the tag, the merge into `main`, any push, any deploy, any host run, any key check, any commit.
+
+## Lead's checks after the texts (2026-11-13)
+
+- **Key files, 18 of 18 OK** (`ArenaMapPort.BundleCrypt verify-keys`, the staged `keys/*.json`, read-only against three installations): the five
+  older maps `wrap 0 (built for 0.6.1.0.48206)` and Chop Shop `wrap 0 (built for 0.6.2.0.48473)` each `unlocks the store's content key against Arena`
+  0.6.2.0.48473 (this VM), 0.6.1.0.48206 (GPU-2, `\\192.168.178.109\C$\Battlestate Games\Escape from Tarkov Arena`) and 0.6.2.0.48598
+  (`\\MASCHINE11\Battlestate Games\Escape from Tarkov Arena`). So Chop Shop's one wrap is enough for the three builds at hand; no second wrap was staged.
+  Arena 0.6.0 was not checked (no installation of it is at hand).
+
+- **Build at 0.6.0** (the working tree of this step, before its commit): client Release WITHOUT DllOnly, so the staging ran for all six maps:
+  `OK stage arena_<map>: 3 bundles encrypted (0 written), key file keys/arena_<map>.json: wrap present for Arena 0.6.2.0.48473, 2 wrap(s) in the file
+  (unchanged)` for the five older maps and `1 wrap(s) in the file (unchanged)` for Chop Shop; server Release build; 0 warnings, 0 errors each. No bundle
+  and no key file changed: the release differs from the deployed state only in the two DLLs.
+- **Gates on that build:** `DLL_VERSIONS_OK 0.6.0 client/server source, project and staged binaries`; `DISTRIBUTION_OK 6 maps 18 bundles 6 sidecars
+  encrypted`; `make_release_zips.py --single --plan`: `total: 396 dist files, raw 6,378,924,543 B (6,083.4 MiB), estimated zip 6,348,651,925 B (6,054.5
+  MiB)`, `estimated single ZIP: 5.91 GiB`; Python `Ran 3262 tests in 1487.265s`, `OK (skipped=68)` (PYTHONUTF8=1); .NET 3,300 of 3,300
+  (`dotnet test ... -c Release`, run alone: the writer's 3,299 was the CNG throughput test under load).
+- These gates and the host run are repeated on the exact release build at publication (the publication commit changes the note's placeholders, and
+  the DLLs carry the commit).

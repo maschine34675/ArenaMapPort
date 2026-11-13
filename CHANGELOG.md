@@ -3,8 +3,100 @@
 All notable changes to ArenaMapPort, newest first. The file starts with 0.2.3. 0.1.0, 0.2.0, 0.2.1 and 0.2.2 were withdrawn, and 0.2.3 was deleted on 2026-11-07
 (their releases, tags and download files are gone); their notes stay under [docs/releases/](docs/releases/) for the record. 0.3.0 is the
 oldest version that is still downloadable.
-Dates are ISO dates. Each entry links its full release note (download links, checksums, install and upgrade steps),
+Dates are ISO dates (the newest entry may read "unreleased" while a version is prepared). Each entry links its full release note (download links, checksums, install and upgrade steps),
 and the settings text is in the [README](README.md).
+
+## 0.6.0 - unreleased
+
+Prepared on 2026-11-13, not published: the release date, the download links and the checksum are set at publication (see the placeholders in [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md)).
+
+Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
+
+### Added
+
+- **Chop Shop, the sixth map** (Arena's `Arena_AutoService`, "Arena: Chop Shop"): a garage hall with a walled street yard, with Arena's
+  TeamFight layout (a team pocket at each end, one capture point, four moving gates), Arena's own scenes, materials and colliders, a
+  newly baked NavMesh for bots, Arena's room acoustics (7 rooms) and ambient sounds (the summer set; the winter-only loops are not
+  ported), two exits, original per-light flares (8 gas lamps), Arena's gate and door sounds for its four gates (released by a mode
+  plugin), the ScoreMonitors rows (4 of 4 TV holders with a face), Arena's own spectator crowd (30 fans with calls, murmur and reactions),
+  loading screens, a menu banner, an official description and a selection marker on the region map. Time of day and weather follow the
+  server, as on Bay5. No loot and no scav raids. **Chop Shop has no DynamicMaps overview, no native water and no winter or snow look.**
+  The sound mix of its ambience is a computed start value that nobody has listened to, and nobody has listened to its gate sounds or its
+  crowd either.
+- **More Bot spawn rows on all six maps** (Chop Shop 16, Equator 16, Bay5 16, Iceberg 17, Air Pit 20, Bowl 21; 39 rows appended, the
+  Player rows stay at 4 per map). Existing rows are byte for byte unchanged (ArenaMode compiles six of them in by id and coordinates). The
+  rows widen the pool a mode plugin can place bots and pickups from; ArenaMode's Team Deathmatch and Domination use their own points.
+  The developer tool `tools/validate/spawn_coverage.py` measures them.
+- **Exits stand inside the team start areas, with their green flares** (every map; Equator's already did). A player in a plain raid now
+  spawns a few metres from an 8-second exit; Air Pit's north gate cannot be reached in a plain raid until a mode plugin releases its
+  passport gates. Bots never trigger exits; in the two ArenaMode Team Deathmatch runs on Bowl and Iceberg, ArenaMode hid the extraction and nobody
+  extracted. Exit names are unchanged.
+
+### Changed
+
+- **The roar beds are exported 6 dB louder** (-26 dBFS RMS instead of -32) and the developer key `Spectators/ReactionBedVolume` is back at
+  1.0. A saved 2.0 moves once to 1.0 (hidden revision key `Spectators/ReactionBedDefaultsRevision`); any other value stays. **This
+  level has not been listened to.**
+- **Iceberg's lamp limits are 4.6 (ceiling) and 1.8 (floor)** instead of 4.8 and 1.9 (the author's change of 7 November, by eye). A saved
+  4.8 / 1.9 pair moves once; a tuned pair stays (hidden revision key `Lighting (arena_iceberg)/EmissionDefaultsRevision`). The test
+  host's configuration reads 4.6 / 1.8 with the revision key at 1; the log line of the one-time move was not captured.
+- **Air Pit package v10:** a floating board above two crates is left out; the crates stay. Two of Air Pit's bundles differ from 0.5.0's,
+  so the ZIP overwrites them.
+- **Chop Shop's crowd textures join the shared set** (123 to 135 images, 12 new). The five crowd graphs and the shared texture manifest
+  ship together; extract the whole ZIP, never a part of it.
+- **DynamicMaps overviews:** the exit markers of Bay5, Air Pit, Bowl and Iceberg moved with the exits. Chop Shop has no overview.
+- The ZIP grows to about 5.9 GiB (396 files; 0.5.0: about 5.0 GiB, 359 files).
+
+### Fixed
+
+- **Sunlight on far walls beyond the shadow distance.** Unity's sun shadows end at the shadow distance, and beyond it EFT keeps the
+  sun out only with proxies that belong to a level-of-detail group. Chop Shop's hall (58 x 48 m) is wider than that distance and showed a
+  sunlit patch with a curved edge on its far walls that followed the view; its two shadow hulls are now enrolled and the patch is gone
+  (the author reported the patch; checked on the test host with a live on/off control). Iceberg's cafe
+  had the same leak at lower shadow qualities: with shadow quality Low, low morning sun through the cafe's east glazing lit the lobby
+  behind it, and 0.5.0 has that leak below the Ultra setting; the cafe's three shells are now enrolled (checked on the test host at Low
+  and at Ultra). Medium, High and evening hours were not checked. New developer keys `Lighting (arena_autoservice)/RoofDistantShadows`
+  and `Lighting (arena_iceberg)/RoofDistantShadows` (default on; Equator's key is unchanged).
+
+### Changed (internal)
+
+- New developer tools `tools/validate/spawn_coverage.py` (spawn rows against ArenaMode's 25 m rule, exit placement rules R1 to R5) and
+  `tools/validate/distant_shadow_census.py` (which shadow proxies are unreferenced by a level-of-detail group), with tests.
+- The gate-doorway probe of `SpawnGates` measures 0.5 m above a gate's bottom and counts a missing NavMesh as inconclusive (Debug verdicts
+  only; no gameplay change). Equator's roof-shadow repair became the descriptor-driven `RoofShadowRepairs`.
+- The version is 0.6.0 in both project files, `Plugin.PluginVersion` and `ModMetadata`.
+
+### Known limitations
+
+- Chop Shop: raids on the test host with and without bots and the hideout afterwards, no ArenaMapPort warning; not listened to: its
+  ambient mix (computed start values), its gate sounds, its crowd and the louder roar beds; not checked: whether a player can climb the
+  tribune decks above the hall, the rain-depth readback, the equator shutter's collider against its detail levels seen from the east
+  shop, a raid with ArenaMode from this project, and which faction starts at which end (copied from Bowl). The selection marker was moved
+  twice at the author's request and checked on the test host's selection screen. No winter set (the author's decision: summer is enough).
+- The appended spawn rows and moved exits ran in plain raids on all six maps (no warning, every marker on the NavMesh) and in two ArenaMode
+  Team Deathmatch runs (Bowl and Iceberg). **Not checked:** a respawn that lands on an in-box marker; Team Deathmatch on Chop Shop, Air Pit
+  and Bay5 with the new exits; any Domination, Deathmatch, Zombies or Tactical match with the new rows; the flares from across a map, at
+  night or in rain, and their sound; bots spawning at each of the 39 new rows; walking to Chop Shop's west exit (reached by teleport only).
+  Iceberg's two exit boxes contain stage markers, so a first spawn can stand 1.6 m from the flare and be tinted green.
+- Iceberg: the one-time re-seeds of the lamp limits and the roar-bed volume have unit tests; on the test host both revision keys read 1
+  and the values 4.6 / 1.8 and 1.0, but the log lines of the moves were not captured.
+  The 0.5.0 limits that remain: its ambient sounds, lamp loops and gate sounds were not listened to; no crowd and no per-light flares.
+- Gate and door sounds were checked in the log only and have not been listened to on any map; the exit lamps were checked by reading their
+  state; Equator's puddle cache and the rain-driven puddles are unchecked; EFT's sound bundle has no impact sounds for Books and CardBoard
+  props; Fika compatibility has not been verified.
+- Spectator crowds exist on five of the six maps (not Iceberg); lamp flares on Equator, Bay5, Bowl and Chop Shop; overviews for all but
+  Chop Shop. No loot and no scav raids.
+
+### Compatibility
+
+- SPT 4.1.6 / EFT 0.16.9.5-40743; server range remains `~4.1.5`.
+- One ZIP on Pixeldrain, as for 0.3.0, 0.4.0 and 0.5.0 (too large for a GitHub release asset; the GitHub release carries the notes, the
+  links and the checksum file). Close EFT and the SPT server and extract the whole ZIP over the installation; keep `BepInEx/config`. There
+  is no DLL-only package. From 0.5.0 the ZIP replaces both DLLs, adds Chop Shop's files and replaces the crowd graphs and the shared
+  texture manifest together. No configuration changes and no new player settings.
+- Requires an installed Escape from Tarkov: Arena (the check is a requirement, not copy protection). Both client and server must be
+  updated together: the 0.5.0 server cannot read the five-entry official map text pack. The ArenaMode contracts (`SpectatorCrowd`,
+  `ScoreMonitors`, the gate done signal) are unchanged.
 
 ## 0.5.0 - 2026-11-07
 

@@ -6,9 +6,9 @@ dist/ holds two install roots, `BepInEx/plugins/maschine-ArenaMapPort/...` (clie
 
 Two layouts, one classification, one verifier:
 
-  --single   (the release form the user chose for 0.3.0, 0.4.0 and 0.5.0; about 3.4 GiB with the four encrypted maps of
+  --single   (the release form the user chose for 0.3.0, 0.4.0 and 0.5.0, and the form prepared for 0.6.0; about 3.4 GiB with the four encrypted maps of
               0.3.0, about 3.6 GiB for 0.4.0 with the spectators, about 5.0 GiB for 0.5.0 with Iceberg and the crowd
-              reactions (359 files); hosted on Pixeldrain, not GitHub)
+              reactions (359 files), about 5.9 GiB for 0.6.0 with Chop Shop (396 files); hosted on Pixeldrain, not GitHub)
       maschine-ArenaMapPort-<version>.zip     EVERY dist file, the generated README.txt and
                                               THIRD-PARTY-NOTICES.txt entries, and the manifest
                                               BepInEx/plugins/maschine-ArenaMapPort/parts/full.json
@@ -675,16 +675,19 @@ KEYS_BUILT_FOR = "0.6.1.0.48206"
 
 # The encrypted bundles (stage 2, docs/PLAN-ENCRYPTION.md, key source of section 6). The same four statements as README.md and
 # the release notes: encrypted with a key derived from the player's Arena files, not copy protection, art and audio stay
-# plaintext, and the build the keys are built for (the 0.6.2 build checked for all five maps, and the 0.6.0 build checked for the four
-# maps of 0.4.0 only: its resource files are identical there; no check of Iceberg on 0.6.0 exists).
+# plaintext, and the build the keys are built for (the 0.6.2 build checked for all six maps, and the 0.6.0 build checked for the four
+# maps of 0.4.0 only: its resource files are identical there; no check of Iceberg or Chop Shop on 0.6.0 exists). Chop Shop's key
+# file carries a wrap for 0.6.2.0.48473 only; it was also checked on 0.6.1.0.48206 and on the newer hotfix 0.6.2.0.48598.
 ENCRYPTION_TEXT = (
     "Encrypted bundles: the map bundles in bundles/ (scenes, materials, textures, NavMesh) are encrypted with a key\n"
     "that your PC derives from the Arena resource files each map is built from (the texture and mesh data of its\n"
     "scenes; a fixed sample of a few MB is read when the map is first used and never sent anywhere; keys/<map>.json\n"
     "lists the files by path and size only). They work only next to your own Arena files. The keys in this release\n"
-    f"are built for Arena {KEYS_BUILT_FOR} and were checked against 0.6.2.0.48473 for all five maps; the four maps\n"
-    "of 0.4.0 were also checked against 0.6.0.0.47752, whose resource files are identical (your\n"
-    "build is in the client log at startup, \"Arena: found ...\"); if an Arena update changes a map's resource files,\n"
+    f"are built for Arena {KEYS_BUILT_FOR} and were checked against 0.6.2.0.48473 for all six maps (Chop Shop's key\n"
+    "file is built for 0.6.2.0.48473 and was also checked on 0.6.1.0.48206; 0.6.2.0.48598 was checked as well); the four\n"
+    "maps of 0.4.0 were also checked against 0.6.0.0.47752, whose resource files are identical (Iceberg and Chop Shop\n"
+    "were not checked there; your build is in the client log at startup, \"Arena: found ...\"); if an Arena\n"
+    "update changes a map's resource files,\n"
     "that map does not load (the client log names the cause) until an updated ArenaMapPort package carries the key\n"
     "for your build, and the other maps keep working. This is a requirement, not copy protection: anyone who owns\n"
     "Arena can derive the key. Loading screens, banners, audio, overview maps and map descriptions are not encrypted.\n\n"
@@ -693,7 +696,7 @@ ENCRYPTION_TEXT = (
 
 # The game's own spelling of a map in prose. MapRelease.display is a folder name (DynamicMaps' ArenaMapPort_AirPit) and stays
 # as it is; every sentence of the generated README.txt says "Air Pit", like README.md, the release notes and the in-game name.
-PROSE_NAMES = {"AirPit": "Air Pit"}
+PROSE_NAMES = {"AirPit": "Air Pit", "AutoService": "Chop Shop"}
 
 
 def prose_name(display: str) -> str:
@@ -773,13 +776,15 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "Known audio limits: the intermittent Equator static of 0.3.0 was fixed in 0.4.0 (a bundle block flagged\n"
             "as compressed but stored uncompressed; measured on the test host and confirmed by the author in play).\n"
             "A faint steady hiss and short clicks seen in one recording are not explained by it.\n"
-            "The spectator crowds of Equator, Bay5, Air Pit and Bowl play their calls and murmur in a plain raid;\n"
+            "The spectator crowds of Equator, Bay5, Air Pit, Bowl and Chop Shop play their calls and murmur in a plain raid;\n"
             "Iceberg has no crowd. The crowd reactions (70 original fan clips) and the roar beds that answer them\n"
             "sound only when a mode plugin such as ArenaMode asks for them through the SpectatorCrowd contract;\n"
             "ArenaMode 0.4.0 and later uses it and drives them from its match events, so a plain raid without a mode never plays them. The author listened to the\n"
             "developer demo cycle (reaction voices with the roar beds) on 7 November 2026 and said it sounds good;\n"
-            "that is not a clip-by-clip review of the 70 clips, and nothing was heard in a real match. Iceberg's\n"
-            "ambient mix uses provisional start values.\n"
+            "that is not a clip-by-clip review of the 70 clips, and nothing was heard in a real match. The roar beds\n"
+            "are exported 6 dB louder than in 0.5.0 (since 0.6.0); that level has not been listened to. The ambient mixes of Iceberg and\n"
+            "Chop Shop use provisional start values (Chop Shop's was computed, not heard), and Chop Shop's crowd and gate\n"
+            "sounds have not been listened to either. Chop Shop has no DynamicMaps overview and no winter look.\n"
             "The game's own sound bundle has no impact sounds for the Books and CardBoard prop types, so 39 Equator\n"
             "props (shoes, books, blue cups, a road cone, pizza boxes and office folders) stay silent when they hit\n"
             "something.\n"
@@ -787,7 +792,10 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "has them, its motions (at half their time). They stand open from raid start, or a mode plugin such as\n"
             "ArenaMode holds them closed and opens them when the fight starts; Air Pit's passport control stays\n"
             "shut until a mode plugin opens it. A few doors that Arena itself never moves (three warehouse\n"
-            "rollers on Bay5, the FCK shop's roller shutter on Equator) stay shut.\n\n"
+            "rollers on Bay5, the FCK shop's roller shutter on Equator) stay shut. The exits stand inside the team start\n"
+            "areas, so a player in a plain raid spawns a few metres from one (an exit extracts you after 8 seconds if you\n"
+            "stand in it; in the two ArenaMode Team Deathmatch runs on Bowl and Iceberg ArenaMode hid the extraction and nobody\n"
+            "extracted). Air Pit's north gate cannot be reached in a plain raid until a mode plugin opens the passport gates.\n\n"
             "Optional DynamicMaps integration: overview map data lives in this plugin's own dynamicmaps\n"
             "folder and is registered automatically when DynamicMaps is installed.\n\n"
             "Settings: F12 exposes NaturalEquatorNight for a natural Equator midnight look on the next\n"
