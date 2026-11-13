@@ -93,3 +93,17 @@ Client and server builds, the release cut, the extract-check, the VirusTotal sca
   (`dotnet test ... -c Release`, run alone: the writer's 3,299 was the CNG throughput test under load).
 - These gates and the host run are repeated on the exact release build at publication (the publication commit changes the note's placeholders, and
   the DLLs carry the commit).
+
+## Commit, rebuild and the deploy that did not reach GPU-2 (2026-11-13, 21:10-21:25)
+
+- The preparation is commit `08369fc`. Both DLLs were rebuilt from it (client Release with DllOnly, server Release; `DLL_VERSIONS_OK 0.6.0 client/server
+  source, project and staged binaries`) and deployed to the mirror: dry run `0 new, 2 to overwrite, 394 already identical` (the two DLLs), then
+  `[deploy-to-spt] OK -- 396 file(s) copied into D:\SPT41`.
+- **GPU-2 does not hold them.** `gpu-run status`: `server not running · game not running` (somebody closed both since the control raid of 00:41);
+  `deploy-wait`: `2 of 24 file(s) are not identical on the host after 180.1 s` (both DLLs, `hash differs`; the host's server DLL is still the 00:35 file of
+  build `160523d`). The VM's Syncthing reports the device SPT-GPU-2 connected and its side of the folder `D:\SPT41` as `remoteState=paused` with
+  31,468 items / 12.1 GB outstanding: the folder is paused ON the host. That is the host's own setting and was not touched from here (hard rule: no
+  host configuration edits). GPU-2 therefore still has the `160523d` DLLs (version string 0.5.0) on disk; the 0.6.0 DLLs arrive when the folder is
+  resumed there.
+- **Not host-run:** the 0.6.0 DLLs (the change against `160523d` is the version string in four places; no logic changed). The host run of all six maps
+  and the hideout on the exact release build is a publication step anyway.
