@@ -632,10 +632,11 @@ much sobald man mit vollautomatik schießt". ("Hall" is the German word for reve
   climbs towards a steady state that grows with the decay time, while a single shot only shows its own tail. The old Hall table (Concrete
   walls and ceiling) decays over 5 to 7 s (below), so a burst keeps building for seconds and rings on after it. This reading is inferred
   from the code and the measurement; nobody recorded a burst.
-- The player's own gun uses the loudest route: first person switches the queue to stereo, and the two reverb-only helper sources of
-  `ReverbSuperSource.PlayScheduled` take the Gunshots stereo settings (reverb send 0 dB against -6 dB on the mono route, SPT's
-  `MetaXRAudioPluginSettings`). The probe's route line of this session: `pulse route bus=GunshotsFirstPerson source=ReverbSuperSource
-  spatialized=False acoustics=True reverbSendDb=-6.0 helperSources=True`.
+- The player's own gun presumably uses the loudest route (the third-person route was not measured today): first person switches the
+  queue to stereo, and the two reverb-only helper sources of `ReverbSuperSource.PlayScheduled` take the group's stereo settings, which
+  SPT's `settings.json` (`MetaXRAudioPluginSettings`, group Gunshots) gives as reverb send 0 dB against -6 dB for mono. The probe's route
+  line of this session, `pulse route bus=GunshotsFirstPerson source=ReverbSuperSource spatialized=False acoustics=True reverbSendDb=-6.0
+  helperSources=True`, shows the main source's own value, not the helpers'.
 
 ### Correction to the sections above: the probe logs amplitudes, not energies
 
@@ -693,11 +694,12 @@ Reading:
 - Equator's hall is louder than Air Pit's under the same table (early +3.0 dB, late +1.8 dB): its box is lower (24.7 m against 43.2 m).
   A smaller box is LOUDER (cap 30: +5.9 dB in both windows), so the size cap is no lever for "weaker".
 - With the feature off the tail is at the noise floor: the ported maps have no gunshot reverb at all without the shoebox.
-- The two levers act differently. A single-exponential read of the two windows (`E(t) = E0 exp(-kt)` fitted to the window means; a crude
-  model, the first 0.35 s are extrapolated) gives a decay time of 7.0 s (Air Pit) and 5.4 s (Equator) for the old table, 4.8 s and 4.1 s
-  with the AcousticTile ceiling, and 6 to 7 s again with clutter alone (Air Pit Concrete 0.8: 7.4 s; Equator Concrete 0.6: 6.6 s): the
-  ceiling shortens the decay, clutter lowers the level and leaves the decay about where it was.
-- The same read gives the steady reverb level under a continuous feed (`E0 / k`, the automatic-fire case), in dB against the old table:
+- The two levers act differently. A single-exponential read of the two windows (`E(t) = E0 exp(-kt)` for the energy, the squared
+  amplitude, fitted to the window means; a crude model, the first 0.35 s are extrapolated, and nothing below it was measured as such) gives a decay time of 7.0 s (Air Pit) and 5.4 s (Equator) for the old table, 4.8 s and 4.1 s
+  with the AcousticTile ceiling, and no shorter decay with clutter alone (Air Pit Concrete 0.8: 7.4 s against 7.0 s; Equator Concrete 0.6: 6.6 s against 5.4 s, a
+  difference the two-window fit cannot be trusted with): the ceiling shortens the decay, clutter lowers the level and does not shorten it.
+- The same read gives the steady reverb level under a continuous feed (`E0 / k`: the tails of an incoherent feed add in energy; the
+  automatic-fire case, modelled, no burst was recorded), in dB against the old table:
 
 | Hall ceiling, clutter | Air Pit: decay, build-up | Equator: decay, build-up |
 |---|---|---|
@@ -754,3 +756,59 @@ without a developer file simply gets the new code defaults.
   untested, and it would need the same restore discipline as the model (see the Meta XR trap in AGENTS.md). Not used.
 - Walls are the lever for a still shorter decay; no wall material was measured today.
 - Not measured: the third-person route (other shooters), an actual burst, the passport hall, and before the build the other maps' halls.
+
+### Host verification of the build (lead, GPU-2, 2026-11-14 10:16-10:25, client DLL of commit `7dba143`)
+
+Deploy: dry run `0 new, 1 to overwrite, 395 already identical` (the client DLL; the server DLL was not redeployed: its code is unchanged
+and a rebuilt file would have asked for a server restart, so the deployed `08369fc` server DLL was put back into `dist/`), then
+`[deploy-to-spt] OK -- 396 file(s) copied into D:\SPT41`, `deploy-wait: 2 file(s) identical on the host after 14.1 s`, `gpu-run restart`:
+`ok 74 s ... 16/16 identical`. One EFT process (started 10:16:09), three plain PMC raids with bots None and the hideout:
+
+- **The re-seed ran once** (the BepInEx log file, before UiBridge records): `10:16:08.304 [Debug maschine-ArenaMapPort] [ShotAcoustics]
+  config re-seeded to hall defaults revision 1 (2 value(s) moved; hall=Concrete/AcousticTile/CeramicTile clutter=0.6)`. The host's
+  configuration afterwards (`uibridge_config`): `HallCeiling = AcousticTile (default AcousticTile ...)`, `HallClutter = 0.6 (default 0.6;
+  0–1; Single)`, `HallDefaultsRevision = 1 (default 0; Int32) · hidden, protected`, walls Concrete, floor CeramicTile, cap 50. GPU-2's
+  developer .cfg held the untouched old table, so this is the "moves" case; the "tuned table stays" case is unit-tested only.
+- **Old against new in the same raid** (same method and muting as above; "old" is the previous table set live with
+  `uibridge_config_set persist=false` and set back afterwards, "new" the shipped defaults):
+
+| Room | Table | tailEarly / tailLate per pulse (log time) |
+|---|---|---|
+| Air Pit `Main` (room 17, 50.0 x 43.2 x 50.0), at (-3.2, 0.0, -12.1) | new | 4.40e-4 / 2.00e-4 (10:17:42), 4.54e-4 / 2.01e-4 (10:17:48) |
+| | old | 9.39e-4 / 5.93e-4 (10:17:56) |
+| Equator `Main` (room 19, 50.0 x 24.7 x 50.0), at (0.0, 0.2, 2.0) | new | 5.86e-4 / 2.69e-4 (10:19:14), 6.04e-4 / 2.51e-4 (10:20:59), **8.33e-4 / 3.78e-4** (10:21:04), 5.92e-4 / 2.65e-4 (10:21:16) |
+| | old | **1.89e-3 / 1.02e-3** (10:19:22), **1.73e-3 / 1.00e-3** (10:19:34), 1.24e-3 / 6.62e-4 (10:20:16), 1.20e-3 / 7.16e-4 (10:20:23), 1.31e-3 / 7.19e-4 (10:20:28) |
+| Bay5 `SpawnBuilding1` (room 16, IndoorBrick, 44.0 x 9.6 x 21.6), at (40.0, -3.8, -3.4) | new | 1.18e-3 / 5.97e-4 (10:22:49), 1.16e-3 / 6.01e-4 (10:22:54), 1.11e-3 / 5.82e-4 (10:22:58) |
+| | old | 2.67e-3 / 2.32e-3 (10:23:07), **3.92e-3 / 3.20e-3** (10:23:12, baseline 5.5e-5: the previous tail still rings), 2.67e-3 / 2.25e-3 (10:23:19) |
+
+  Room lines: `arena_airpit: room=17/IndoorConcrete class=Hall dims=50.0x43.2x50.0 materials=Concrete,Concrete,AcousticTile,CeramicTile,
+  Concrete,Concrete clutter=0.60 model=ShoeboxRoom` (10:18:02), `arena_bay5: room=16/IndoorBrick class=Hall dims=44.0x9.6x21.6
+  materials=Concrete,Concrete,AcousticTile,CeramicTile,Concrete,Concrete clutter=0.60 model=ShoeboxRoom` (10:22:36).
+- **The probe reads in two groups.** The bold pulses are about 3 dB (a factor 1.4, a doubling of energy) above the others in both windows,
+  under either table (early / late: Equator old 3.1 / 3.1 dB, new 3.0 / 3.1 dB, Bay5 old 3.3 / 2.9 dB); five of the day's 41 pulses (four
+  of the 18 of this verification): three of Equator's nine old-table pulses, one of its six new-table pulses, one of Bay5's six, none of
+  Air Pit's 13, with clean baselines. The
+  row of 09:38:26 that the table above sets aside as "a background sound" was probably the same thing. The cause was not looked for (a guess: the
+  weapon queue's two reverb helper sources). Consequence for every table in this document: one pulse is not a measurement; take three or
+  more and compare the lower group with the lower group. Within a group the pulses agree within about 1.2 dB.
+- **Result** (means of the lower group, the morning's pulses of the same tables included; decay and build-up from the single-exponential
+  read):
+
+| Room | old early / late | new early / late | early | late | decay | automatic-fire build-up |
+|---|---|---|---|---|---|---|
+| Air Pit `Main` | 9.48e-4 / 5.69e-4 | 4.47e-4 / 2.00e-4 | -6.5 dB | -9.1 dB | 7.2 -> 4.4 s | -6.0 dB |
+| Equator `Main` | 1.30e-3 / 6.94e-4 | 5.92e-4 / 2.65e-4 | -6.8 dB | -8.4 dB | 5.8 -> 4.4 s | -6.4 dB |
+| Bay5 `SpawnBuilding1` | 2.67e-3 / 2.29e-3 | 1.15e-3 / 5.93e-4 | -7.3 dB | -11.7 dB | about 25 -> 5.5 s | -9.5 dB |
+
+  Equator's higher group gives the same differences (-7.0 / -8.4 dB). These means pool the morning's and the verification's pulses, so
+  the old-table decay reads 7.2 s and 5.8 s here against 7.0 s and 5.4 s in the "Reading" above, Equator's new decay 4.4 s against 4.5 s and
+  its build-up -6.4 dB against -6.8 dB: that is the scatter of the method, and "about 7 dB" in the decision paragraph is "about 6 dB" by
+  this table. Decay and build-up are modelled from the two windows; only the windows are measured. Bay5's spawn building, a low 44 x 22 m box that barely decayed under
+  the concrete ceiling, gains the most; it is the south team's start building.
+- **Acceptance of the client build:** `warnings 0; errors 0` for the Air Pit and Bay5 raids and `warnings 0 from mods, 4 Unity Log; errors
+  0` for Equator in gpu-run's raid lines, no ArenaMapPort line at Warning or above in the whole process, the hideout opened in 5.9 s
+  (10:24), `16 identical (VM build = host disk = loaded)`. All temporary values were set back (`persist=false`, nothing but the plugin's own
+  re-seed reached the host's .cfg).
+- **Not verified:** nobody has listened to the new table (the user's ear decides); an actual burst; the third-person route; the other five
+  Hall rooms (Equator `UpRoof`, Air Pit `Start1`, Bowl `FanZone`, Iceberg `coffe_2`, Chop Shop `MainRoom`), which get the same table by
+  the same code path; a developer file with a tuned hall table on a real install.

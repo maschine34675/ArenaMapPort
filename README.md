@@ -27,9 +27,9 @@ lamp flares; Air Pit and Iceberg do not. Bay5 includes its harbor background and
 water, and Iceberg its sea.
 
 Chop Shop is new in 0.6.0 (Arena's `Arena_AutoService`, shown in the game as "Arena: Chop Shop").
-Its ambient sound mix is a computed start value that the author kept after listening
-to the map on 14 November 2026 ("passt alles"; his statement covers the map as he played
-it and names no single item). It has no DynamicMaps overview, no native water and no
+Its ambient sound mix is a computed start value; the author listened to the map on
+14 November 2026 and asked for no change ("passt alles"; his statement covers the map
+as he played it and names no single item). It has no DynamicMaps overview, no native water and no
 winter set.
 
 Iceberg joined in 0.5.0. Its brightest lamps (the lobby crystal lamps and the
@@ -175,8 +175,8 @@ Per-room gunshot reverb (**RoomShotAcoustics**) is on by default on all six
 maps: shots ring differently in a big hall than in a small shop. Its room data is
 invented, because neither Escape from Tarkov nor Arena provides gunshot reverb
 values. Since 0.6.0 the reverb of the big halls (eight rooms, among them the main halls of
-Equator and Air Pit) is weaker: about 7 to 8 dB less tail on Equator's main hall,
-measured on the test host, but not yet listened to; shops and steel bodies are unchanged.
+Equator and Air Pit) is weaker: about 7 to 9 dB less tail in the main halls of Equator and
+Air Pit, measured on the test host, but not yet listened to; shops and steel bodies are unchanged.
 It can be switched off per map under `Audio (arena_equator)`,
 `Audio (arena_bay5)`, `Audio (arena_airpit)`, `Audio (arena_bowl)`, `Audio (arena_iceberg)` or `Audio (arena_autoservice)` with
 **General / DeveloperMode** enabled (enable it and restart EFT, the keys then appear in F12); switching it off

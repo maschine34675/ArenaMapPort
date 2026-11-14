@@ -37,6 +37,9 @@ equator 24, bay5 30, airpit 22, bowl 26, iceberg 27, autoservice 25.
 | USER | Confirm the number 0.6.0; back up `work/release-keys` off the VM (the new `arena_autoservice.key` of 2026-11-11: the user was asked to on that day and no record says it happened; losing it means `rotate-key`); listen and look (below); Forge entry; whether to delete 0.3.0 / 0.4.0 (decided to stay online so far); the stale v0.5.0 GitHub release body (HANDOFF's earlier next step, no record that it was done: it may still say ArenaMode has not adopted the contracts); the open options (more Player rows with sides All for Deathmatch variety; Equator South Gate to (0.5, 0.06, -41.65) to clear the elevator frames); ArenaMode: its whitelist row pins ArenaMapPort 0.5.0 (the check is advisory: a version difference gives a note, no refusal), the pin and its test follow after publication, and ArenaMode must not announce Chop Shop before this release ships |
 | RISK | (1) Key wording: Chop Shop's key file has one wrap, for 0.6.2.0.48473, while `KEYS_BUILT_FOR` (pinned equal to `tools/bundle/key-sources.json`) says 0.6.1.0.48206; the texts therefore say that Chop Shop's file is built for 0.6.2.0.48473 and was also checked on 0.6.1.0.48206 and 0.6.2.0.48598. The lead re-runs `verify-keys` on all three installs before the cut and decides whether to stage Chop Shop on 0.6.1 as well. (2) The one-time re-seeds (Iceberg 4.8/1.9 to 4.6/1.8, roar-bed volume 2.0 to 1.0) have unit tests and no host log. (3) The unverified spawn-row and exit items below. (4) Until the staged DLLs are rebuilt, the dist says 0.5.0. (5) A reader of the repo before this step would have seen dist-manifest and AGENTS call Chop Shop "pending / NOT built"; both are updated. (6) ArenaMode warns about the MapPort version on every session until its pin moves (a note only). |
 
+(2026-11-14: the USER row's key backup is done, Chop Shop was listened to by the author, and risk (4) is closed since the rebuild of
+2026-11-13 evening; see the last section of this record. The table and the list below are the state of 2026-11-13.)
+
 ## Open verification items (stated as such in the release note)
 
 - Not listened to: Chop Shop's ambient mix (a computed start value, 3 dB, offset 0.2, range 3), its gate sounds and its crowd; the roar beds at -26 dBFS RMS (6 dB louder than 0.5.0); Iceberg's ambience, lamp loops and gate sounds (as in 0.5.0).
@@ -107,3 +110,31 @@ Client and server builds, the release cut, the extract-check, the VirusTotal sca
   resumed there.
 - **Not host-run:** the 0.6.0 DLLs (the change against `160523d` is the version string in four places; no logic changed). The host run of all six maps
   and the hideout on the exact release build is a publication step anyway.
+
+## 2026-11-14: user statements, GPU-2 on the 0.6.0 DLLs, and the hall reverb change (still NOT published)
+
+User, 2026-11-14: "keys sind gesichert. chop shop habe ich mir angehört, passt alles. unseren hall sollten wir aber nochmal abschwächen,
+gerade auf Equator & Airpit in der Haupthalle ist der ein wenig too much sobald man mit vollautomatik schießt".
+
+- **Key backup: done (user).** "keys sind gesichert": the off-VM backup of `work/release-keys`, the USER item of the readiness table
+  (the `arena_autoservice.key` of 2026-11-11), is closed by the user's statement. Where the copy lies is not recorded here on purpose.
+- **Chop Shop listened to (user).** "chop shop habe ich mir angehört, passt alles": the author listened to the map and approves its sound.
+  The sentence names the map as a whole, no single item; the texts (CHANGELOG, release note, README, FORGE, the generated README.txt) say
+  exactly that, call the ambient mix a computed start value for which he asked no change, and keep the roar beds at -26 dBFS and Iceberg's items as not
+  listened to.
+- **GPU-2 runs the 0.6.0 DLLs.** The host's Syncthing folder was back on 2026-11-14 morning (completion 100 %, `remoteState=valid`);
+  `gpu-run start`: `16/16 identical` (build `08369fc`), an Air Pit raid `warnings 0; errors 0` and an Equator raid `warnings 0 from mods,
+  4 Unity Log; errors 0` at 09:34-09:48 (the reverb measurement of that morning). The "deploy that did not reach GPU-2" of 2026-11-13 is
+  resolved; the host run of all six maps and the hideout on the exact release build stays a publication step.
+- **Hall gunshot reverb weakened** (commit `7dba143`, record [shot-acoustics.md](shot-acoustics.md) "2026-11-14"): Hall ceiling
+  AcousticTile and clutter 0.6 with the once-only re-seed `ShotAcousticsLab/HallDefaultsRevision`. Client DLL rebuilt, deployed and
+  host-verified on GPU-2 at 10:16-10:25 (the re-seed line, old against new in Air Pit's and Equator's main halls and Bay5's spawn building:
+  about -7 dB early and -8 to -12 dB late, the hideout, 0 warnings). .NET 3,305 of 3,305 (five new tests). The change is one new item in
+  the 0.6.0 texts, stated as measured and not listened to. dist is unchanged in its file list (396 files); the client DLL differs from the
+  build of `08369fc`, the server DLL in `dist/` is the deployed one of `08369fc`.
+- **Gates on `7dba143`:** .NET `erfolgreich: 3305, gesamt: 3305`; Python `Ran 3262 tests in 1055.115s`, `OK (skipped=68)` (PYTHONUTF8=1, started after the commit;
+  `test_dll_versions` among them); after the later text edits of this step `test_changelog` (12) and `test_release_zips` (195) again, OK.
+  `validate_distribution.py` was not rerun (only the client DLL changed); it is a publication gate.
+- **Open now:** the user's ear on the weaker hall (live steps: `ShotAcousticsLab/HallClutter` 0.8 for less, 0.4 for more) and on the
+  roar beds; the user's go for the publication steps of the readiness table (cut, scan, upload, merge, tag, push), which rebuild both DLLs
+  and repeat the gates and the six-map host run; the Forge entry; ArenaMode's pin and announcement after the release.

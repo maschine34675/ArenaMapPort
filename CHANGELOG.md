@@ -21,7 +21,7 @@ Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
   plugin), the ScoreMonitors rows (4 of 4 TV holders with a face), Arena's own spectator crowd (30 fans with calls, murmur and reactions),
   loading screens, a menu banner, an official description and a selection marker on the region map. Time of day and weather follow the
   server, as on Bay5. No loot and no scav raids. **Chop Shop has no DynamicMaps overview, no native water and no winter or snow look.**
-  The sound mix of its ambience is a computed start value that the author kept after listening to the map on 14 November 2026 ("passt alles"; his
+  The sound mix of its ambience is a computed start value; the author listened to the map on 14 November 2026 and asked for no change ("passt alles"; his
   statement covers the map as he played it and names no single item).
 - **More Bot spawn rows on all six maps** (Chop Shop 16, Equator 16, Bay5 16, Iceberg 17, Air Pit 20, Bowl 21; 39 rows appended, the
   Player rows stay at 4 per map). Existing rows are byte for byte unchanged (ArenaMode compiles six of them in by id and coordinates). The
@@ -43,9 +43,10 @@ Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
 - **Gunshot reverb in the big halls is weaker.** The author found it "a little too much" in the main halls of Equator and Air Pit
   under full-automatic fire. The hall class (eight rooms: Equator's atrium and its 40 m service corridor, Air Pit's main hall and passport hall,
   Bay5's SpawnBuilding1, Bowl's fan zone, Iceberg's cafe room and Chop Shop's main room) now has an invented room table with an acoustic-tile
-  ceiling instead of concrete and more clutter (0.6 instead of 0.4). Measured with the developer reverb pulse on the test host in Equator's
-  main hall: the tail is about 7 dB lower in its first part (0.35 to 0.7 s) and about 8 dB lower later (0.7 to 1.5 s), sustained automatic fire
-  builds up about 7 dB less, and the decay time falls from about 5.4 s to 4.5 s. Shops and steel bodies are unchanged. A developer
+  ceiling instead of concrete and more clutter (0.6 instead of 0.4). Measured with the developer reverb pulse on the test host, old table
+  against new in the same raid, in the main halls of Equator and Air Pit: the tail is about 7 dB lower in its first part (0.35 to 0.7 s) and
+  8 to 9 dB lower later (0.7 to 1.5 s); read from those two windows, sustained automatic fire builds up about 6 dB less and the decay time
+  falls from about 6 to 7 s to about 4.5 s. Bay5's spawn building, the loudest of the three measured halls, falls by about 7 and 12 dB. Shops and steel bodies are unchanged. A developer
   configuration that still holds the untouched old hall table moves once to the new one (hidden revision key
   `ShotAcousticsLab/HallDefaultsRevision`); a tuned table stays. **This level is measured and has not been listened to.**
 - **Air Pit package v10:** a floating board above two crates is left out; the crates stay. Two of Air Pit's bundles differ from 0.5.0's,

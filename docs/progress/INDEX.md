@@ -192,6 +192,8 @@ dated state in one screen; read it before this index if you only have a minute.
   Audio shoebox room (class Hall/Shop/Metal/Outdoor), live `ShotAcousticsLab` tuning keys, the Gunshots probe buses
   and three GPU-2 measurement rounds (2026-10-15/16); on by default since 2026-10-16 (user decision after
   listening on all three maps). Bowl room classes (2026-10-18, offline; the log says what a host raid still has to show).
+  **2026-11-14:** the Hall table weakened after the user's "ein wenig too much" under full-auto fire (AcousticTile ceiling, clutter 0.6,
+  re-seed `HallDefaultsRevision`), measured on GPU-2 before and after (the probe logs amplitudes; some pulses read 3 dB high); not listened to.
 - [selection-map.md](selection-map.md) — original Arena region-selection artwork, native SPT alignment,
   screenshot-derived current/future map positions and GPU-1 menu validation (2026-10-13);
   Arena-only menu scope and PMC/Scav restoration (2026-10-15).

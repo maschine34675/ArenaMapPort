@@ -1,6 +1,20 @@
 # HANDOFF — dated working state
 
+## Hall gunshot reverb weakened, user statements - 2026-11-14 (0.6.0 still NOT published)
+
+**Request (user, 2026-11-14):** "keys sind gesichert. chop shop habe ich mir angehört, passt alles. unseren hall sollten wir aber nochmal abschwächen, gerade auf Equator & Airpit in der Haupthalle ist der ein wenig too much sobald man mit vollautomatik schießt".
+Records: [shot-acoustics.md](docs/progress/shot-acoustics.md) "2026-11-14" (measurement, decision, re-seed, host verification), [release-preparation-20261113.md](docs/progress/release-preparation-20261113.md) "2026-11-14".
+
+1. **Done:** Hall table of the per-room gunshot reverb = Concrete walls, AcousticTile ceiling (was Concrete), CeramicTile floor, clutter 0.6 (was 0.4); Shop and Metal unchanged; once-only re-seed `ShotAcousticsLab/HallDefaultsRevision` (exactly the untouched old table moves, as a set); commit `7dba143`; .NET 3,305; client DLL deployed.
+2. **Host-verified by measurement (GPU-2, 10:16-10:25):** the re-seed line (`2 value(s) moved`), old against new in the same raid: Air Pit `Main` -6.5 / -9.1 dB, Equator `Main` -6.8 / -8.4 dB, Bay5 `SpawnBuilding1` -7.3 / -11.7 dB (windows 0.35-0.7 s / 0.7-1.5 s), three raids and the hideout, 0 warnings. Modelled from those two windows (a single-exponential read, no burst was recorded): decay 7.2 / 5.8 / about 25 s -> about 4.4 to 5.5 s, automatic-fire build-up about -6 dB (-9.5 dB in Bay5's spawn building). **Nobody has listened to it.**
+3. **User:** listen (Equator and Air Pit main halls, full-auto). Live steps without a rebuild (DeveloperMode): `ShotAcousticsLab/HallClutter` 0.8 = weaker still (about -9 / -11 dB against the old table), 0.4 = back up (about -4 / -6 dB). Option not built: a burst-only trim of the reverb send (single shots keep more hall).
+4. **Closed by the user's statements:** the off-VM key backup; Chop Shop's sound ("passt alles"; the texts say the map as a whole, no single item).
+5. **Measuring trap found:** the reverb probe logs amplitudes (20 log10) and some pulses read 3 dB high (five of 41 that day); three or more pulses per state (AGENTS.md, Meta XR trap).
+6. **Publication:** unchanged, on the user's go (readiness table of the preparation record); the cut rebuilds both DLLs and repeats the gates and the six-map host run.
+
 ## 0.6.0 prepared: version and texts - 2026-11-13 (NOT published)
+
+(2026-11-14: items 3 and 4 below are closed in part, see the block above: the key backup is done and the author listened to Chop Shop; the staged DLLs are 0.6.0 since the evening of 2026-11-13.)
 
 **Request (user, 2026-11-13):** "denke das passt alles, fehlt noch was fuer die veroeffentlichung? ansonsten schonmal version erhoehen und docs aktualisieren". The number 0.6.0 is the lead's choice (a new map is a minor version, as 0.3.0 and 0.5.0); the user can change it.
 Record: [release-preparation-20261113.md](docs/progress/release-preparation-20261113.md) (readiness table DONE / TO DO AT PUBLICATION / USER / RISK, what was written, the open verification items).

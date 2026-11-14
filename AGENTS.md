@@ -102,7 +102,7 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 - Never delete `bin/` or `obj/` (an agent's `rm -rf` once hit an MCP proxy running from there). Let
   `dotnet` manage them.
 - BepInEx persists config values in the user's `.cfg`. Never change an existing key's default or meaning
-  silently: add a new key, or use the `DefaultsRevision` re-seed pattern in `WeatherRig.cs` (further examples: `Spectators/ReactionBedDefaultsRevision`, `Lighting (arena_iceberg)/EmissionDefaultsRevision`, both 2026-11-07).
+  silently: add a new key, or use the `DefaultsRevision` re-seed pattern in `WeatherRig.cs` (further examples: `Spectators/ReactionBedDefaultsRevision`, `Lighting (arena_iceberg)/EmissionDefaultsRevision`, both 2026-11-07; `ShotAcousticsLab/HallDefaultsRevision`, 2026-11-14, a whole table that moves as a set).
 - `D:\SPT41vanilla` (the user's own test bed, no SAIN) receives only host-verified builds via the same
   deploy script with `-SptRoot 'D:\SPT41vanilla'`; restarting its server is the user's job.
 - Never add a switch that disables the Arena installation check (`ArenaInstallation` in Shared; release/0.2.3, user
@@ -176,12 +176,13 @@ the roof/distant sun-shadow repairs (Chop Shop hall, Iceberg cafe), Air Pit pack
 of the build yet): version 0.6.0 in both csproj files, `Plugin.PluginVersion`, `ModMetadata` and the stale-control literal of `test_dll_versions.py`; CHANGELOG "0.6.0 - unreleased"; `docs/releases/v0.6.0.md` with placeholders
 (grep `<[a-z-]+>` and `TBD-AT-PUBLICATION`); README, FORGE, `docs/dist-manifest.md` ("Release 0.6.0 contract") and the generated README.txt / `ENCRYPTION_TEXT` of `make_release_zips.py` (six maps, `PROSE_NAMES` maps the registry's
 "AutoService" to "Chop Shop") with their pins. Plan: 396 files, estimated single ZIP 6,348,651,635 B (about 5.9 GiB), parts core 242, equator 24, bay5 30, airpit 22, bowl 26, iceberg 27, autoservice 25. **Open, in this order, on
-the user's go:** client Release build WITHOUT DllOnly and server build (the staged DLLs still say 0.5.0; `test_dll_versions` stays red until then), the gates, `validate_distribution.py`, `validate_bundle_names.py`,
+the user's go:** client Release build WITHOUT DllOnly and server build (the staged DLLs are 0.6.0 since 2026-11-13, `DLL_VERSIONS_OK 0.6.0`: the server DLL of `08369fc`, the client DLL a DllOnly build of `7dba143`; the release build is made again from the publication tree), the gates, `validate_distribution.py`, `validate_bundle_names.py`,
 `validate_port.py --map autoservice --distribution`, `verify-keys` on every Arena build at hand (Chop Shop's key file has ONE wrap, 0.6.2.0.48473; it was recorded OK on 0.6.1.0.48206, 0.6.2.0.48473 and 0.6.2.0.48598), deploy and
 a GPU-2 host run of all six maps and the hideout (include the Iceberg `[EmissionCap] ... cap=4.60 floor=1.80` line and the two re-seed lines), `make_release_zips.py --single --extract-check`, `--verify-only`, VirusTotal for both
 DLLs, `upload_pixeldrain.py` (dry run first), fill the placeholders, publication commit, fast-forward `main` (63 commits ahead, none behind), tag `v0.6.0`, push, GitHub release, refresh the stale body of the v0.5.0 release.
-User items: the off-VM backup of `work/release-keys` (the `arena_autoservice.key` of 2026-11-11 is new; no record says it was backed up), listening and looking (Chop Shop ambience, gates and crowd, the -26 dBFS roar beds, Iceberg
+User items: listening and looking (the weaker hall reverb of 2026-11-14, the -26 dBFS roar beds, Iceberg
 at 4.6 / 1.8), the Forge entry, ArenaMode's whitelist pin (0.5.0; advisory only) and no ArenaMode announcement of Chop Shop before this ships. Nothing is cut, scanned, uploaded, tagged or pushed.
+**2026-11-14 (user: "keys sind gesichert. chop shop habe ich mir angehört, passt alles. unseren hall sollten wir aber nochmal abschwächen, gerade auf Equator & Airpit in der Haupthalle ist der ein wenig too much sobald man mit vollautomatik schießt"):** the off-VM backup of `work/release-keys` is done (user's statement; the Chop Shop key of 2026-11-11 was the open one); the author listened to Chop Shop and approved it (the sentence names the map, no single item: the texts say exactly that); GPU-2 runs the 0.6.0 DLLs (the paused Syncthing folder of 2026-11-13 was back); and the Hall class of the per-room gunshot reverb is weaker (`7dba143`: ceiling AcousticTile, clutter 0.6, once-only re-seed `ShotAcousticsLab/HallDefaultsRevision`; host-verified by measurement on GPU-2 the same day, about -7 dB early and -8 to -12 dB late in Air Pit's and Equator's main halls and Bay5's spawn building; **measured, not listened to**; [shot-acoustics.md](docs/progress/shot-acoustics.md) "2026-11-14", .NET 3,305 tests). The client DLL of the staged dist is that build; the publication steps above rebuild both DLLs anyway.
 
 **2026-11-07: 0.5.0 PUBLISHED** (Pixeldrain list https://pixeldrain.com/l/VHbxKwMB, ZIP https://pixeldrain.com/u/shfhQhBF, checksum https://pixeldrain.com/u/mJEWfZS3; tag `v0.5.0` on the publication commit, `main` fast-forwarded to it, GitHub release with the notes and the `.sha256` asset; prepared the same day (user decisions "0.5.0, Iceberg kommt rein, keys sind gesichert"; record
 [release-preparation-20261107.md](docs/progress/release-preparation-20261107.md)): the first release with Iceberg, the crowd reactions and the roar layer. Build
@@ -743,7 +744,12 @@ the log; the user uses it to point at things.
   own `CheckSceneHasRoom`) on switch-off, outdoors and in `NativeSpatialAudio.Release`, and re-sends the model after
   `AudioSettings.OnAudioConfigurationChanged`. Measuring reverb on the muted host: `Audio diagnostics/ReverbPulse` with a
   Gunshots bus at `ReverbPulseVolume` 0.8 and the rain/ambience keys muted, otherwise the rain bed sits at the tail level
-  (recipe in `docs/progress/shot-acoustics.md`).
+  (recipe in `docs/progress/shot-acoustics.md`). Since the crowd exists, also mute `Spectators/CrowdBed`, `Audio diagnostics/SpectatorCalls` and
+  `Spectators/Reactions` (the murmur alone lifts the baseline to 5e-4). The probe's `tailEarly` / `tailLate` are RMS amplitudes (dB = 20 log10), and
+  some pulses read 3 dB higher in both windows for no known reason (five of 41 on 2026-11-14, three of them among Equator's nine old-table
+  pulses): take three or more pulses per state and compare like with like. Automatic fire is ONE looping voice in EFT, so the shoebox reverb builds up with the decay time: the Hall table (eight rooms on the six
+  maps) is Concrete walls, AcousticTile ceiling, CeramicTile floor, clutter 0.6 since 2026-11-14 (Concrete ceiling and 0.4 before; user: "ein wenig too
+  much" under full-auto fire), a smaller size cap makes a hall LOUDER, the ceiling shortens the decay and clutter lowers the level.
 - Bundle encryption (stage 2, [PLAN-ENCRYPTION.md](docs/PLAN-ENCRYPTION.md); host-verified on GPU-2 and GPU-1 on 2026-10-20,
   record and quoted lines in [bundle-encryption.md](docs/progress/bundle-encryption.md)): EFT's Mono has no hardware crypto in
   managed code (managed AES and SHA-256 run at tens of MB/s, so a 1 GB scenes bundle would add tens of seconds to a raid
