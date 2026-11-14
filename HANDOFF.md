@@ -5,8 +5,14 @@
 User request: add the missing overview. `feature/chopshop-dynamicmaps` adds the
 owned `ArenaMapPort_AutoService` pack, display Chop Shop, and its loader/build/deploy
 integration. Source record: [autoservice-dynamicmaps.md](docs/progress/autoservice-dynamicmaps.md).
-The existing 0.6.0 download is unchanged. Geometry/preview and 67 cartography tests
-pass; deployment and native marker acceptance are pending at this source checkpoint.
+The existing 0.6.0 download is unchanged. **Source `322e3a2` is installed and host-verified:**
+GPU-2, 20:30–20:32 Europe/Berlin, plain PMC/no bots, all four positions/headings
+(east, center, west, raised north), compass and exits correct. MapPort/DynamicMaps
+warnings/errors zero; normal leave/heal completed, MainMenu, control free, hooks off.
+Loaded MVID `63757983-c2ce-41bf-aee8-c8244dcb5f54`; source/build/host/loaded match.
+67 cartography, 62 distribution, 154 scoped deployment, 9 loader and 10 packaging-text
+checks pass. See the record for exact evidence, limitations and the two game-startup
+config rewrites; no published ZIP was replaced. The branch is committed, not pushed.
 
 
 ## 0.6.0 PUBLISHED - 2026-11-14

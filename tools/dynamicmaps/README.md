@@ -68,7 +68,7 @@ pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:/SPT41' `
 ```
 
 The historical exporter filename remains compatible with Equator commands; the descriptor
-selects the profile (Equator, Bay5, AirPit, Bowl and Iceberg). Bay5 requires native triangulation. Its exact package files are
+selects the profile (Equator, Bay5, AirPit, Bowl, Iceberg and Chop Shop). Bay5 requires native triangulation. Its exact package files are
 `ArenaMapPort_Bay5.jsonc` and `Layers/Ground.svg`; its fixed destination is
 `BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/ArenaMapPort_Bay5/`. Each package deploy
 leaves the other map's files alone. Bay5 requires `-DynamicMapsMap Bay5`; omitting

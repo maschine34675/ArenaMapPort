@@ -93,7 +93,7 @@ Designed for **ArenaMode**, installed separately. ArenaMapPort provides the
 maps; ArenaMode provides its match rules and respawns. No loot or scav raids
 are included. Fika compatibility has not been verified.
 
-**DynamicMaps is optional:** overview maps for five of the six maps (all but Chop Shop) are included
+**DynamicMaps is optional:** overview maps for all six maps are included
 and load automatically when it is installed. Air Pit and Bowl show their ground floors;
 their upper spectator areas are omitted.
 
