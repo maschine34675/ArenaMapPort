@@ -175,8 +175,9 @@ Per-room gunshot reverb (**RoomShotAcoustics**) is on by default on all six
 maps: shots ring differently in a big hall than in a small shop. Its room data is
 invented, because neither Escape from Tarkov nor Arena provides gunshot reverb
 values. Since 0.6.0 the reverb of the big halls (eight rooms, among them the main halls of
-Equator and Air Pit) is weaker: about 7 to 9 dB less tail in the main halls of Equator and
-Air Pit, measured on the test host, but not yet listened to; shops and steel bodies are unchanged.
+Equator and Air Pit) is weaker and much shorter: in the main halls of Equator and Air Pit the tail
+starts 8 to 10 dB lower and decays in about 2.5 s instead of about 6.5 s (about 3 to 3.5 s
+instead of 9 to 14 s in the low end), measured on the test host, but not yet listened to; shops and steel bodies are unchanged.
 It can be switched off per map under `Audio (arena_equator)`,
 `Audio (arena_bay5)`, `Audio (arena_airpit)`, `Audio (arena_bowl)`, `Audio (arena_iceberg)` or `Audio (arena_autoservice)` with
 **General / DeveloperMode** enabled (enable it and restart EFT, the keys then appear in F12); switching it off
@@ -267,7 +268,7 @@ Chop Shop has had raids on the test host with and without bots, and the hideout 
 afterwards, with no ArenaMapPort warning, but fewer than the older maps. The author
 listened to the map on 14 November 2026 and said everything fits (no single item named;
 the ambient mix stays a computed start value). Not listened to: the louder roar beds and
-the weaker big-hall gunshot reverb. Not checked: whether a player can climb the tribune decks above the hall,
+the reworked big-hall gunshot reverb. Not checked: whether a player can climb the tribune decks above the hall,
 the rain-depth readback and a raid with ArenaMode from this project. It is a server-time map with a
 summer set only (no winter or snow look). The appended spawn rows and the exits in the
 team start areas ran in plain raids on all six maps and in two ArenaMode Team Deathmatch

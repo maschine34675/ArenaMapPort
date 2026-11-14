@@ -40,15 +40,18 @@ Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
 - **Iceberg's lamp limits are 4.6 (ceiling) and 1.8 (floor)** instead of 4.8 and 1.9 (the author's change of 7 November, by eye). A saved
   4.8 / 1.9 pair moves once; a tuned pair stays (hidden revision key `Lighting (arena_iceberg)/EmissionDefaultsRevision`). The test
   host's configuration reads 4.6 / 1.8 with the revision key at 1; the log line of the one-time move was not captured.
-- **Gunshot reverb in the big halls is weaker.** The author found it "a little too much" in the main halls of Equator and Air Pit
-  under full-automatic fire. The hall class (eight rooms: Equator's atrium and its 40 m service corridor, Air Pit's main hall and passport hall,
-  Bay5's SpawnBuilding1, Bowl's fan zone, Iceberg's cafe room and Chop Shop's main room) now has an invented room table with an acoustic-tile
-  ceiling instead of concrete and more clutter (0.6 instead of 0.4). Measured with the developer reverb pulse on the test host, old table
-  against new in the same raid, in the main halls of Equator and Air Pit: the tail is about 7 dB lower in its first part (0.35 to 0.7 s) and
-  8 to 9 dB lower later (0.7 to 1.5 s); read from those two windows, sustained automatic fire builds up about 6 dB less and the decay time
-  falls from about 6 to 7 s to about 4.5 s. Bay5's spawn building, the loudest of the three measured halls, falls by about 7 and 12 dB. Shops and steel bodies are unchanged. A developer
-  configuration that still holds the untouched old hall table moves once to the new one (hidden revision key
-  `ShotAcousticsLab/HallDefaultsRevision`); a tuned table stays. **This level is measured and has not been listened to.**
+- **Gunshot reverb in the big halls is weaker and much shorter.** The author found it "a little too much" in the main halls of Equator
+  and Air Pit under full-automatic fire and, after hearing a first, only quieter version, named the long ringing as the thing to rework.
+  The hall class (eight rooms: Equator's atrium and its 40 m service corridor, Air Pit's main hall and passport hall, Bay5's SpawnBuilding1, Bowl's fan zone, Iceberg's cafe room and Chop Shop's main room) now has an
+  invented room table with concrete-block walls instead of concrete, an acoustic-tile ceiling instead of concrete and less clutter (0.2
+  instead of 0.4). Measured with the developer reverb pulse on the test host, 0.5.0's table against the new one in the same raid, in the
+  main halls of Equator and Air Pit: in the first part of the tail (0.35 to 0.7 s) the level is 8 to 10 dB lower at 1500 Hz and 13 to 17 dB lower at 400 Hz; from
+  1.5 s after the shot it is about 32 dB lower in Air Pit at 1500 Hz and elsewhere at or near the noise floor of the measurement (at least
+  36 dB lower in Equator at 1500 Hz, at least 29 and 24 dB at 400 Hz). Read from those windows, the decay time falls from about 6.5 s to
+  about 2.5 s at 1500 Hz and from 9 to 14 s to about 3 to 3.5 s at 400 Hz: the old table rang longest in the low end. Bay5's spawn
+  building, the loudest of the three measured halls, starts about 20 dB (1500 Hz) and 25 dB (400 Hz) lower. Shops and steel bodies are unchanged; at 1500 Hz a big hall now decays about as fast as a shop and is quieter, in the low end
+  it still rings longer. A developer configuration that still holds an untouched earlier hall table moves once to the new one (hidden
+  revision key `ShotAcousticsLab/HallDefaultsRevision`); a tuned table stays. **This table is measured and has not been listened to.**
 - **Air Pit package v10:** a floating board above two crates is left out; the crates stay. Two of Air Pit's bundles differ from 0.5.0's,
   so the ZIP overwrites them.
 - **Chop Shop's crowd textures join the shared set** (123 to 135 images, 12 new). The five crowd graphs and the shared texture manifest
@@ -79,7 +82,7 @@ Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
 
 - Chop Shop: raids on the test host with and without bots and the hideout afterwards, no ArenaMapPort warning; the author listened to
   the map on 14 November and said everything fits (the statement names no single item; the ambient mix stays a computed start value); not
-  listened to: the louder roar beds and the new hall reverb level; not checked: whether a player can climb the
+  listened to: the louder roar beds and the final hall reverb table; not checked: whether a player can climb the
   tribune decks above the hall, the rain-depth readback, the equator shutter's collider against its detail levels seen from the east
   shop, a raid with ArenaMode from this project, and which faction starts at which end (copied from Bowl). The selection marker was moved
   twice at the author's request and checked on the test host's selection screen. No winter set (the author's decision: summer is enough).

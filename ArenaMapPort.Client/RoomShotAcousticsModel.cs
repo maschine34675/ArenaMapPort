@@ -160,8 +160,10 @@ namespace ArenaMapPort.Client
     /// the author's educated guesses; the materials, clutter factors and the size cap are the outcome of two host
     /// measurement rounds: the first showed that near-perfectly reflective presets (Concrete, PlasterOnBrick, CeramicTile)
     /// make a small shop ring about six times louder and longer than the hall, the opposite of the intent; the second
-    /// picked the current table (hard hall shell, GypsumBoard shop walls under an AcousticTile ceiling, 50 m cap), which
-    /// gives the hall the long late tail and the shop a clear early slap that dies quickly. They are still invented
+    /// picked a hard hall shell, GypsumBoard shop walls under an AcousticTile ceiling and the 50 m cap, which gave the hall a
+    /// long late tail and the shop a clear early slap that dies quickly. On 2026-11-14 the hall was reworked twice after the
+    /// author's listening (too much under full-auto fire, then: the long ringing): the current hall table has ConcreteBlock
+    /// walls, an AcousticTile ceiling and clutter 0.2, a decay of about 2.5 s instead of 6.5 s at 1500 Hz. They are still invented
     /// values, and every one of them is a live lab key (<see cref="RoomShotTuning"/>) for tuning by ear.
     /// The table is generic by room type and size (not per map), which is why it is code and not descriptor data.
     ///

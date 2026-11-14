@@ -1,5 +1,17 @@
 # HANDOFF — dated working state
 
+## Hall gunshot reverb, second round: the long ringing (revision 2) - 2026-11-14 (0.6.0 still NOT published)
+
+**Request (user, 2026-11-14, after listening to the first round below):** "habe ich mir angehört, ich glaube es ist eher das lange nachklingen das wir nochmal überarbeiten sollten".
+Record: [shot-acoustics.md](docs/progress/shot-acoustics.md) "2026-11-14 (2)" (measurement at 1500 Hz and 400 Hz, decision, re-seed revision 2, host verification).
+
+1. **Finding:** the ringing was a low-end problem. The table of the first round decayed over 4.8 s at 1500 Hz and 8 to 10 s at 400 Hz (0.5.0: 6.5 s and 9 to 14 s); the clutter step acts mostly on the highs (inferred from the plugin's band factors, not measured at 400 Hz).
+2. **Done (`ee46a3e`):** Hall table = ConcreteBlock walls (was Concrete), AcousticTile ceiling, CeramicTile floor, clutter 0.2 (was 0.6; 0.4 in 0.5.0); `RoomShotHallDefaults` revision 2 (a saved table moves only when it is the default of its saved revision); the developer probe has a far window (1.5-3.0 s) and `Audio diagnostics/ReverbPulseFrequency`. .NET 3,313. Deployed; the block below describes revision 1, which was never released.
+3. **Host-verified by measurement (GPU-2, 11:19-11:32), 0.5.0's table against the new one:** Equator `Main` 1500 Hz -10.0 / -19.6 dB / at the floor (early / late / far), 400 Hz -17.0 / -23.4 dB / at the floor; Air Pit `Main` -8.4 / -16.2 / -32.5 dB and -12.6 / -20.0 dB / near the floor (at least -29 dB); Bay5 `SpawnBuilding1` about -20 dB (1500 Hz) and -25 dB (400 Hz) early. Decay about 6.5 s -> 2.5 s (1500 Hz) and 9 to 14 s -> about 3 to 3.5 s (400 Hz), read from the windows of a test pulse (no burst was recorded). The re-seed line (`revision 2 (2 value(s) moved; ...)`) once, none on the next start; three raids and the hideout, 0 warnings. **Nobody has listened to revision 2.**
+4. **User:** listen again (main halls of Equator and Air Pit, full-auto). Live steps (DeveloperMode, no rebuild): `ShotAcousticsLab/HallCeiling = Concrete` = the longer variant (about 3 s in the mids, 3.4 to 4.7 s in the lows, 2 to 5 dB louder at first); `HallClutter` 0.4 or 0.6 = 3 or 6 dB less in the highs, about the same decay.
+5. **Open question for the ear:** at 1500 Hz the hall now decays about as fast as a shop (2.3 to 2.6 s against 2.3 s for the GypsumBoard shop row of 2026-10-15) and is quieter; only the low end is still longer (3.2 to 3.4 s against 2.3 s at 400 Hz in Equator's spawn room, one pulse). If that reads as too dry, step 4's first key is the way back.
+6. **Publication:** unchanged, on the user's go.
+
 ## Hall gunshot reverb weakened, user statements - 2026-11-14 (0.6.0 still NOT published)
 
 **Request (user, 2026-11-14):** "keys sind gesichert. chop shop habe ich mir angehört, passt alles. unseren hall sollten wir aber nochmal abschwächen, gerade auf Equator & Airpit in der Haupthalle ist der ein wenig too much sobald man mit vollautomatik schießt".

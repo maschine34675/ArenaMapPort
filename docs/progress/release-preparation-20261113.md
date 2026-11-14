@@ -138,3 +138,23 @@ gerade auf Equator & Airpit in der Haupthalle ist der ein wenig too much sobald 
 - **Open now:** the user's ear on the weaker hall (live steps: `ShotAcousticsLab/HallClutter` 0.8 for less, 0.4 for more) and on the
   roar beds; the user's go for the publication steps of the readiness table (cut, scan, upload, merge, tag, push), which rebuild both DLLs
   and repeat the gates and the six-map host run; the Forge entry; ArenaMode's pin and announcement after the release.
+
+## 2026-11-14 (2): the hall reverb reworked a second time (revision 2), still NOT published
+
+User, 2026-11-14, after listening to the table of `7dba143`: "habe ich mir angehört, ich glaube es ist eher das lange nachklingen das wir
+nochmal überarbeiten sollten".
+
+- Commit `ee46a3e`: Hall table ConcreteBlock walls / AcousticTile ceiling / CeramicTile floor / clutter 0.2, `RoomShotHallDefaults`
+  revision 2 (a saved table moves only when it is the default of its saved revision), and the developer probe's far window and tone
+  frequency key. Record: [shot-acoustics.md](shot-acoustics.md) "2026-11-14 (2)". The revision-1 table of the morning was never released;
+  the release texts describe only the final table.
+- Host-verified by measurement on GPU-2 at 11:19-11:32 (the re-seed line from revision 1, 0.5.0's table against the new one in Equator's
+  and Air Pit's main halls and Bay5's spawn building at 1500 Hz and 400 Hz, three raids and the hideout, 0 warnings). .NET 3,313.
+- The staged client DLL is the build of `ee46a3e`; the server DLL was rebuilt by the test run and deployed with it (same code), GPU-2's
+  server was restarted. dist's file list is unchanged (396).
+- **Gates:** .NET `erfolgreich: 3313, gesamt: 3313` (rerun; one run right after the build showed 3,312, the failing test was not captured);
+  Python `Ran 3262 tests in 1258.803s`, `OK (skipped=68)` on the tree of `ee46a3e` with the texts of this step; `test_release_zips` (195),
+  `test_changelog` (12) and `test_dll_versions` again on the final texts, OK. `validate_distribution.py` was not rerun (a publication gate).
+- **Open:** the user's ear on revision 2 (live steps: `ShotAcousticsLab/HallCeiling = Concrete` for a longer ring, `HallClutter` 0.4 or
+  0.6 for fewer highs). This replaces the "Open now" line of the section above, whose `HallClutter` advice belonged to revision 1.
+  Everything else as in the section above.
