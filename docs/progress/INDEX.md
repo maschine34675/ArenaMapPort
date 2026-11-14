@@ -8,6 +8,8 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [autoservice-dynamicmaps.md](autoservice-dynamicmaps.md) — Chop Shop overview, source geometry and owned package integration (2026-11-14).
+
 - [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md) — **2026-11-12**: 39 appended Bot spawn rows on the six maps (Chop Shop 16, Equator 16,
   Bay5 16, Iceberg 17, Air Pit 20, Bowl 21) for ArenaMode's 25 m rule, the ten non-Equator exits moved into the team pockets so the green flares mark the
   start areas (rule R3, consequences R4, Chop Shop's appended rows R5), the offline tool `tools/validate/spawn_coverage.py` and its layout tests, Chop Shop's

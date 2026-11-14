@@ -1,5 +1,14 @@
 # HANDOFF — dated working state
 
+## Chop Shop DynamicMaps overview — 2026-11-14 (after published 0.6.0)
+
+User request: add the missing overview. `feature/chopshop-dynamicmaps` adds the
+owned `ArenaMapPort_AutoService` pack, display Chop Shop, and its loader/build/deploy
+integration. Source record: [autoservice-dynamicmaps.md](docs/progress/autoservice-dynamicmaps.md).
+The existing 0.6.0 download is unchanged. Geometry/preview and 67 cartography tests
+pass; deployment and native marker acceptance are pending at this source checkpoint.
+
+
 ## 0.6.0 PUBLISHED - 2026-11-14
 
 **Request (user, 2026-11-14, after listening to the final hall table):** "habe ich mir angehört, passt so. dann branch mergen, löschen, pushen und release auf github".

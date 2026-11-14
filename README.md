@@ -18,7 +18,7 @@ does not add Arena match rules.
 | Air Pit | An abandoned terminal hangar: the furnished main hall with its four shops, the passport hall and the apron. Two normal server-time choices, a progressing day/night cycle and dynamic weather, like Bay5. Two gates serve as extractions. |
 | Bowl | An open-air stadium arena: the sunken stadium field with a crashed Mi-26 in the middle, a gated team pocket at the east and at the west end, containers and guard towers. The spectator stands are scenery and no grass is ported. Two normal server-time choices, a progressing day/night cycle and dynamic weather, like Bay5. Two gates serve as extractions. |
 | Iceberg | The Iceberg resort hotel on a rocky canyon: a multi-storey hotel with a rotunda, with its lobby, atrium, pool hall and cafe inside and a street area around it. It uses Arena's CheckPoint layout: two team pockets behind sliding gates at the east and west ends and three capture points (A, B and C) between them. The sea below the canyon uses the same native water as Bay5's harbor. It uses the server's time of day and weather, as on Bay5; raids were run at noon and in the evening, clear. The east and west gates serve as extractions. There is no spectator crowd and no grass is ported. |
-| Chop Shop | A garage hall with a walled street yard, in Arena's TeamFight layout: a team pocket at the east end and one at the west end, one capture point and four moving gates. It uses the server's time of day and weather, as on Bay5 (summer set only: no winter or snow look). Arena's own spectator crowd fills its stands. The east and west gates serve as extractions. There is no DynamicMaps overview and no native water. |
+| Chop Shop | A garage hall with a walled street yard, in Arena's TeamFight layout: a team pocket at the east end and one at the west end, one capture point and four moving gates. It uses the server's time of day and weather, as on Bay5 (summer set only: no winter or snow look). Arena's own spectator crowd fills its stands. The east and west gates serve as extractions. A DynamicMaps overview is included; there is no native water. |
 
 All six maps include imported geometry, materials, lighting, collision and bot
 navigation, with restored ambience, material sounds, room acoustics and decals.
@@ -29,7 +29,7 @@ water, and Iceberg its sea.
 Chop Shop is new in 0.6.0 (Arena's `Arena_AutoService`, shown in the game as "Arena: Chop Shop").
 Its ambient sound mix is a computed start value; the author listened to the map on
 14 November 2026 and asked for no change ("passt alles"; his statement covers the map
-as he played it and names no single item). It has no DynamicMaps overview, no native water and no
+as he played it and names no single item). It has no native water and no
 winter set.
 
 Iceberg joined in 0.5.0. Its brightest lamps (the lobby crystal lamps and the
@@ -230,7 +230,7 @@ raid" (reinstall the complete client folder).
 
 ## DynamicMaps
 
-Overview maps for Equator, Bay5, Air Pit, Bowl and Iceberg are included (Chop Shop has none). If DynamicMaps is
+Overview maps for all six maps, including Chop Shop, are included. If DynamicMaps is
 installed, open inventory → **MAP** during a raid.
 
 ArenaMapPort loads these maps from its own directory; you do not need to copy

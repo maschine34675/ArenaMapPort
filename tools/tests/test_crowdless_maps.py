@@ -125,25 +125,27 @@ class PackerTests(unittest.TestCase):
 
 
 class NotYetRulesTests(unittest.TestCase):
-    """Pin the explicit feature lists: Iceberg has overview and water and no flares, Autoservice has flares and neither overview nor water."""
+    """Pin explicit feature lists: Iceberg has overview/water, Chop Shop overview/flares."""
 
     def test_iceberg_has_an_overview_but_no_flares_yet(self):
         self.assertIn("Iceberg", VDIST.OVERVIEW_MAP_NAMES)
         self.assertNotIn("arena_iceberg", VDIST.FLARE_MAP_KEYS)
-        self.assertEqual(VDIST.OVERVIEW_MAP_NAMES, ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg"))
+        self.assertEqual(VDIST.OVERVIEW_MAP_NAMES, ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService"))
         # Autoservice (PLAN-AUTOSERVICE item 11/12) has a flare package: the eight gas-lamp flares of work/extract/multiflare/arena_autoservice
         self.assertEqual(VDIST.FLARE_MAP_KEYS, ("arena_equator", "arena_bay5", "arena_bowl", "arena_autoservice"))
 
-    def test_autoservice_has_flares_and_neither_overview_nor_water(self):
+    def test_autoservice_has_flares_and_overview_but_no_water(self):
         self.assertIn("arena_autoservice", VDIST.FLARE_MAP_KEYS)
-        self.assertNotIn("AutoService", VDIST.OVERVIEW_MAP_NAMES)
+        self.assertIn("AutoService", VDIST.OVERVIEW_MAP_NAMES)
         self.assertNotIn("arena_autoservice", VDIST.WATER_MAP_KEYS)
         self.assertNotIn("arena_autoservice", VD.NATIVE_WATER_MAP_KEYS)
         text = (REPO / "ArenaMapPort.Client" / "ArenaMapPort.Client.csproj").read_text(encoding="utf-8")
-        for target, present in (("ArenaMapPortStageMultiFlare", True), ("ArenaMapPortStageDynamicMaps", False), ("ArenaMapPortStageWater", False)):
+        for target, token, present in (("ArenaMapPortStageMultiFlare", "arena_autoservice", True),
+                                       ("ArenaMapPortStageDynamicMaps", "ArenaMapPort_AutoService", True),
+                                       ("ArenaMapPortStageWater", "arena_autoservice", False)):
             start = text.index(f'<Target Name="{target}"')
             body = text[start:text.index("</Target>", start)]
-            self.assertEqual("arena_autoservice" in body, present, target)
+            self.assertEqual(token in body, present, target)
         required = release.required_files(release.load_spec(REPO, "9.9.9", maps=PROD_MAPS))["autoservice"]
         self.assertFalse([name for name in required if any(f"/{folder}/" in name for folder in ("flares", "dynamicmaps", "water"))])
         self.assertIn(f"{PLUGIN}/spectators/arena_autoservice/spectator.json.gz", required)      # its crowd is a required file since phase C (2026-11-11)

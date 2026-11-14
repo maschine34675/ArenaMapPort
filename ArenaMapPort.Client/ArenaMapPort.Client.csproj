@@ -253,6 +253,7 @@
     <ItemGroup>
       <ArenaMapPortOverview Include="ArenaMapPort_Equator\ArenaMapPort_Equator.jsonc;ArenaMapPort_Equator\Layers\Ground.svg;ArenaMapPort_Bay5\ArenaMapPort_Bay5.jsonc;ArenaMapPort_Bay5\Layers\Ground.svg;ArenaMapPort_AirPit\ArenaMapPort_AirPit.jsonc;ArenaMapPort_AirPit\Layers\Ground.svg;ArenaMapPort_Bowl\ArenaMapPort_Bowl.jsonc;ArenaMapPort_Bowl\Layers\Ground.svg" />
       <ArenaMapPortOverview Include="ArenaMapPort_Iceberg\ArenaMapPort_Iceberg.jsonc;ArenaMapPort_Iceberg\Layers\Ground.svg" />
+      <ArenaMapPortOverview Include="ArenaMapPort_AutoService\ArenaMapPort_AutoService.jsonc;ArenaMapPort_AutoService\Layers\Ground.svg" />
     </ItemGroup>
     <Error Condition="!Exists('$(ArenaMapPortOverviewRoot)\%(ArenaMapPortOverview.Identity)')" Text="Missing accepted overview map %(ArenaMapPortOverview.Identity); see tools/dynamicmaps/README.md" />
     <Copy SourceFiles="@(ArenaMapPortOverview->'$(ArenaMapPortOverviewRoot)\%(Identity)')" DestinationFiles="@(ArenaMapPortOverview->'$(ArenaMapPortDistDir)\dynamicmaps\%(Identity)')" />

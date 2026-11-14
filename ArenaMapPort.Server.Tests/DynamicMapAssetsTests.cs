@@ -23,6 +23,7 @@ public sealed class DynamicMapAssetsTests : IDisposable
     [InlineData("AirPit")]
     [InlineData("Bowl")]
     [InlineData("Iceberg")]
+    [InlineData("AutoService")]
     public void ResolvesOnlyExactOwnedDefinitionAndGroundLayer(string map)
     {
         var token = $"Maps/ArenaMapPort_{map}/Layers/Ground.svg";
@@ -90,7 +91,7 @@ public sealed class DynamicMapAssetsTests : IDisposable
         var missing = new List<string>();
         _assets.LoadAdditional("Maps", loaded.Add, missing.Add);
         Assert.Equal(new[] { _assets.DirectoryFor("Equator") }, loaded);
-        Assert.Equal(new[] { "Bay5", "AirPit", "Bowl", "Iceberg" }, missing);
+        Assert.Equal(new[] { "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService" }, missing);
         Assert.Throws<IOException>(() => _assets.LoadAdditional("Maps", _ => throw new IOException("fixture"), missing.Add));
         loaded.Clear();
         _assets.LoadAdditional("Maps", loaded.Add, missing.Add);

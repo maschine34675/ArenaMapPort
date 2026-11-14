@@ -617,3 +617,13 @@ the release build (version 0.6.0); the key files of all six maps were checked ag
 ConcreteBlock, ceiling AcousticTile, floor CeramicTile, clutter 0.2, eight Hall rooms, a once-only re-seed), and the generated
 README.txt says that the author listened to Chop Shop as a whole and approved that table on 2026-11-14, that the roar level has not been
 listened to, and names the four checked Arena builds.
+
+## Chop Shop overview addition — 2026-11-14 (after published 0.6.0)
+
+The next development distribution adds exactly two files under
+`BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/ArenaMapPort_AutoService/`:
+`ArenaMapPort_AutoService.jsonc` and `Layers/Ground.svg`. All six maps now have an
+overview; native water remains Bay5/Iceberg only. The runtime allowlist, client
+staging and distribution validator require these files. The release packer's
+existing AutoService path rule assigns them to Chop Shop. Generated previews and
+receipts remain local. The published 396-file 0.6.0 ZIP is unchanged.

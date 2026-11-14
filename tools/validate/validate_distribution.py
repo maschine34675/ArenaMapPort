@@ -33,14 +33,14 @@ KEY_FILE_MAX_BYTES = 64 * 1024
 
 # Not every released map carries every optional payload. The key set of the release itself comes from
 # validate_map_descriptors.RELEASE_MAP_KEYS (six maps since Autoservice, PLAN-AUTOSERVICE item 12, 2026-11-11; five since Iceberg, PLAN-ICEBERG
-# item 12, 2026-10-30). Five have an overview pack (Iceberg joined on 2026-10-31); Autoservice has none ("not yet": a DynamicMaps overview is a Phase C item). AirPit has no active flare light (item 22), so it has no
+# item 12, 2026-10-30). All six have overview packs (Chop Shop joined on 2026-11-14). AirPit has no active flare light (item 22), so it has no
 # flare package; Bowl ships one (4 of its 28 lights are active, item 17).
 # Iceberg has an overview but no MultiFlare package (79 FlareLights, four with a negative total scale that need a reviewed
 # rule). Its native sea water joined on 2026-10-31 (WATER_MAP_KEYS below). It has no spectator crowd either: that is
 # validate_map_descriptors.CROWDLESS_MAP_KEYS, checked against the crowd maps (extract_spectator.MAP_SCENES) in validate().
 # Autoservice (PLAN-AUTOSERVICE item 11/12) HAS a MultiFlare package (8 active gas-lamp flares, work/extract/multiflare/arena_autoservice), so it is in
-# FLARE_MAP_KEYS; it has no overview and no water; since 2026-11-11 it has a crowd (extract_spectator.MAP_SCENES), so it is not in CROWDLESS_MAP_KEYS.
-OVERVIEW_MAP_NAMES = ('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg')
+# FLARE_MAP_KEYS; it has an overview but no water; since 2026-11-11 it has a crowd (extract_spectator.MAP_SCENES), so it is not in CROWDLESS_MAP_KEYS.
+OVERVIEW_MAP_NAMES = ('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService')
 FLARE_MAP_KEYS = ('arena_equator', 'arena_bay5', 'arena_bowl', 'arena_autoservice')
 # The maps with a native sea-water surface (the Sea/Plane mesh of Bay5's harbor and of Iceberg's sea, NativeWaterRepairs.cs): the one list
 # validate_map_descriptors.NATIVE_WATER_MAP_KEYS, which that validator holds equal to every sidecar's has_native_water and every descriptor's

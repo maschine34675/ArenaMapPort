@@ -171,7 +171,7 @@ class DistributionSidecarTests(unittest.TestCase):
                                                        if key in self.RELEASED})
             art_pin.start()
             self.addCleanup(art_pin.stop)
-        for name in ('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg'):
+        for name in ('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService'):
             for file in (f'ArenaMapPort_{name}.jsonc', 'Layers/Ground.svg'):
                 relative = f'ArenaMapPort_{name}/{file}'
                 for root in (self.plugin/'dynamicmaps', self.repo/'work/dynamicmaps/release'):
@@ -1021,15 +1021,15 @@ class DistributionSidecarTests(unittest.TestCase):
         shutil.rmtree(self.plugin / "water/arena_bowl")
         self.validate()
 
-    def test_autoservice_has_a_crowd_five_loadscreens_and_flares_but_no_sea_and_no_overview(self):
+    def test_autoservice_has_crowd_five_loadscreens_flares_and_overview_but_no_sea(self):
         # PLAN-AUTOSERVICE item 12 (2026-11-11): the sixth released map ships (since phase C, 2026-11-11, its fans are a crowd map; it is no longer crowdless) the flare package of its eight gas lamps
-        # (FLARE_MAP_KEYS) and has neither a native sea (WATER_MAP_KEYS) nor a DynamicMaps overview pack (OVERVIEW_MAP_NAMES): explicit absences.
+        # (FLARE_MAP_KEYS), and since 2026-11-14 its overview. It has no native sea.
         self.assertEqual(5, len(extract_loadscreens.LOADSCREENS["arena_autoservice"]))
         self.assertEqual({f"arena_autoservice_{n}.jpg" for n in range(1, 6)},
                          {p.name for p in (self.plugin / "loadscreens").glob("arena_autoservice_*.jpg")})
         self.assertTrue((self.plugin / "spectators/arena_autoservice" / stage_spectators.GRAPH).is_file())
         self.assertFalse((self.plugin / "water/arena_autoservice").exists())
-        self.assertFalse((self.plugin / "dynamicmaps/ArenaMapPort_AutoService").exists())
+        self.assertTrue((self.plugin / "dynamicmaps/ArenaMapPort_AutoService/Layers/Ground.svg").is_file())
         self.assertTrue((self.plugin / "flares/arena_autoservice/flares.json").is_file())
         self.validate()
         # its crowd package is required like the other four: a missing folder is refused by the staged-spectator check
@@ -1038,18 +1038,26 @@ class DistributionSidecarTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unexpected or missing spectator folder"):
             self.validate()
         shutil.move(str(moved), str(self.plugin / "spectators/arena_autoservice"))
-        # neither a water package nor an overview pack may appear before the map lists them on purpose
+        # No sea; overview must be complete, byte-identical and contain no extra layer.
         (self.plugin / "water/arena_autoservice").mkdir(parents=True)
         (self.plugin / "water/arena_autoservice/water.json").write_text("{}", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "Water file set mismatch"):
             self.validate()
         shutil.rmtree(self.plugin / "water/arena_autoservice")
-        stray = self.plugin / "dynamicmaps/ArenaMapPort_AutoService/Layers/Ground.svg"
-        stray.parent.mkdir(parents=True)
+        overview = self.plugin / "dynamicmaps/ArenaMapPort_AutoService/Layers/Ground.svg"
+        original = overview.read_bytes()
+        overview.write_bytes(b"stale")
+        with self.assertRaisesRegex(ValueError, "Stale overview map"):
+            self.validate()
+        overview.unlink()
+        with self.assertRaises(FileNotFoundError):
+            self.validate()
+        overview.write_bytes(original)
+        stray = overview.with_name("Upper.svg")
         stray.write_text("<svg/>", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "Unexpected or missing overview"):
             self.validate()
-        shutil.rmtree(self.plugin / "dynamicmaps/ArenaMapPort_AutoService")
+        stray.unlink()
         # the flare package is required, exactly
         stray_flare = self.plugin / "flares/arena_autoservice/Unexpected.json"
         stray_flare.write_text("{}", encoding="utf-8")

@@ -460,6 +460,12 @@ MAP_PROFILES = {
                       "heights": (-3.1, 6.4), "anchor": (10.36, -77.21), "relative": True,
                       "connected_anchor": (10.36, 3.15, -77.21), "seam_grid": .01,
                       "bounds": [-62, -131, 121, -33], "max_extent": 190, "obstacle_tolerance": .30},
+    # Chop Shop's connected yard/hall includes raised routes, but not the
+    # disconnected roofs and ground islands. Anchor = original Arena AI core 3.
+    "arena_autoservice": {"name": "Chop Shop", "folder": "ArenaMapPort_AutoService", "title": "CHOP SHOP",
+                          "heights": (-4.1, -.1), "anchor": (-367.94, 492.36), "relative": True,
+                          "connected_anchor": (-367.94, -3.79, 492.36), "seam_grid": .01,
+                          "bounds": [-415, 464, -331, 515], "obstacle_tolerance": .20},
 }
 
 

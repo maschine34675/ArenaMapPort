@@ -23,7 +23,7 @@ Bring **Equator, Bay5, Air Pit, Bowl, Iceberg and Chop Shop from Escape from Tar
 - **Chop Shop:** a garage hall with a walled street yard, in Arena's TeamFight layout: a team pocket
   at each end, one capture point and four moving gates, with Arena's own spectator crowd in the
   stands. It uses the server's time of day and weather, as on Bay5 (summer set only, no winter
-  look), and the two gates as extractions. It has no DynamicMaps overview and no native water.
+  look), and the two gates as extractions. It includes a DynamicMaps overview; it has no native water.
 
 All six maps include bot navigation, original environmental audio, material
 sounds, room acoustics and decals; Equator and Bay5 also have restored dust, and

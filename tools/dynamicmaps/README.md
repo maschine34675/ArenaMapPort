@@ -304,3 +304,32 @@ Obstacle simplification is 0.30 m; the native route footprint retains its finer
 simplification. Open gate poses, gate frames and parked leaves use the same source
 sidecar workflow as the other maps. Exactly two files are installed in ArenaMapPort's
 own `dynamicmaps/ArenaMapPort_Iceberg` folder; DynamicMaps' installation stays intact.
+
+## Chop Shop (2026-11-14)
+
+Chop Shop uses ID `arena_autoservice` and canonical package name `AutoService`.
+Export the current `work/build/autoservice/arena_autoservice_navmesh.bundle` with
+`ExportMapTriangulation` as above into `work/dynamicmaps/autoservice/navmesh.json`, then:
+
+```powershell
+& ./work/dynamicmaps/venv/Scripts/python.exe tools/dynamicmaps/export_equator.py `
+  --package work/extract/autoservice-native-v2 --descriptor tools/maps/autoservice.json `
+  --navmesh work/dynamicmaps/autoservice/navmesh.json --output work/dynamicmaps/autoservice
+pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot D:/SPT41 `
+  -DynamicMapsPackage work/dynamicmaps/autoservice/pack -DynamicMapsMap AutoService
+```
+
+Review the preview and dry run before adding `-Confirm`. Accepted files go to
+`work/dynamicmaps/release/ArenaMapPort_AutoService`; Release and DLL-only client
+builds require and stage both files. The client DLL also needs the new allowlist
+entry; restart EFT after deployment. No DynamicMaps installation files change.
+
+The single overview includes the hall, yard, pockets and raised north route. A
+3D component anchored at Arena AI core 3 (-367.94, -3.79, 492.36) excludes detached
+roofs/ground islands; the world-height band is -4.1..-0.1. Drawing bounds match the
+bake: X -415..-331 / Z 464..515. One small raised car/ramp overlaps the lower route
+in projection; no second floor layer is warranted. All 23 door rows are applied.
+
+The first export used the existing read-only bundle decoder because Unity's Editor
+license was unavailable. Its triangle multiset was independently checked against
+Iceberg's native Unity export before use. See [source and acceptance record](../../docs/progress/autoservice-dynamicmaps.md).
