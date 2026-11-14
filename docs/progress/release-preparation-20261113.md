@@ -220,3 +220,19 @@ He had committed new screenshots under `assets/` himself (`498adbc`).
 - **Publication:** the links, the checksum, the build commit and the scan lines went into `docs/releases/v0.6.0.md` (its checklist
   comment removed; no placeholder left); this commit is the publication commit. What followed it (the fast-forward of `main`, the tag
   `v0.6.0`, the push, the deletion of `feature/autoservice` and the GitHub release) is recorded in the next section.
+
+## After the publication commit - 2026-11-14, 18:53-18:56
+
+- Publication commit `ba0659a`. `git checkout main`, `git merge --ff-only feature/autoservice` (72 commits, `52d0a4d..ba0659a`), annotated
+  tag `v0.6.0` on `ba0659a` ("ArenaMapPort 0.6.0: Chop Shop, more spawn rows, exits in the team start areas, shorter hall reverb"),
+  `git push origin main` and `git push origin v0.6.0`: `origin/main` and `main` are equal, the tag is on the remote.
+- `feature/autoservice` deleted (`git branch -d`, it was merged; the branch had never been pushed, so there was no remote branch to
+  delete). Left alone: the branches `claude/cool-mclean-d3f849`, `claude/wonderful-hawking-613f6e` and `fix/spawngate-floor-probe` (all
+  ancestors of `main`) and the worktree of the first; they belong to other sessions.
+- GitHub release "ArenaMapPort 0.6.0" (https://github.com/maschine34675/ArenaMapPort/releases/tag/v0.6.0, published
+  2026-11-14T17:55:08Z, marked Latest): the body is `docs/releases/v0.6.0.md` without its title line (22,907 characters), the only asset
+  `maschine-ArenaMapPort-0.6.0.sha256` (98 bytes). Pixeldrain's file record answers with the ZIP's size and SHA-256.
+- Not done, on purpose: the body of the v0.5.0 GitHub release (it still says ArenaMode has not adopted the contracts; changing a published
+  release was not asked for), the older releases (0.3.0, 0.4.0, 0.5.0 stay online), the Forge entry and ArenaMode's pin (the user's).
+- The 6 GiB scratch copy of the extract check (`work/tmp/extract-check-0.6.0-b06f8dc`) was removed after the release; the cut, its logs
+  and the records `virustotal.json` and `pixeldrain.json` stay under `work/releases/0.6.0`.
