@@ -30,7 +30,7 @@ sounds, room acoustics and decals; Equator and Bay5 also have restored dust, and
 Equator, Bay5, Bowl and Chop Shop original lamp flares (Air Pit and Iceberg have none). Gunshots ring
 differently in a big hall than in a small shop: the per-room gunshot reverb is on by default on
 all six maps (its room data is invented; since 0.6.0 the big halls ring weaker and much shorter,
-about 2.5 s instead of about 6.5 s in the two measured main halls, not yet listened to) and can be switched off per map with DeveloperMode
+about 2.5 s instead of about 6.5 s at 1500 Hz in the main halls of Equator and Air Pit; approved by the author's ear on 14 November 2026) and can be switched off per map with DeveloperMode
 enabled (enable it and restart EFT).
 
 Chop Shop is new in 0.6.0 (Arena's `Arena_AutoService`, shown in the game as "Arena: Chop Shop"). Its
@@ -84,8 +84,8 @@ folder in `General / ArenaInstallPath` (client) and in
 runs in full. The map bundles are encrypted with a key derived from the Arena files each map
 is built from, so they work only next to your own Arena files: a requirement, not copy
 protection (anyone with Arena can decrypt them; the art and audio shipped beside the bundles
-are not encrypted). The keys are built for Arena 0.6.1.0.48206 and were checked against
-0.6.2.0.48473 (all six maps; Chop Shop's key file was also checked on 0.6.1.0.48206 and 0.6.2.0.48598); the four older maps also open on 0.6.0.0.47752, Iceberg and Chop Shop were not checked there;
+are not encrypted). The keys are built for Arena 0.6.1.0.48206 (Chop Shop's key file for 0.6.2.0.48473), and the key files of
+all six maps were checked on 0.6.1.0.48206, 0.6.2.0.48473 and the newer hotfixes 0.6.2.0.48598 and 0.6.2.0.48767; the four older maps also open on 0.6.0.0.47752, Iceberg and Chop Shop were not checked there;
 after an Arena update that changes a map's resource files, that map waits for an updated
 ArenaMapPort package with the key for that build; the other maps keep working.
 
@@ -133,11 +133,11 @@ stays unchanged. Equator Day, Bay5, Air Pit, Bowl, Iceberg and Chop Shop are una
   and angry recordings were heard by the author only in the developer demo (7 November 2026, found
   good), on Equator and Bowl; a plain raid without a mode sends no match events.
 - Iceberg has had fewer raids on the test host than the older maps. Its ambient mix, its gate sounds
-  and the lamp limits (4.6 and 1.8) are first choices, the 0.6.0 lamp values have not been through an Iceberg raid on the
-  test host yet, and it has no spectators, no per-light flares and no ported grass.
+  and the lamp limits (4.6 and 1.8) are first choices, the 0.6.0 lamp values ran in one Iceberg raid on the
+  test host, and it has no spectators, no per-light flares and no ported grass.
 - Chop Shop has had raids on the test host with and without bots (no warning), but fewer than the older maps. Its ambient mix
   (computed start values) stays: the author listened to the map on 14 November 2026 and asked for no change (no single item named); the louder roar beds
-  and the reworked big-hall gunshot reverb have not been listened to; whether a player can climb
+  have not been listened to; whether a player can climb
   the tribune decks, the rain readback and a raid with ArenaMode from this project are not checked.
 - The appended spawn rows and the exits in the team start areas ran in plain raids on all six maps and in two ArenaMode Team
   Deathmatch runs (Bowl, Iceberg); a respawn onto an in-box marker, other ArenaMode modes with the new rows and the flares seen

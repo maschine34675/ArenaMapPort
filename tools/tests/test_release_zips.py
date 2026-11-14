@@ -775,7 +775,7 @@ class BuildTests(FakeRepoCase):
         self.assertIn("sound only when a mode plugin such as ArenaMode asks for them through the SpectatorCrowd contract; ArenaMode 0.4.0 and later uses it and drives them from its match events, so a plain raid without a mode never plays them", readme)
         self.assertIn("The author listened to the developer demo cycle (reaction voices with the roar beds) on 7 November 2026 and said it sounds good; that is not a clip-by-clip review of the 70 clips, and nothing was heard in a real match", readme)
         self.assertIn("the author listened to the map on 14 November 2026 and said everything fits, naming no single item", readme)
-        self.assertIn("The big-hall gunshot reverb is weaker and shorter since 0.6.0 (measured, not listened to)", readme)
+        self.assertIn("The big-hall gunshot reverb is weaker and shorter since 0.6.0 (measured; the author listened to it on 14 November 2026 and approved it)", readme)
         self.assertNotIn("fixed in this release", readme)
         self.assertNotIn("are new", readme)
         self.assertNotIn("nobody has listened", readme)
@@ -2660,6 +2660,7 @@ class RealRepoTests(unittest.TestCase):
         self.assertNotIn("all five maps", release.ENCRYPTION_TEXT)
         self.assertIn("Iceberg and Chop Shop", release.ENCRYPTION_TEXT)
         self.assertIn("0.6.2.0.48598", release.ENCRYPTION_TEXT)
+        self.assertIn("0.6.2.0.48767", release.ENCRYPTION_TEXT)
         spec = release.load_spec(REPO)
         for name in ("README.md", "FORGE.md", f"docs/releases/v{spec.version}.md"):
             text = (REPO / name).read_text(encoding="utf-8")

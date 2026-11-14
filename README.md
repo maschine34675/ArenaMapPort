@@ -107,9 +107,9 @@ stay shut.
   never sent anywhere; the mod's `keys` folder lists the files by path and size only), so they
   work only next to your own Arena files; this is a requirement, not copy protection (anyone
   with Arena can decrypt them), and the art and audio files shipped beside the bundles are not
-  encrypted). The keys in this release are built for Arena 0.6.1.0.48206 and were checked
-  against 0.6.2.0.48473 (all six maps; Chop Shop's key file is built for 0.6.2.0.48473 and was also
-  checked on 0.6.1.0.48206 and on the newer hotfix 0.6.2.0.48598); the four maps of 0.4.0 also open on
+  encrypted). The keys in this release are built for Arena 0.6.1.0.48206 (Chop Shop's key file for
+  0.6.2.0.48473), and the key files of all six maps were checked on 0.6.1.0.48206, 0.6.2.0.48473 and the
+  newer hotfixes 0.6.2.0.48598 and 0.6.2.0.48767; the four maps of 0.4.0 also open on
   0.6.0.0.47752, whose resource files are the same, and Iceberg and Chop Shop were not checked
   there (your build is in the client log at startup, `Arena: found ...`); if an Arena update changes a map's resource files, that map
   will not load (the client log names the cause) until an updated ArenaMapPort package
@@ -176,8 +176,8 @@ maps: shots ring differently in a big hall than in a small shop. Its room data i
 invented, because neither Escape from Tarkov nor Arena provides gunshot reverb
 values. Since 0.6.0 the reverb of the big halls (eight rooms, among them the main halls of
 Equator and Air Pit) is weaker and much shorter: in the main halls of Equator and Air Pit the tail
-starts 8 to 10 dB lower and decays in about 2.5 s instead of about 6.5 s (about 3 to 3.5 s
-instead of 9 to 14 s in the low end), measured on the test host, but not yet listened to; shops and steel bodies are unchanged.
+starts 8 to 10 dB lower at 1500 Hz and decays in about 2.5 s instead of about 6.5 s there
+(about 3 to 3.5 s instead of 9 to 14 s in the low end), measured on the test host; the author listened to it on 14 November 2026 and approved it. Shops and steel bodies are unchanged.
 It can be switched off per map under `Audio (arena_equator)`,
 `Audio (arena_bay5)`, `Audio (arena_airpit)`, `Audio (arena_bowl)`, `Audio (arena_iceberg)` or `Audio (arena_autoservice)` with
 **General / DeveloperMode** enabled (enable it and restart EFT, the keys then appear in F12); switching it off
@@ -258,17 +258,16 @@ listened to them in play on 30 October 2026 and approved them.
 Iceberg has had raids on the test host (with and without bots, the hideout opened
 afterwards) with no ArenaMapPort warning, but fewer than the older four maps. Its
 ambient sound mix, its gate sounds and the lamp limits of 4.6 and 1.8 are first
-choices (the lamp limits were set by the author by eye on his PC; the 0.6.0 values and
-the one-time move from 4.8 and 1.9 have not been through an Iceberg raid on the
-test host yet). It has no spectators,
+choices (the lamp limits were set by the author by eye on his PC; the 0.6.0 values ran in an
+Iceberg raid on the test host on 14 November 2026, the log line of the one-time move
+from 4.8 and 1.9 was not captured). It has no spectators,
 no per-light flares and no ported grass, and it is a server-time map
 without a winter or snow look.
 
 Chop Shop has had raids on the test host with and without bots, and the hideout opened
 afterwards, with no ArenaMapPort warning, but fewer than the older maps. The author
 listened to the map on 14 November 2026 and said everything fits (no single item named;
-the ambient mix stays a computed start value). Not listened to: the louder roar beds and
-the reworked big-hall gunshot reverb. Not checked: whether a player can climb the tribune decks above the hall,
+the ambient mix stays a computed start value). Not listened to: the louder roar beds. Not checked: whether a player can climb the tribune decks above the hall,
 the rain-depth readback and a raid with ArenaMode from this project. It is a server-time map with a
 summer set only (no winter or snow look). The appended spawn rows and the exits in the
 team start areas ran in plain raids on all six maps and in two ArenaMode Team Deathmatch

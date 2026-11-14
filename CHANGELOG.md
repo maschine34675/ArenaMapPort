@@ -6,9 +6,7 @@ oldest version that is still downloadable.
 Dates are ISO dates (the newest entry may read "unreleased" while a version is prepared). Each entry links its full release note (download links, checksums, install and upgrade steps),
 and the settings text is in the [README](README.md).
 
-## 0.6.0 - unreleased
-
-Prepared on 2026-11-13, not published: the release date, the download links and the checksum are set at publication (see the placeholders in [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md)).
+## 0.6.0 - 2026-11-14
 
 Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
 
@@ -38,9 +36,10 @@ Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
   1.0. A saved 2.0 moves once to 1.0 (hidden revision key `Spectators/ReactionBedDefaultsRevision`); any other value stays. **This
   level has not been listened to.**
 - **Iceberg's lamp limits are 4.6 (ceiling) and 1.8 (floor)** instead of 4.8 and 1.9 (the author's change of 7 November, by eye). A saved
-  4.8 / 1.9 pair moves once; a tuned pair stays (hidden revision key `Lighting (arena_iceberg)/EmissionDefaultsRevision`). The test
-  host's configuration reads 4.6 / 1.8 with the revision key at 1; the log line of the one-time move was not captured.
-- **Gunshot reverb in the big halls is weaker and much shorter.** The author found it "a little too much" in the main halls of Equator
+  4.8 / 1.9 pair moves once; a tuned pair stays (hidden revision key `Lighting (arena_iceberg)/EmissionDefaultsRevision`). An Iceberg
+  raid of the release build on the test host ran with 4.6 / 1.8 (5 materials capped, 15 lifted); the log line of the one-time move from
+  4.8 / 1.9 was not captured.
+- **Gunshot reverb in the big halls is weaker and much shorter.** The author found it "ein wenig too much" in the main halls of Equator
   and Air Pit under full-automatic fire and, after hearing a first, only quieter version, named the long ringing as the thing to rework.
   The hall class (eight rooms: Equator's atrium and its 40 m service corridor, Air Pit's main hall and passport hall, Bay5's SpawnBuilding1, Bowl's fan zone, Iceberg's cafe room and Chop Shop's main room) now has an
   invented room table with concrete-block walls instead of concrete, an acoustic-tile ceiling instead of concrete and less clutter (0.2
@@ -51,7 +50,7 @@ Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
   about 2.5 s at 1500 Hz and from 9 to 14 s to about 3 to 3.5 s at 400 Hz: the old table rang longest in the low end. Bay5's spawn
   building, the loudest of the three measured halls, starts about 20 dB (1500 Hz) and 25 dB (400 Hz) lower. Shops and steel bodies are unchanged; at 1500 Hz a big hall now decays about as fast as a shop and is quieter, in the low end
   it still rings longer. A developer configuration that still holds an untouched earlier hall table moves once to the new one (hidden
-  revision key `ShotAcousticsLab/HallDefaultsRevision`); a tuned table stays. **This table is measured and has not been listened to.**
+  revision key `ShotAcousticsLab/HallDefaultsRevision`); a tuned table stays. The author listened to this table on 14 November 2026 and approved it ("passt so").
 - **Air Pit package v10:** a floating board above two crates is left out; the crates stay. Two of Air Pit's bundles differ from 0.5.0's,
   so the ZIP overwrites them.
 - **Chop Shop's crowd textures join the shared set** (123 to 135 images, 12 new). The five crowd graphs and the shared texture manifest
@@ -65,8 +64,8 @@ Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
   sun out only with proxies that belong to a level-of-detail group. Chop Shop's hall (58 x 48 m) is wider than that distance and showed a
   sunlit patch with a curved edge on its far walls that followed the view; its two shadow hulls are now enrolled and the patch is gone
   (the author reported the patch; checked on the test host with a live on/off control). Iceberg's cafe
-  had the same leak at lower shadow qualities: with shadow quality Low, low morning sun through the cafe's east glazing lit the lobby
-  behind it, and 0.5.0 has that leak below the Ultra setting; the cafe's three shells are now enrolled (checked on the test host at Low
+  had the same leak at shadow quality Low: low morning sun through the cafe's east glazing lit the lobby
+  behind it, and 0.5.0 has that leak at Low (Ultra showed none); the cafe's three shells are now enrolled (checked on the test host at Low
   and at Ultra). Medium, High and evening hours were not checked. New developer keys `Lighting (arena_autoservice)/RoofDistantShadows`
   and `Lighting (arena_iceberg)/RoofDistantShadows` (default on; Equator's key is unchanged).
 
@@ -82,7 +81,7 @@ Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
 
 - Chop Shop: raids on the test host with and without bots and the hideout afterwards, no ArenaMapPort warning; the author listened to
   the map on 14 November and said everything fits (the statement names no single item; the ambient mix stays a computed start value); not
-  listened to: the louder roar beds and the final hall reverb table; not checked: whether a player can climb the
+  listened to: the louder roar beds; not checked: whether a player can climb the
   tribune decks above the hall, the rain-depth readback, the equator shutter's collider against its detail levels seen from the east
   shop, a raid with ArenaMode from this project, and which faction starts at which end (copied from Bowl). The selection marker was moved
   twice at the author's request and checked on the test host's selection screen. No winter set (the author's decision: summer is enough).
