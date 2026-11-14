@@ -618,3 +618,139 @@ at (34.1, 0.2, -55.1) `room=1/IndoorMetalThin class=Metal dims=8.2x2.7x7.0`; off
 `room=3/IndoorWoodThick class=Shop dims=14.4x2.5x2.3 materials=GypsumBoard,GypsumBoard,AcousticTile,CeramicTile,...`;
 field again `class=Outdoor`. The user's own raid earlier that day (MASCHINE11, 13:27:03, pre-rule client) logged the Mi-26
 as `class=Shop` with the GypsumBoard set, so the rule's effect is the only difference. No reverb measurement was taken.
+
+## 2026-11-14 - Hall table weakened: AcousticTile ceiling, clutter 0.6 (user: "ein wenig too much" under full-auto fire)
+
+User, 2026-11-14: "unseren hall sollten wir aber nochmal abschwächen, gerade auf Equator & Airpit in der Haupthalle ist der ein wenig too
+much sobald man mit vollautomatik schießt". ("Hall" is the German word for reverb.)
+
+### Why automatic fire shows it (read from the EFT decompile, `D:/SPT41/Development/_decompiled`)
+
+- A burst is ONE looping voice, not one voice per shot: `WeaponSoundPlayer.FireBullet` sets `_isFiring` for an automatic weapon and every
+  later call only updates mixer, pitch and balance; the body clip is queued with end time 0 and `SuperBetterAudioQueue.Update` turns that
+  into `superSource.Loop = (End == 0.0)`. The plugin's shared reverb therefore gets a continuous feed for the whole burst, and its level
+  climbs towards a steady state that grows with the decay time, while a single shot only shows its own tail. The old Hall table (Concrete
+  walls and ceiling) decays over 5 to 7 s (below), so a burst keeps building for seconds and rings on after it. This reading is inferred
+  from the code and the measurement; nobody recorded a burst.
+- The player's own gun uses the loudest route: first person switches the queue to stereo, and the two reverb-only helper sources of
+  `ReverbSuperSource.PlayScheduled` take the Gunshots stereo settings (reverb send 0 dB against -6 dB on the mono route, SPT's
+  `MetaXRAudioPluginSettings`). The probe's route line of this session: `pulse route bus=GunshotsFirstPerson source=ReverbSuperSource
+  spatialized=False acoustics=True reverbSendDb=-6.0 helperSources=True`.
+
+### Correction to the sections above: the probe logs amplitudes, not energies
+
+`ReverbAudioProbe` logs `Math.Sqrt(sum |X|^2 / n)` of the 1500 Hz bin for the baseline and the two tail windows: an RMS amplitude. The
+sections above call these numbers "energy"; the numbers themselves are right, but a ratio of two of them is `20 log10` in dB, and "the
+late window keeps 85 % of the early energy" reads "85 % of the early amplitude". The tables below use 20 log10.
+
+### Host measurement (lead, GPU-2, 2026-11-14 09:34-09:48, build `08369fc` = version 0.6.0, one EFT process)
+
+Method as in "Probe procedure": plain PMC raid, bots None, DeveloperMode, `ReverbPulseBus = GunshotsFirstPerson`, `ReverbPulseVolume` 0.8,
+one `ReverbPulse = true` per row, the lab keys set live with `uibridge_config_set persist=false` (nothing was saved to the host's .cfg, all
+values were set back). Muted for the measurement: the map's `RainVolume` 0 and `AmbientGainDb` -12 (Air Pit also `AmbientVolumeOffset` 0)
+and, new since the crowd exists, `Spectators/CrowdBed` false, `Audio diagnostics/SpectatorCalls` false and `Spectators/Reactions` false:
+with the murmur on, the first pulse read `baseline=5.1819E-004 ... tailEarly=1.4735E-003 tailLate=9.5846E-004` (not used); with it off
+the baseline is 8e-7 to 8e-6. `tailEarly` is the window 0.35-0.7 s after the pulse, `tailLate` 0.7-1.5 s; dB against the mean of the
+same room's default rows.
+
+Air Pit, main hall (room 17 `Main`, IndoorConcrete, class Hall, box 50.00 x 43.22 x 50.00), standing at (-3.2, 0.0, -12.1):
+
+| Hall ceiling, clutter (walls Concrete, floor CeramicTile, cap 50) | tailEarly | tailLate | early dB | late dB | log time |
+|---|---|---|---|---|---|
+| Concrete, 0.4 (the table until today) | 9.68e-4 | 5.40e-4 | 0 | 0 | 09:35:03 |
+| same | 9.37e-4 | 5.75e-4 | 0 | 0 | 09:35:10 |
+| AcousticTile, 0.4 | 6.02e-4 | 2.88e-4 | -4.0 | -5.8 | 09:35:24 |
+| Concrete, 0.8 | 5.18e-4 | 3.14e-4 | -5.3 | -5.0 | 09:35:32 |
+| Concrete, 1.0 | 4.08e-4 | 2.26e-4 | -7.3 | -7.9 | 09:35:40 |
+| AcousticTile, 0.8 | 3.26e-4 | 1.58e-4 | -9.3 | -11.0 | 09:35:48 (baseline 1.1e-4: repeated) |
+| same | 3.31e-4 | 1.48e-4 | -9.2 | -11.6 | 09:35:55 |
+| AcousticTile, 1.0 | 2.24e-4 | 1.15e-4 | -12.5 | -13.7 | 09:36:09 |
+| Concrete, 0.4, cap 30 (box 30 x 30 x 30) | 1.87e-3 | 1.10e-3 | +5.9 | +5.9 | 09:36:38 |
+| `Audio (arena_airpit)/RoomShotAcoustics` false | 2.87e-6 | 2.35e-6 | (floor) | (floor) | 09:36:23 |
+
+Equator, main hall (room 19 `Main`, IndoorConcrete, class Hall, box 50.00 x 24.72 x 50.00), standing at (0.0, 0.2, 2.0):
+
+| Hall ceiling, clutter | tailEarly | tailLate | early dB | late dB | log time |
+|---|---|---|---|---|---|
+| Concrete, 0.4 (the table until today) | 1.37e-3 | 6.76e-4 | 0 | 0 | 09:38:01 |
+| same (baseline 2.1e-5, a background sound: not used) | 1.96e-3 | 9.62e-4 | | | 09:38:26 |
+| same | 1.35e-3 | 6.69e-4 | 0 | 0 | 09:38:36 |
+| same | 1.30e-3 | 7.19e-4 | 0 | 0 | 09:46:59 |
+| Concrete, 0.6 | 9.36e-4 | 5.31e-4 | -3.1 | -2.3 | 09:47:05 |
+| same | 9.27e-4 | 5.40e-4 | -3.2 | -2.1 | 09:47:12 |
+| AcousticTile, 0.4 | 8.64e-4 | 3.42e-4 | -3.8 | -6.1 | 09:39:03 |
+| same | 8.06e-4 | 3.70e-4 | -4.4 | -5.4 | 09:47:44 |
+| AcousticTile, 0.5 | 6.92e-4 | 3.22e-4 | -5.7 | -6.6 | 09:47:35 |
+| **AcousticTile, 0.6 (chosen)** | 5.90e-4 | 2.61e-4 | -7.1 | -8.4 | 09:47:22 |
+| same | 5.88e-4 | 2.77e-4 | -7.2 | -7.9 | 09:47:27 |
+| AcousticTile, 0.8 | 4.79e-4 | 1.94e-4 | -8.9 | -11.0 | 09:38:46 |
+| AcousticTile, 1.0 | 3.49e-4 | 1.50e-4 | -11.7 | -13.2 | 09:38:54 |
+
+References: Air Pit 9.5e-4 / 5.6e-4, Equator 1.34e-3 / 6.88e-4 (means of the used default rows). Repeats agree within about 0.7 dB.
+
+Reading:
+
+- Equator's hall is louder than Air Pit's under the same table (early +3.0 dB, late +1.8 dB): its box is lower (24.7 m against 43.2 m).
+  A smaller box is LOUDER (cap 30: +5.9 dB in both windows), so the size cap is no lever for "weaker".
+- With the feature off the tail is at the noise floor: the ported maps have no gunshot reverb at all without the shoebox.
+- The two levers act differently. A single-exponential read of the two windows (`E(t) = E0 exp(-kt)` fitted to the window means; a crude
+  model, the first 0.35 s are extrapolated) gives a decay time of 7.0 s (Air Pit) and 5.4 s (Equator) for the old table, 4.8 s and 4.1 s
+  with the AcousticTile ceiling, and 6 to 7 s again with clutter alone (Air Pit Concrete 0.8: 7.4 s; Equator Concrete 0.6: 6.6 s): the
+  ceiling shortens the decay, clutter lowers the level and leaves the decay about where it was.
+- The same read gives the steady reverb level under a continuous feed (`E0 / k`, the automatic-fire case), in dB against the old table:
+
+| Hall ceiling, clutter | Air Pit: decay, build-up | Equator: decay, build-up |
+|---|---|---|
+| AcousticTile, 0.4 | 4.8 s, -3.6 dB | 4.1 s, -3.6 dB |
+| AcousticTile, 0.5 | | 4.6 s, -5.5 dB |
+| AcousticTile, 0.6 | | 4.5 s, -6.8 dB |
+| AcousticTile, 0.8 | 4.6 s, -8.8 dB | 3.8 s, -8.2 dB |
+| AcousticTile, 1.0 | 5.4 s, -12.4 dB | 4.2 s, -11.2 dB |
+| Concrete, 0.8 / 0.6 | 7.4 s, -5.3 dB (0.8) | 6.6 s, -3.3 dB (0.6) |
+
+### Decision (lead; the new code defaults, pinned in `RoomShotAcousticsModelTests`)
+
+| | Walls | Ceiling | Floor | Clutter |
+|---|---|---|---|---|
+| Hall (2026-11-14) | Concrete | **AcousticTile** (was Concrete) | CeramicTile | **0.6** (was 0.4) |
+| Shop (unchanged) | GypsumBoard | AcousticTile | CeramicTile | 0.7 |
+| Metal (unchanged) | Steel | Steel | Carpet | 0.7 |
+
+`HallMaxDimension` stays 50. Why this step: the user called the hall "a little too much", so the middle of the measured range: the
+tail windows about 7 dB (early) and 8 dB (late) lower, the automatic-fire build-up about 7 dB lower, the decay a sixth to a third
+shorter (Equator 5.4 -> 4.5 s; Air Pit 7.0 s -> between its measured 4.8 s at 0.4 and 4.6 s at 0.8). The ceiling alone (about -4 / -6 dB,
+build-up -3.6 dB) was judged too small a step to be noticed without an A/B, the 0.8 step (about -9 / -11 dB) more than "a little". The
+hall still decays more than twice as long as a shop (the GypsumBoard shop of round 2 reads 1.8 s, Equator's `adik` 2.2 s), but its level
+is no longer above a shop's: Equator's hall now reads 5.9e-4 / 2.7e-4 against `adik`'s 1.26e-3 / 3.0e-4 of 2026-10-16 (that row had a
+1.4e-4 baseline). Still INVENTED data. **Nobody has listened to the new table yet.**
+
+Live steps for the ear (developer keys, no rebuild): `ShotAcousticsLab/HallClutter` 0.8 is the next step down (about -9 / -11 dB),
+0.4 the step back up (about -4 / -6 dB); `HallCeiling = Concrete` with `HallClutter = 0.4` is the old table.
+
+### The Hall class is eight rooms on six maps (one table for all)
+
+Equator `Main` (the atrium, 54.8 x 24.7 x 59.7) and `UpRoof` (the 40 m service corridor); Air Pit `Main` (111.4 x 43.2 x 96.4) and
+`Start1` (the passport hall); Bay5 `SpawnBuilding1` (44.0 x 9.6 x 21.6, the loudest room of the 2026-10-16 table: 3.8e-3 / 3.3e-3);
+Bowl `FanZone`; Iceberg `coffe_2`; Chop Shop `MainRoom` (57.5 x 22.7 x 46.7). The user named Equator's and Air Pit's main halls; the
+other six rooms change with them. Chop Shop's hall is part of the map the user listened to and approved on the same day ("chop shop
+habe ich mir angehört, passt alles"), before this change.
+
+### Saved values: `ShotAcousticsLab/HallDefaultsRevision`
+
+The lab keys are bound through `Settings`, so a developer .cfg (GPU-2, the user's own installs) and an old developer archive hold the old
+table as explicit values. Hard rule (AGENTS.md): no silent default change. `RoomShotHallDefaults` (Unity-free, in
+`RoomShotAcousticsModel.cs`) is revision 1: the hall table moves as a SET, exactly a saved Concrete / Concrete / CeramicTile / 0.4 at
+revision 0 moves once to the new table (ceiling and clutter are written), a table with any tuned value stays entirely. The hidden int key
+`ShotAcousticsLab/HallDefaultsRevision` records it; one Debug line `[ShotAcoustics] config re-seeded to hall defaults revision 1 (...)`.
+In player mode the move happens in memory at every start (the archive is never rewritten), as with the other revision keys. A player
+without a developer file simply gets the new code defaults.
+
+### Not done, options
+
+- A burst-only trim: a Harmony prefix on `ReverbSuperSource.PlayScheduled` could lower the Gunshots reverb send on ported maps and add a
+  further trim while `Loop` is true (an automatic burst), which would keep the single-shot tail and weaken only the build-up. Not built;
+  an option if single shots should keep more hall than bursts.
+- `MetaXRAudioNativeInterface.Interface.SetSharedReverbWetLevel(float)` exists and EFT never calls it: a process-global wet level,
+  untested, and it would need the same restore discipline as the model (see the Meta XR trap in AGENTS.md). Not used.
+- Walls are the lever for a still shorter decay; no wall material was measured today.
+- Not measured: the third-person route (other shooters), an actual burst, the passport hall, and before the build the other maps' halls.

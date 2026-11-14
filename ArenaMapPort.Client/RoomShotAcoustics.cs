@@ -38,6 +38,9 @@ namespace ArenaMapPort.Client
     /// The class table is tuned live in the developer config section ShotAcousticsLab (docs/progress/shot-acoustics.md):
     /// the first host measurement showed that the near-perfectly reflective first presets make a shop ring louder and
     /// longer than the hall, so every material and clutter factor is a key, read on each application.
+    /// 2026-11-14 (user request, "a little too much under full-auto fire"): the Hall default became ceiling AcousticTile and
+    /// clutter 0.6 (Concrete / 0.4 before); a saved hall table that is exactly the old one moves once, as a set, through the
+    /// hidden key HallDefaultsRevision (RoomShotHallDefaults), a tuned table stays. Record: docs/progress/shot-acoustics.md.
     /// Host test: GPU-2 2026-10-15/16 on AirPit, Equator and Bay5 (ReverbPulse buses Gunshots, GunshotsFirstPerson and
     /// GunshotsThirdPerson, hall vs shop vs switch off); evidence in docs/progress/shot-acoustics.md.
     /// </summary>
@@ -86,9 +89,28 @@ namespace ArenaMapPort.Client
                     "reach it, but it caps every indoor class. Invented tuning value. Live; re-applies the current room.",
                     new AcceptableValueRange<float>(10f, 200f)));
             _hallMaxDimension.SettingChanged += MarkTuningChanged;
+            MigrateHallDefaults(defaults.Hall);
             // Same pattern as RoomReverb: a device switch or AudioSettings.Reset can drop the plugin's native state while its
             // managed model value still reads ShoeboxRoom, so the next Tick re-applies the current room.
             AudioSettings.OnAudioConfigurationChanged += deviceChanged => _audioReset = true;
+        }
+
+        // Once-only re-seed (revision 1, 2026-11-14): the Hall class got ceiling AcousticTile and clutter 0.6. The hall table moves as a
+        // set, only when all four saved values are exactly the previous table; the decision is RoomShotHallDefaults' (unit-tested).
+        static void MigrateHallDefaults(RoomShotClassTuning newHall)
+        {
+            var revision = Plugin.Instance.Settings.Bind(LabSection, "HallDefaultsRevision", 0, new ConfigDescription(
+                "Internal - once-only default migration for the hall table (revision 1: an untouched previous table moves to AcousticTile ceiling and clutter 0.6). Leave it alone.",
+                null, System.ComponentModel.BrowsableAttribute.No));
+            if (revision.Value >= RoomShotHallDefaults.Revision) return;
+            int moved = 0;
+            if (RoomShotHallDefaults.Moves(revision.Value, _hall.Walls.Value, _hall.Ceiling.Value, _hall.Floor.Value, _hall.Clutter.Value))
+            {
+                if (_hall.Ceiling.Value != newHall.Ceiling) { _hall.Ceiling.Value = newHall.Ceiling; moved++; }
+                if (_hall.Clutter.Value != newHall.Clutter) { _hall.Clutter.Value = newHall.Clutter; moved++; }
+            }
+            revision.Value = RoomShotHallDefaults.Revision;
+            Plugin.Log.LogDebug($"{Tag} config re-seeded to hall defaults revision {RoomShotHallDefaults.Revision} ({moved} value(s) moved; hall={_hall.Walls.Value}/{_hall.Ceiling.Value}/{_hall.Floor.Value} clutter={_hall.Clutter.Value.ToString("0.##", CultureInfo.InvariantCulture)})");
         }
 
         sealed class ClassEntries

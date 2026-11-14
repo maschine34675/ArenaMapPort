@@ -21,8 +21,8 @@ Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
   plugin), the ScoreMonitors rows (4 of 4 TV holders with a face), Arena's own spectator crowd (30 fans with calls, murmur and reactions),
   loading screens, a menu banner, an official description and a selection marker on the region map. Time of day and weather follow the
   server, as on Bay5. No loot and no scav raids. **Chop Shop has no DynamicMaps overview, no native water and no winter or snow look.**
-  The sound mix of its ambience is a computed start value that nobody has listened to, and nobody has listened to its gate sounds or its
-  crowd either.
+  The sound mix of its ambience is a computed start value that the author kept after listening to the map on 14 November 2026 ("passt alles"; his
+  statement covers the map as he played it and names no single item).
 - **More Bot spawn rows on all six maps** (Chop Shop 16, Equator 16, Bay5 16, Iceberg 17, Air Pit 20, Bowl 21; 39 rows appended, the
   Player rows stay at 4 per map). Existing rows are byte for byte unchanged (ArenaMode compiles six of them in by id and coordinates). The
   rows widen the pool a mode plugin can place bots and pickups from; ArenaMode's Team Deathmatch and Domination use their own points.
@@ -40,6 +40,14 @@ Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
 - **Iceberg's lamp limits are 4.6 (ceiling) and 1.8 (floor)** instead of 4.8 and 1.9 (the author's change of 7 November, by eye). A saved
   4.8 / 1.9 pair moves once; a tuned pair stays (hidden revision key `Lighting (arena_iceberg)/EmissionDefaultsRevision`). The test
   host's configuration reads 4.6 / 1.8 with the revision key at 1; the log line of the one-time move was not captured.
+- **Gunshot reverb in the big halls is weaker.** The author found it "a little too much" in the main halls of Equator and Air Pit
+  under full-automatic fire. The hall class (eight rooms: Equator's atrium and its 40 m service corridor, Air Pit's main hall and passport hall,
+  Bay5's SpawnBuilding1, Bowl's fan zone, Iceberg's cafe room and Chop Shop's main room) now has an invented room table with an acoustic-tile
+  ceiling instead of concrete and more clutter (0.6 instead of 0.4). Measured with the developer reverb pulse on the test host in Equator's
+  main hall: the tail is about 7 dB lower in its first part (0.35 to 0.7 s) and about 8 dB lower later (0.7 to 1.5 s), sustained automatic fire
+  builds up about 7 dB less, and the decay time falls from about 5.4 s to 4.5 s. Shops and steel bodies are unchanged. A developer
+  configuration that still holds the untouched old hall table moves once to the new one (hidden revision key
+  `ShotAcousticsLab/HallDefaultsRevision`); a tuned table stays. **This level is measured and has not been listened to.**
 - **Air Pit package v10:** a floating board above two crates is left out; the crates stay. Two of Air Pit's bundles differ from 0.5.0's,
   so the ZIP overwrites them.
 - **Chop Shop's crowd textures join the shared set** (123 to 135 images, 12 new). The five crowd graphs and the shared texture manifest
@@ -68,8 +76,9 @@ Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
 
 ### Known limitations
 
-- Chop Shop: raids on the test host with and without bots and the hideout afterwards, no ArenaMapPort warning; not listened to: its
-  ambient mix (computed start values), its gate sounds, its crowd and the louder roar beds; not checked: whether a player can climb the
+- Chop Shop: raids on the test host with and without bots and the hideout afterwards, no ArenaMapPort warning; the author listened to
+  the map on 14 November and said everything fits (the statement names no single item; the ambient mix stays a computed start value); not
+  listened to: the louder roar beds and the new hall reverb level; not checked: whether a player can climb the
   tribune decks above the hall, the rain-depth readback, the equator shutter's collider against its detail levels seen from the east
   shop, a raid with ArenaMode from this project, and which faction starts at which end (copied from Bowl). The selection marker was moved
   twice at the author's request and checked on the test host's selection screen. No winter set (the author's decision: summer is enough).
@@ -81,7 +90,8 @@ Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
 - Iceberg: the one-time re-seeds of the lamp limits and the roar-bed volume have unit tests; on the test host both revision keys read 1
   and the values 4.6 / 1.8 and 1.0, but the log lines of the moves were not captured.
   The 0.5.0 limits that remain: its ambient sounds, lamp loops and gate sounds were not listened to; no crowd and no per-light flares.
-- Gate and door sounds were checked in the log only and have not been listened to on any map; the exit lamps were checked by reading their
+- Gate and door sounds were checked in the log only; no listening to them is recorded on any map (the author's statement about Chop
+  Shop names no single item); the exit lamps were checked by reading their
   state; Equator's puddle cache and the rain-driven puddles are unchecked; EFT's sound bundle has no impact sounds for Books and CardBoard
   props; Fika compatibility has not been verified.
 - Spectator crowds exist on five of the six maps (not Iceberg); lamp flares on Equator, Bay5, Bowl and Chop Shop; overviews for all but

@@ -82,9 +82,11 @@ namespace ArenaMapPort.Client
         }
 
         /// <summary>The built-in table: the choice of the second host measurement round (docs/progress/shot-acoustics.md,
-        /// "Tuning round"). Still INVENTED data, see <see cref="RoomShotAcousticsModel"/>.</summary>
+        /// "Tuning round"), with the Hall class softened on 2026-11-14 (ceiling AcousticTile, clutter 0.6; Concrete / 0.4
+        /// before; user request "a little too much under full-auto fire", record docs/progress/shot-acoustics.md section
+        /// "2026-11-14"). Still INVENTED data, see <see cref="RoomShotAcousticsModel"/>.</summary>
         internal static readonly RoomShotTuning Default = new RoomShotTuning(
-            new RoomShotClassTuning(RoomShotAcousticsModel.Concrete, RoomShotAcousticsModel.Concrete,
+            new RoomShotClassTuning(RoomShotAcousticsModel.Concrete, RoomShotAcousticsModel.AcousticTile,
                 RoomShotAcousticsModel.CeramicTile, RoomShotAcousticsModel.HallClutter),
             new RoomShotClassTuning(RoomShotAcousticsModel.GypsumBoard, RoomShotAcousticsModel.AcousticTile,
                 RoomShotAcousticsModel.CeramicTile, RoomShotAcousticsModel.ShopClutter),
@@ -103,6 +105,25 @@ namespace ArenaMapPort.Client
                 default: return null;
             }
         }
+    }
+
+    /// <summary>
+    /// Once-only re-seed of the Hall class table (revision 1, 2026-11-14): the hall moved from Concrete ceiling / clutter 0.4
+    /// to AcousticTile / 0.6. The table moves as a SET: exactly the untouched previous table moves to the new one; a table
+    /// with any tuned value stays as it is, entirely. Unity-free, unit-tested; the glue is RoomShotAcoustics.Install.
+    /// </summary>
+    internal static class RoomShotHallDefaults
+    {
+        internal const int Revision = 1;
+        internal const string PreviousWalls = "Concrete", PreviousCeiling = "Concrete", PreviousFloor = "CeramicTile";
+        internal const float PreviousClutter = 0.4f;
+
+        internal static bool Moves(int savedRevision, string walls, string ceiling, string floor, float clutter) =>
+            savedRevision < Revision
+            && string.Equals(walls, PreviousWalls, StringComparison.Ordinal)
+            && string.Equals(ceiling, PreviousCeiling, StringComparison.Ordinal)
+            && string.Equals(floor, PreviousFloor, StringComparison.Ordinal)
+            && clutter == PreviousClutter;
     }
 
     /// <summary>
@@ -158,8 +179,9 @@ namespace ArenaMapPort.Client
 
         /// <summary>Metal: steel shell, soft floor, plenty of seats and luggage. INVENTED.</summary>
         internal const float MetalClutter = 0.7f;
-        /// <summary>Hall: fairly empty, but not a bare box. INVENTED; kept by the second measurement round.</summary>
-        internal const float HallClutter = 0.4f;
+        /// <summary>Hall: fairly empty, but not a bare box. INVENTED. 0.6 since 2026-11-14 (user request "a little too much
+        /// under full-auto fire", docs/progress/shot-acoustics.md "2026-11-14"); 0.4 before, kept by the second measurement round.</summary>
+        internal const float HallClutter = 0.6f;
         /// <summary>Shop: shelves full of goods, counters. INVENTED; kept by the second measurement round.</summary>
         internal const float ShopClutter = 0.7f;
 

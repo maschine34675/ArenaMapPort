@@ -27,9 +27,10 @@ lamp flares; Air Pit and Iceberg do not. Bay5 includes its harbor background and
 water, and Iceberg its sea.
 
 Chop Shop is new in 0.6.0 (Arena's `Arena_AutoService`, shown in the game as "Arena: Chop Shop").
-Its ambient sound mix is a computed start value that nobody has listened to, and
-nobody has listened to its gate sounds or its crowd either. It has no DynamicMaps
-overview, no native water and no winter set.
+Its ambient sound mix is a computed start value that the author kept after listening
+to the map on 14 November 2026 ("passt alles"; his statement covers the map as he played
+it and names no single item). It has no DynamicMaps overview, no native water and no
+winter set.
 
 Iceberg joined in 0.5.0. Its brightest lamps (the lobby crystal lamps and the
 chandeliers, among others) are far brighter in Arena's data than on any other map, so
@@ -61,7 +62,7 @@ all) while the stands add one of Arena's louder cheering or angry crowd recordin
 ArenaMode 0.4.0 and later uses the contract and drives the reactions from its match events; a plain raid without a mode sends no such event, so nothing reacts there. The author listened to the developer demo on
 7 November 2026 and found it good (he did not report on the angry recordings
 separately; the demo and the 70 clips ran on the four older crowd maps on 2 November, the roar layer only on Equator and Bowl, not on Bay5 and Air Pit; Iceberg has no crowd,
-and nobody has listened to a reaction on Chop Shop). The roar beds are exported 6 dB louder than in 0.5.0 (since 0.6.0; the developer
+and no single reaction on Chop Shop is recorded as heard apart from the author's statement about the map as a whole). The roar beds are exported 6 dB louder than in 0.5.0 (since 0.6.0; the developer
 volume key stays at 1.0); that level has not been listened to. The idle and cheering animations run independently
 of match events.
 Their textures are stored once for all maps (135 images, about 147 MB on disk). The crowds
@@ -173,7 +174,10 @@ and remains active when developer mode is off.
 Per-room gunshot reverb (**RoomShotAcoustics**) is on by default on all six
 maps: shots ring differently in a big hall than in a small shop. Its room data is
 invented, because neither Escape from Tarkov nor Arena provides gunshot reverb
-values. It can be switched off per map under `Audio (arena_equator)`,
+values. Since 0.6.0 the reverb of the big halls (eight rooms, among them the main halls of
+Equator and Air Pit) is weaker: about 7 to 8 dB less tail on Equator's main hall,
+measured on the test host, but not yet listened to; shops and steel bodies are unchanged.
+It can be switched off per map under `Audio (arena_equator)`,
 `Audio (arena_bay5)`, `Audio (arena_airpit)`, `Audio (arena_bowl)`, `Audio (arena_iceberg)` or `Audio (arena_autoservice)` with
 **General / DeveloperMode** enabled (enable it and restart EFT, the keys then appear in F12); switching it off
 restores the shipped gunshot acoustics.
@@ -260,9 +264,10 @@ no per-light flares and no ported grass, and it is a server-time map
 without a winter or snow look.
 
 Chop Shop has had raids on the test host with and without bots, and the hideout opened
-afterwards, with no ArenaMapPort warning, but fewer than the older maps. Not listened
-to: its ambient mix (computed start values), its gate sounds, its crowd and the louder
-roar beds. Not checked: whether a player can climb the tribune decks above the hall,
+afterwards, with no ArenaMapPort warning, but fewer than the older maps. The author
+listened to the map on 14 November 2026 and said everything fits (no single item named;
+the ambient mix stays a computed start value). Not listened to: the louder roar beds and
+the weaker big-hall gunshot reverb. Not checked: whether a player can climb the tribune decks above the hall,
 the rain-depth readback and a raid with ArenaMode from this project. It is a server-time map with a
 summer set only (no winter or snow look). The appended spawn rows and the exits in the
 team start areas ran in plain raids on all six maps and in two ArenaMode Team Deathmatch

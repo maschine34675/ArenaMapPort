@@ -73,7 +73,7 @@ public sealed class RoomShotAcousticsModelTests
         // AirPit "Main": 111.4 x 43.2 x 96.4 m, IndoorConcrete.
         var cls = Resolve(IndoorConcrete, false, false, 111.4f, 43.2f, 96.4f, out var preset);
         Assert.Equal(RoomShotClass.Hall, cls);
-        AssertPreset(preset, 50f, 43.2f, 50f, "Concrete", "Concrete", "Concrete", "CeramicTile", "Concrete", "Concrete", 0.4f);
+        AssertPreset(preset, 50f, 43.2f, 50f, "Concrete", "Concrete", "AcousticTile", "CeramicTile", "Concrete", "Concrete", 0.6f);
         Assert.False(preset.UsedClassDefaults);
     }
 
@@ -83,7 +83,7 @@ public sealed class RoomShotAcousticsModelTests
         // AirPit "Start1": 111 x 35 x 89 m, IndoorBrick. Size wins over the brick type for the Hall class.
         var cls = Resolve(IndoorBrick, false, false, 111f, 35f, 89f, out var preset);
         Assert.Equal(RoomShotClass.Hall, cls);
-        AssertPreset(preset, 50f, 35f, 50f, "Concrete", "Concrete", "Concrete", "CeramicTile", "Concrete", "Concrete", 0.4f);
+        AssertPreset(preset, 50f, 35f, 50f, "Concrete", "Concrete", "AcousticTile", "CeramicTile", "Concrete", "Concrete", 0.6f);
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public sealed class RoomShotAcousticsModelTests
     {
         // The choice of the second host measurement round (docs/progress/shot-acoustics.md, "Tuning round"); the numbers
         // stay INVENTED. Changing one is a decision.
-        Assert.Equal(("Concrete", "Concrete", "CeramicTile", 0.4f), (Default.Hall.Walls, Default.Hall.Ceiling, Default.Hall.Floor, Default.Hall.Clutter));
+        Assert.Equal(("Concrete", "AcousticTile", "CeramicTile", 0.6f), (Default.Hall.Walls, Default.Hall.Ceiling, Default.Hall.Floor, Default.Hall.Clutter));
         Assert.Equal(("GypsumBoard", "AcousticTile", "CeramicTile", 0.7f), (Default.Shop.Walls, Default.Shop.Ceiling, Default.Shop.Floor, Default.Shop.Clutter));
         Assert.Equal(("Steel", "Steel", "Carpet", 0.7f), (Default.Metal.Walls, Default.Metal.Ceiling, Default.Metal.Floor, Default.Metal.Clutter));
         Assert.Equal(50f, Default.HallMaxDimension);
@@ -359,6 +359,48 @@ public sealed class RoomShotAcousticsModelTests
                 Assert.Equal(name, ClampLikeBepInEx(RoomShotAcousticsModel.MaterialChoices(keyDefault), name));
     }
 
+    // ---- hall defaults revision (2026-11-14) ----------------------------------------------------------------------------
+
+    [Fact]
+    public void HallDefaultsRevisionIsOneAndKeepsThePreviousTable()
+    {
+        Assert.Equal(1, RoomShotHallDefaults.Revision);
+        Assert.Equal(("Concrete", "Concrete", "CeramicTile", 0.4f),
+            (RoomShotHallDefaults.PreviousWalls, RoomShotHallDefaults.PreviousCeiling, RoomShotHallDefaults.PreviousFloor, RoomShotHallDefaults.PreviousClutter));
+    }
+
+    [Fact]
+    public void TheNewHallTableDiffersFromThePreviousOneInCeilingAndClutterOnly()
+    {
+        Assert.Equal(RoomShotHallDefaults.PreviousWalls, Default.Hall.Walls);
+        Assert.Equal(RoomShotHallDefaults.PreviousFloor, Default.Hall.Floor);
+        Assert.NotEqual(RoomShotHallDefaults.PreviousCeiling, Default.Hall.Ceiling);
+        Assert.NotEqual(RoomShotHallDefaults.PreviousClutter, Default.Hall.Clutter);
+        Assert.Equal("AcousticTile", Default.Hall.Ceiling);
+        Assert.Equal(0.6f, Default.Hall.Clutter);
+    }
+
+    [Fact]
+    public void TheHallTableMovesAtRevisionZeroOnlyForExactlyThePreviousTable()
+    {
+        Assert.True(RoomShotHallDefaults.Moves(0, "Concrete", "Concrete", "CeramicTile", 0.4f));
+        Assert.False(RoomShotHallDefaults.Moves(0, "Marble", "Concrete", "CeramicTile", 0.4f));
+        Assert.False(RoomShotHallDefaults.Moves(0, "Concrete", "Glass", "CeramicTile", 0.4f));
+        Assert.False(RoomShotHallDefaults.Moves(0, "Concrete", "Concrete", "Carpet", 0.4f));
+        Assert.False(RoomShotHallDefaults.Moves(0, "Concrete", "Concrete", "CeramicTile", 0.41f));
+        Assert.False(RoomShotHallDefaults.Moves(0, "concrete", "Concrete", "CeramicTile", 0.4f)); // ordinal
+        Assert.False(RoomShotHallDefaults.Moves(0, null, "Concrete", "CeramicTile", 0.4f));
+        // The new table is not the previous one, so it never "moves" again.
+        Assert.False(RoomShotHallDefaults.Moves(0, Default.Hall.Walls, Default.Hall.Ceiling, Default.Hall.Floor, Default.Hall.Clutter));
+    }
+
+    [Fact]
+    public void TheHallTableDoesNotMoveOnceTheRevisionIsReached()
+    {
+        Assert.False(RoomShotHallDefaults.Moves(1, "Concrete", "Concrete", "CeramicTile", 0.4f));
+        Assert.False(RoomShotHallDefaults.Moves(2, "Concrete", "Concrete", "CeramicTile", 0.4f));
+    }
+
     // ---- tuning options -------------------------------------------------------------------------------------------------
 
     [Fact]
@@ -399,7 +441,7 @@ public sealed class RoomShotAcousticsModelTests
         var tuning = Tune(RoomShotClass.Shop, new RoomShotClassTuning("Glass", "Glass", "Glass", 0.9f));
         Resolve(IndoorConcrete, false, false, 111.4f, 43.2f, 96.4f, out var hall, tuning);
         Resolve(IndoorMetalThin, false, false, 5.95f, 2.1f, 39.4f, out var metal, tuning);
-        AssertPreset(hall, 50f, 43.2f, 50f, "Concrete", "Concrete", "Concrete", "CeramicTile", "Concrete", "Concrete", 0.4f);
+        AssertPreset(hall, 50f, 43.2f, 50f, "Concrete", "Concrete", "AcousticTile", "CeramicTile", "Concrete", "Concrete", 0.6f);
         AssertPreset(metal, 5.95f, 2.1f, 39.4f, "Steel", "Steel", "Steel", "Carpet", "Steel", "Steel", 0.7f);
     }
 
@@ -454,12 +496,12 @@ public sealed class RoomShotAcousticsModelTests
         var cls = Resolve(IndoorConcrete, false, false, 111.4f, 43.2f, 96.4f, out var preset, tuning);
         Assert.Equal(RoomShotClass.Hall, cls);
         // The whole class falls back to its own defaults, never to another class's.
-        AssertPreset(preset, 50f, 43.2f, 50f, "Concrete", "Concrete", "Concrete", "CeramicTile", "Concrete", "Concrete", 0.4f);
+        AssertPreset(preset, 50f, 43.2f, 50f, "Concrete", "Concrete", "AcousticTile", "CeramicTile", "Concrete", "Concrete", 0.6f);
         Assert.Equal(new[]
         {
-            "HallWalls='Bogus'->Concrete", "HallCeiling='Nope'->Concrete", "HallFloor='Void'->CeramicTile", "HallClutter=NaN->0.4"
+            "HallWalls='Bogus'->Concrete", "HallCeiling='Nope'->AcousticTile", "HallFloor='Void'->CeramicTile", "HallClutter=NaN->0.6"
         }, preset.Corrections);
-        Assert.Equal("HallWalls='Bogus'->Concrete; HallCeiling='Nope'->Concrete; HallFloor='Void'->CeramicTile; HallClutter=NaN->0.4",
+        Assert.Equal("HallWalls='Bogus'->Concrete; HallCeiling='Nope'->AcousticTile; HallFloor='Void'->CeramicTile; HallClutter=NaN->0.6",
             preset.CorrectionsText);
     }
 
@@ -702,7 +744,7 @@ public sealed class RoomShotAcousticsModelTests
         // (like Equator's UpRoof corridor, a Hall by the 40 m rule). 49.5 m is under the 50 m cap, so the real size is used.
         var cls = Resolve(IndoorGeneric, false, false, 49.478f, 2.911f, 10.124f, out var preset);
         Assert.Equal(RoomShotClass.Hall, cls);
-        AssertPreset(preset, 49.478f, 2.911f, 10.124f, "Concrete", "Concrete", "Concrete", "CeramicTile", "Concrete", "Concrete", 0.4f);
+        AssertPreset(preset, 49.478f, 2.911f, 10.124f, "Concrete", "Concrete", "AcousticTile", "CeramicTile", "Concrete", "Concrete", 0.6f);
     }
 
     [Fact]
@@ -802,6 +844,30 @@ public sealed class RoomShotAcousticsWiringTests
         Assert.Equal(5, Regex.Matches(code, @"\.SettingChanged \+= MarkTuningChanged;").Count);
         Assert.Matches(@"static void MarkTuningChanged\(object sender, EventArgs args\) => _tuningVersion\+\+;", code);
         Assert.Contains("ReadTuning()", code); // the values are read on each application, never cached
+    }
+
+    [Fact]
+    public void TheHallDefaultsReSeedIsHiddenSettingsBoundAndLogsOneDebugLine()
+    {
+        var code = Text("ArenaMapPort.Client/RoomShotAcoustics.cs");
+        Assert.Matches(@"Plugin\.Instance\.Settings\.Bind\(LabSection, ""HallDefaultsRevision"", 0, new ConfigDescription\(", code);
+        Assert.Contains("System.ComponentModel.BrowsableAttribute.No", code);
+        Assert.Contains("RoomShotHallDefaults.Moves(revision.Value,", code);
+        Assert.Contains("if (revision.Value >= RoomShotHallDefaults.Revision) return;", code);
+        Assert.Contains("Plugin.Log.LogDebug($\"{Tag} config re-seeded to hall defaults revision {RoomShotHallDefaults.Revision} ({moved} value(s) moved; hall=", code);
+        Assert.Contains("clutter={_hall.Clutter.Value.ToString(\"0.##\", CultureInfo.InvariantCulture)})", code);
+        Assert.Contains("MigrateHallDefaults(defaults.Hall);", code);
+        // No literals: the new values come from the model's table; the revision key never marks the tuning changed.
+        Assert.Contains("newHall.Ceiling", code);
+        Assert.Contains("newHall.Clutter", code);
+        Assert.Contains("revision.Value = RoomShotHallDefaults.Revision;", code);
+        // The table writes sit inside the Moves(...) block (a tuned table is never overwritten).
+        Assert.Matches(@"Moves\(revision\.Value,[^{]*\{[^}]*newHall\.Ceiling[^;]*;[^;]*;[^}]*\}[^}]*newHall\.Clutter[^}]*\}\s*\}\s*revision\.Value = RoomShotHallDefaults\.Revision;", code);
+        Assert.DoesNotMatch(@"revision\.SettingChanged", code);
+        Assert.Equal(5, Regex.Matches(code, @"\.SettingChanged \+= MarkTuningChanged;").Count);
+        Assert.DoesNotMatch(@"(?<![A-Za-z])Config\.Bind\(", code);
+        Assert.DoesNotContain("Config.Save", code);
+        Assert.DoesNotContain(".Save()", code);
     }
 
     [Fact]
