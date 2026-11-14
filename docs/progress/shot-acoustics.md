@@ -812,3 +812,118 @@ and a rebuilt file would have asked for a server restart, so the deployed `08369
 - **Not verified:** nobody has listened to the new table (the user's ear decides); an actual burst; the third-person route; the other five
   Hall rooms (Equator `UpRoof`, Air Pit `Start1`, Bowl `FanZone`, Iceberg `coffe_2`, Chop Shop `MainRoom`), which get the same table by
   the same code path; a developer file with a tuned hall table on a real install.
+
+## 2026-11-14 (2) - Hall table, revision 2: the long ringing (ConcreteBlock walls, AcousticTile ceiling, clutter 0.2)
+
+User, 2026-11-14, after listening to the table of `7dba143` (Concrete / AcousticTile / CeramicTile, clutter 0.6): "habe ich mir angehört,
+ich glaube es ist eher das lange nachklingen das wir nochmal überarbeiten sollten". So the morning's step lowered the level and left what
+he actually minds: how long a hall rings on.
+
+### The probe got a later window and a tone frequency
+
+`ReverbAudioProbe` (developer only): a third tail window `tailFar`, 1.5-3.0 s after the pulse (the pulse now takes 3.1 s instead of 1.6 s),
+and the key `Audio diagnostics/ReverbPulseFrequency` (default 1500 Hz, 100-8000, read when a pulse starts; tone and readback use it). The
+result line ends `... tailEarly=<e> tailLate=<e> tailFar=<e> freq=<n> blocks=a/b/c/d; output includes background audio`. Every number
+recorded before this section is a 1500 Hz number without a far window. Two things to know when using it: at 400 Hz the muted host's
+baseline is about 3e-5 (1500 Hz: about 2e-6), so a `tailFar` near that is the floor, not the room; and Air Pit has a background sound at
+400 Hz that `AmbientGainDb` -12 does not remove (baselines of 1e-4 to 3e-3): set `Audio (arena_airpit)/AmbientRangeMultiplier` to 1 for
+the measurement as well.
+
+### Host measurement (lead, GPU-2, 2026-11-14 10:56-11:06, the probe build on top of `8755049`, lab keys set live, all values set back)
+
+Method and muting as in the section above; one EFT process, raids Equator, Air Pit, Equator, bots None. `S0` is the table of `7dba143`,
+`ORIG` the table of 0.5.0 (Concrete ceiling, clutter 0.4). Columns: walls / ceiling / clutter (floor CeramicTile, cap 50 throughout);
+amplitudes early / late / far; "decay" is the plain slope between the window centres (0.525 s, 1.1 s, 2.25 s), from early to far where far
+stands clear of the floor, else from early to late. The raw pulses with their log times, the high-group pulses included, are in the table
+below the summary.
+
+Equator `Main` (room 19, 50.0 x 24.7 x 50.0), at (0.0, 0.2, 2.0):
+
+| Table | 1500 Hz early / late / far | decay | 400 Hz early / late / far | decay |
+|---|---|---|---|---|
+| ORIG: Concrete / Concrete / 0.4 | (morning: 1.30e-3 / 6.94e-4, no far window) | | 2.13e-3 / 1.41e-3 / 8.60e-4 (one pulse) | 13 s |
+| S0: Concrete / AcousticTile / 0.6 | 5.27e-4 / 2.61e-4 / 4.29e-5 | 4.8 s | 9.54e-4 / 5.58e-4 / 2.92e-4 | 10 s |
+| ConcreteBlockPainted / AcousticTile / 0.6 | 4.77e-4 / 1.87e-4 / 2.62e-5 | 4.1 s | | |
+| Mud / AcousticTile / 0.6 | 2.94e-4 / 8.85e-5 / floor | 3.3 s | 3.29e-4 / 1.01e-4 / floor | 3.4 s |
+| Vent / AcousticTile / 0.6 | 2.01e-4 / 4.75e-5 / floor | 2.8 s | | |
+| ConcreteBlock / AcousticTile / 0.6 | 1.90e-4 / 4.49e-5 / floor | 2.8 s | | |
+| ConcreteBlock / Concrete / 0.6 | 2.65e-4 / 7.82e-5 / floor | 3.3 s | | |
+| ConcreteBlock / Concrete / 0.2 | 5.15e-4 / 1.47e-4 / 6.7e-6 | 2.7 s | 5.04e-4 / 1.57e-4 / floor | 3.4 s |
+| **ConcreteBlock / AcousticTile / 0.2 (chosen)** | 3.89e-4 / 7.89e-5 / floor | 2.5 s | 3.18e-4 / 8.17e-5 / floor | 2.9 s |
+
+At 4000 Hz (one pulse each): S0 9.58e-5 / 4.16e-5 / 9.27e-6 (5.1 s), ConcreteBlock / Concrete / 0.2 9.26e-5 / 2.36e-5 / 2.12e-6 (3.2 s).
+The unchanged Shop table in the spawn room (room 5, 29.0 x 4.1 x 12.7) at 400 Hz: 1.12e-3 / 1.94e-4 / floor (2.3 s): the shops have no
+low-end ring.
+
+Air Pit `Main` (room 17, 50.0 x 43.2 x 50.0), at (-3.2, 0.0, -12.1):
+
+| Table | 1500 Hz early / late / far | decay | 400 Hz early / late / far | decay |
+|---|---|---|---|---|
+| S0: Concrete / AcousticTile / 0.6 | 4.54e-4 / 1.89e-4 / 4.02e-5 | 4.9 s | 8.16e-4 / 5.11e-4 / 1.82e-4 (one pulse) | 7.9 s |
+| ConcreteBlock / Concrete / 0.6 | 3.00e-4 / 8.19e-5 / floor | 3.1 s | | |
+| ConcreteBlock / Concrete / 0.2 | 5.94e-4 / 1.60e-4 / floor (and two pulses at 7.9e-4 / 2.2e-4 / 2.2e-5) | 3.0 to 3.3 s | 5.80e-4 / 2.63e-4 / 4.53e-5 | 4.7 s |
+| **ConcreteBlock / AcousticTile / 0.2 (chosen)** | 3.79e-4 / 7.86e-5 / 3.89e-6 | 2.6 s | 3.34e-4 / 1.08e-4 / floor (one pulse) | 3.5 s |
+
+Raw pulses, early / late / far (log time; "high" = the 3 dB group):
+
+- Equator 1500 Hz. S0: 8.38e-4 / 4.21e-4 / 7.10e-5 (10:56:40, high), 5.27e-4 / 2.61e-4 / 4.29e-5 (10:56:48), 8.49e-4 / 3.79e-4 / 7.07e-5
+  (10:56:56, high). ConcreteBlock / AcousticTile / 0.6: 1.90e-4 / 4.49e-5 / 2.73e-6 (10:57:07), 2.75e-4 / 5.60e-5 / 2.68e-6 (10:57:15, high).
+  ConcreteBlockPainted: 4.89e-4 / 1.86e-4 / 2.65e-5 (10:57:24), 4.65e-4 / 1.87e-4 / 2.58e-5 (10:57:31). Mud: 2.94e-4 / 8.85e-5 / 4.06e-6
+  (10:58:02), 4.06e-4 / 1.18e-4 / 6.09e-6 (10:58:10, high). Vent: 2.01e-4 / 4.75e-5 / 2.97e-6 (10:58:17). ConcreteBlock / Concrete / 0.6:
+  2.76e-4 / 7.61e-5 / 4.15e-6 (10:58:25), 2.53e-4 / 8.02e-5 / 4.22e-6 (10:58:34); / 0.2: 5.04e-4 / 1.43e-4 / 7.01e-6 (10:58:47), 5.25e-4 /
+  1.51e-4 / 6.38e-6 (10:58:55). Chosen: 4.07e-4 / 7.88e-5 / 2.92e-6 (11:05:42), 3.70e-4 / 7.89e-5 / 2.99e-6 (11:05:50).
+- Equator 400 Hz. ConcreteBlock / Concrete / 0.2: 4.91e-4 / 1.55e-4 / 4.4e-5 (10:59:03), 5.16e-4 / 1.58e-4 / 3.9e-5 (10:59:10). S0: 9.40e-4 /
+  5.61e-4 / 2.90e-4 (10:59:19), 9.68e-4 / 5.55e-4 / 2.94e-4 (10:59:30). ORIG: 2.13e-3 / 1.41e-3 / 8.60e-4 (10:59:38). Mud / AcousticTile /
+  0.6: 3.29e-4 / 1.01e-4 / 3.8e-5 (10:59:48). Chosen: 4.42e-4 / 1.21e-4 / 2.89e-5 (11:05:57, high), 3.18e-4 / 8.17e-5 / 2.95e-5 (11:06:04).
+  Shop room 5: 1.12e-3 / 1.94e-4 / 3.4e-5 (11:06:26).
+- Air Pit 1500 Hz. S0: 6.82e-4 / 2.97e-4 / 5.77e-5 (11:01:29, baseline 2.0e-5, high), 4.54e-4 / 1.89e-4 / 4.02e-5 (11:01:36). ConcreteBlock /
+  Concrete / 0.2: 7.88e-4 / 2.26e-4 / 2.18e-5 (11:01:44), 7.96e-4 / 2.22e-4 / 2.30e-5 (11:01:52), 5.94e-4 / 1.60e-4 / 2.64e-5 (11:02:43,
+  baseline 2.0e-5); / 0.6: 3.00e-4 / 8.19e-5 / 2.29e-5 (11:02:06, baseline 2.8e-5), 4.27e-4 / 1.17e-4 / 3.03e-5 (11:02:14, baseline 2.2e-5,
+  high). Chosen: 3.67e-4 / 7.70e-5 / 3.84e-6 (11:04:00), 3.90e-4 / 8.01e-5 / 3.93e-6 (11:04:08).
+- Air Pit 400 Hz. ConcreteBlock / Concrete / 0.2: three pulses lost to the background sound (baselines 2.96e-3, 3.2e-4, 1.0e-4), then with
+  `AmbientRangeMultiplier` 1: 5.69e-4 / 2.54e-4 / 4.50e-5 (11:03:22), 5.90e-4 / 2.72e-4 / 4.56e-5 (11:03:30). S0: 8.16e-4 / 5.11e-4 / 1.82e-4
+  (11:03:39). Chosen: 3.34e-4 / 1.08e-4 / 1.48e-5 (11:03:52, baseline 1.6e-5).
+
+Which of Air Pit's ConcreteBlock / Concrete / 0.2 pulses at 1500 Hz are the high group is not settled (7.9e-4 twice, 5.9e-4 once).
+
+### Reading
+
+- **The lingering is a low-end problem.** At 400 Hz S0 still holds 0.31 (Equator) and 0.22 (Air Pit) of its early amplitude in the
+  1.5-3 s window, a decay of about 10 s and 8 s, against 0.08 and 0.09 at 1500 Hz (4.8 s and 4.9 s). ORIG read 13 s at 400 Hz. The plugin
+  applies the clutter factor to its four bands as `[c/8, c/4, c/2, c]` (decompile, `MetaXRAudioRoomAcousticProperties.Update`), so the
+  morning's clutter step lowered the highs (about 3 dB at 1500 Hz) and barely touched the lows: S0 is 7 dB quieter than ORIG at 400 Hz in
+  the early window and decays hardly faster (10 s against 13 s). The 1500 Hz probe of the morning could not see this.
+- **Walls are the broadband lever.** The plugin's reflection coefficients for the four bands: Concrete 0.99 / 0.98 / 0.98 / 0.98,
+  ConcreteBlockPainted 0.90 / 0.94 / 0.92 / 0.92, Mud 0.84 / 0.73 / 0.79 / 0.85, Vent 0.85 / 0.62 / 0.70 / 0.80, ConcreteBlock 0.64 / 0.65 /
+  0.67 / 0.79, AcousticTile 0.49 / 0.36 / 0.34 / 0.50. ConcreteBlock walls bring the decay to about 3 s with a Concrete ceiling and to about
+  2.5 s with the AcousticTile ceiling, at 1500 Hz and (within a second) at 400 Hz; a painted block wall is too close to concrete (4.1 s).
+  A Carpet floor would only take the highs (0.99 at the lowest band) and was not tried.
+- **Clutter is now the level control of the highs.** With absorbing walls the tail is quieter as a whole; clutter 0.2 instead of 0.6 gives
+  about 6 dB back at 1500 Hz and leaves the decay alone.
+
+### Decision (lead; the code defaults, pinned in `RoomShotAcousticsModelTests`)
+
+| | Walls | Ceiling | Floor | Clutter |
+|---|---|---|---|---|
+| Hall (revision 2, 2026-11-14) | **ConcreteBlock** (was Concrete) | AcousticTile | CeramicTile | **0.2** (0.6 in revision 1, 0.4 in 0.5.0) |
+| Shop (unchanged) | GypsumBoard | AcousticTile | CeramicTile | 0.7 |
+| Metal (unchanged) | Steel | Steel | Carpet | 0.7 |
+
+Against S0 (what the user heard) the chosen table reads, early / late / far: Equator 1500 Hz -2.6 / -10.4 dB / at the floor (at least
+-23 dB), 400 Hz -9.5 / -16.7 dB / at the floor (at least -20 dB); Air Pit 1500 Hz -1.6 / -7.6 / -20.3 dB, 400 Hz -7.8 / -13.5 dB / at the
+floor (at least -22 dB). In words: the first third of a second is about as loud as before in the mids and clearly leaner in the lows, and
+from 1.5 s on the hall is 20 dB or more quieter than it was; the decay is about 2.5 s in the mids and 3 to 3.5 s in the lows, where it was
+5 s and 8 to 10 s. The hall is still slower than a shop (2.3 s at 400 Hz in Equator's spawn room, about 2 s at 1500 Hz by the earlier
+tables) but no longer by much; its early level is below a shop's. Why the shorter of the two candidates: the request names the ringing,
+and the Concrete-ceiling variant keeps Air Pit's low end at about 4.7 s. Still INVENTED data. **Nobody has listened to this table yet.**
+
+Live steps for the ear (developer keys, no rebuild): `ShotAcousticsLab/HallCeiling = Concrete` is the longer variant (about 3 s in the
+mids, 3.4 to 4.7 s in the lows, and about 2 to 5 dB louder early); `HallClutter` 0.4 or 0.6 takes about 3 or 6 dB off the highs without
+changing the decay; `HallWalls = Concrete` with `HallClutter = 0.6` is the table of the morning.
+
+### Saved values: revision 2 of `ShotAcousticsLab/HallDefaultsRevision`
+
+`RoomShotHallDefaults.Revision` is 2. A saved hall table moves only when it is exactly the default of the revision the file was written
+with: a revision-0 file (0.5.0) holding Concrete / Concrete / CeramicTile / 0.4, or a revision-1 file (the DLL of `7dba143`: GPU-2 and the
+author's own install) holding Concrete / AcousticTile / CeramicTile / 0.6. Anything else is a tuned table and stays entirely, a revision-1
+file that was set back to the 0.5.0 values by hand included. Revision 1 was never released.

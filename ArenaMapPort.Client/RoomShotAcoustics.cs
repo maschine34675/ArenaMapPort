@@ -38,9 +38,10 @@ namespace ArenaMapPort.Client
     /// The class table is tuned live in the developer config section ShotAcousticsLab (docs/progress/shot-acoustics.md):
     /// the first host measurement showed that the near-perfectly reflective first presets make a shop ring louder and
     /// longer than the hall, so every material and clutter factor is a key, read on each application.
-    /// 2026-11-14 (user request, "a little too much under full-auto fire"): the Hall default became ceiling AcousticTile and
-    /// clutter 0.6 (Concrete / 0.4 before); a saved hall table that is exactly the old one moves once, as a set, through the
-    /// hidden key HallDefaultsRevision (RoomShotHallDefaults), a tuned table stays. Record: docs/progress/shot-acoustics.md.
+    /// 2026-11-14 (user: the long ringing, revision 2): the Hall default is ConcreteBlock walls, AcousticTile ceiling,
+    /// CeramicTile floor, clutter 0.2 (the walls are the broadband lever). A saved hall table that is exactly the table of its
+    /// saved revision moves once, as a set, through the hidden key HallDefaultsRevision (RoomShotHallDefaults), a tuned table
+    /// stays. Record: docs/progress/shot-acoustics.md.
     /// Host test: GPU-2 2026-10-15/16 on AirPit, Equator and Bay5 (ReverbPulse buses Gunshots, GunshotsFirstPerson and
     /// GunshotsThirdPerson, hall vs shop vs switch off); evidence in docs/progress/shot-acoustics.md.
     /// </summary>
@@ -95,18 +96,20 @@ namespace ArenaMapPort.Client
             AudioSettings.OnAudioConfigurationChanged += deviceChanged => _audioReset = true;
         }
 
-        // Once-only re-seed (revision 1, 2026-11-14): the Hall class got ceiling AcousticTile and clutter 0.6. The hall table moves as a
-        // set, only when all four saved values are exactly the previous table; the decision is RoomShotHallDefaults' (unit-tested).
+        // Once-only re-seed (revision 2, 2026-11-14): the Hall class got ConcreteBlock walls and clutter 0.2. The hall table moves as a
+        // set, only when all four saved values are exactly the table its saved revision shipped; the decision is made by RoomShotHallDefaults (unit-tested).
         static void MigrateHallDefaults(RoomShotClassTuning newHall)
         {
             var revision = Plugin.Instance.Settings.Bind(LabSection, "HallDefaultsRevision", 0, new ConfigDescription(
-                "Internal - once-only default migration for the hall table (revision 1: an untouched previous table moves to AcousticTile ceiling and clutter 0.6). Leave it alone.",
+                "Internal - once-only default migration for the hall table (revision 2: an untouched earlier default table moves to ConcreteBlock walls, AcousticTile ceiling and clutter 0.2). Leave it alone.",
                 null, System.ComponentModel.BrowsableAttribute.No));
             if (revision.Value >= RoomShotHallDefaults.Revision) return;
             int moved = 0;
             if (RoomShotHallDefaults.Moves(revision.Value, _hall.Walls.Value, _hall.Ceiling.Value, _hall.Floor.Value, _hall.Clutter.Value))
             {
+                if (_hall.Walls.Value != newHall.Walls) { _hall.Walls.Value = newHall.Walls; moved++; }
                 if (_hall.Ceiling.Value != newHall.Ceiling) { _hall.Ceiling.Value = newHall.Ceiling; moved++; }
+                if (_hall.Floor.Value != newHall.Floor) { _hall.Floor.Value = newHall.Floor; moved++; }
                 if (_hall.Clutter.Value != newHall.Clutter) { _hall.Clutter.Value = newHall.Clutter; moved++; }
             }
             revision.Value = RoomShotHallDefaults.Revision;

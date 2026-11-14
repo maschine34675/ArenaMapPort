@@ -82,11 +82,12 @@ namespace ArenaMapPort.Client
         }
 
         /// <summary>The built-in table: the choice of the second host measurement round (docs/progress/shot-acoustics.md,
-        /// "Tuning round"), with the Hall class softened on 2026-11-14 (ceiling AcousticTile, clutter 0.6; Concrete / 0.4
-        /// before; user request "a little too much under full-auto fire", record docs/progress/shot-acoustics.md section
-        /// "2026-11-14"). Still INVENTED data, see <see cref="RoomShotAcousticsModel"/>.</summary>
+        /// "Tuning round"), with the Hall class reworked on 2026-11-14: revision 1 (morning) ceiling AcousticTile, clutter 0.6
+        /// (Concrete / 0.4 before); revision 2 (user: the long ringing) walls ConcreteBlock, clutter 0.2 (the walls are the
+        /// broadband lever, clutter acts mostly on the highs). Record docs/progress/shot-acoustics.md sections "2026-11-14"
+        /// and "2026-11-14 (2)". Still INVENTED data, see <see cref="RoomShotAcousticsModel"/>.</summary>
         internal static readonly RoomShotTuning Default = new RoomShotTuning(
-            new RoomShotClassTuning(RoomShotAcousticsModel.Concrete, RoomShotAcousticsModel.AcousticTile,
+            new RoomShotClassTuning(RoomShotAcousticsModel.ConcreteBlock, RoomShotAcousticsModel.AcousticTile,
                 RoomShotAcousticsModel.CeramicTile, RoomShotAcousticsModel.HallClutter),
             new RoomShotClassTuning(RoomShotAcousticsModel.GypsumBoard, RoomShotAcousticsModel.AcousticTile,
                 RoomShotAcousticsModel.CeramicTile, RoomShotAcousticsModel.ShopClutter),
@@ -108,22 +109,45 @@ namespace ArenaMapPort.Client
     }
 
     /// <summary>
-    /// Once-only re-seed of the Hall class table (revision 1, 2026-11-14): the hall moved from Concrete ceiling / clutter 0.4
-    /// to AcousticTile / 0.6. The table moves as a SET: exactly the untouched previous table moves to the new one; a table
-    /// with any tuned value stays as it is, entirely. Unity-free, unit-tested; the glue is RoomShotAcoustics.Install.
+    /// Once-only re-seed of the Hall class table. Revision 0 (0.5.0): Concrete walls and ceiling, CeramicTile floor, clutter 0.4.
+    /// Revision 1 (2026-11-14 morning, never released): AcousticTile ceiling, clutter 0.6. Revision 2 (2026-11-14, user: the
+    /// long ringing): ConcreteBlock walls, AcousticTile ceiling, CeramicTile floor, clutter 0.2 (the walls are the broadband
+    /// lever, clutter acts mostly on the highs). The table moves as a SET and only when it is exactly the table that the SAVED
+    /// revision shipped as its default; any other table is a tuned one and stays entirely. Unity-free, unit-tested; the glue is
+    /// RoomShotAcoustics.Install.
     /// </summary>
     internal static class RoomShotHallDefaults
     {
-        internal const int Revision = 1;
-        internal const string PreviousWalls = "Concrete", PreviousCeiling = "Concrete", PreviousFloor = "CeramicTile";
-        internal const float PreviousClutter = 0.4f;
+        internal const int Revision = 2;
 
-        internal static bool Moves(int savedRevision, string walls, string ceiling, string floor, float clutter) =>
-            savedRevision < Revision
-            && string.Equals(walls, PreviousWalls, StringComparison.Ordinal)
-            && string.Equals(ceiling, PreviousCeiling, StringComparison.Ordinal)
-            && string.Equals(floor, PreviousFloor, StringComparison.Ordinal)
-            && clutter == PreviousClutter;
+        /// <summary>One shipped default table of the Hall class.</summary>
+        internal readonly struct Table
+        {
+            internal readonly string Walls, Ceiling, Floor;
+            internal readonly float Clutter;
+            internal Table(string walls, string ceiling, string floor, float clutter)
+            {
+                Walls = walls; Ceiling = ceiling; Floor = floor; Clutter = clutter;
+            }
+            internal bool Matches(string walls, string ceiling, string floor, float clutter) =>
+                string.Equals(walls, Walls, StringComparison.Ordinal)
+                && string.Equals(ceiling, Ceiling, StringComparison.Ordinal)
+                && string.Equals(floor, Floor, StringComparison.Ordinal)
+                && clutter == Clutter;
+        }
+
+        /// <summary>The default table of revision 0 (0.5.0) and of revision 1 (2026-11-14 morning).</summary>
+        internal static readonly Table Revision0 = new Table("Concrete", "Concrete", "CeramicTile", 0.4f);
+        internal static readonly Table Revision1 = new Table("Concrete", "AcousticTile", "CeramicTile", 0.6f);
+
+        /// <summary>Does a saved table move to the current default? A revision-0 file (or lower) moves only revision 0 table, a
+        /// revision-1 file only revision 1 table; a file at <see cref="Revision"/> or higher never moves.</summary>
+        internal static bool Moves(int savedRevision, string walls, string ceiling, string floor, float clutter)
+        {
+            if (savedRevision >= Revision) return false;
+            var shipped = savedRevision <= 0 ? Revision0 : Revision1;
+            return shipped.Matches(walls, ceiling, floor, clutter);
+        }
     }
 
     /// <summary>
@@ -175,13 +199,13 @@ namespace ArenaMapPort.Client
         /// <summary>Plugin material names used by <see cref="RoomShotTuning.Default"/>. Every one must be a
         /// <c>MaterialPreset</c> value name.</summary>
         internal const string Steel = "Steel", Carpet = "Carpet", Concrete = "Concrete", CeramicTile = "CeramicTile",
-            GypsumBoard = "GypsumBoard", AcousticTile = "AcousticTile";
+            GypsumBoard = "GypsumBoard", AcousticTile = "AcousticTile", ConcreteBlock = "ConcreteBlock";
 
         /// <summary>Metal: steel shell, soft floor, plenty of seats and luggage. INVENTED.</summary>
         internal const float MetalClutter = 0.7f;
-        /// <summary>Hall: fairly empty, but not a bare box. INVENTED. 0.6 since 2026-11-14 (user request "a little too much
-        /// under full-auto fire", docs/progress/shot-acoustics.md "2026-11-14"); 0.4 before, kept by the second measurement round.</summary>
-        internal const float HallClutter = 0.6f;
+        /// <summary>Hall: fairly empty, but not a bare box. INVENTED. 0.2 since 2026-11-14 (revision 2, user: the long
+        /// ringing; clutter acts mostly on the highs, the walls carry the broadband tail); 0.6 in revision 1, 0.4 before.</summary>
+        internal const float HallClutter = 0.2f;
         /// <summary>Shop: shelves full of goods, counters. INVENTED; kept by the second measurement round.</summary>
         internal const float ShopClutter = 0.7f;
 

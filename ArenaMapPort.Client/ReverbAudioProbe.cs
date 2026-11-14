@@ -18,7 +18,11 @@ namespace ArenaMapPort.Client
     /// GunshotsFirstPerson and GunshotsThirdPerson: the weapon audio queue that WeaponSoundPlayer fills for EVERY shot,
     /// with EnableStereo(true) (the player's own weapon) or EnableStereo(false) (everyone else's: bots, other players).
     /// The "pulse begin" line records the plugin's acoustic model and native room, the "pulse route" line what the source
-    /// really did (spatialized, acoustics, helper sources), so the log shows which path each number belongs to.</summary>
+    /// really did (spatialized, acoustics, helper sources), so the log shows which path each number belongs to.
+    /// The result line gives RMS amplitudes of the tone bin (dB = 20 log10 of a ratio) for the baseline and three tail windows:
+    /// tailEarly 0.35-0.7 s, tailLate 0.7-1.5 s and, since 2026-11-14, tailFar 1.5-3.0 s after the pulse (how long a room rings
+    /// on). The tone is 1500 Hz unless ReverbPulseFrequency says otherwise (2026-11-14: a wall material can absorb the highs
+    /// and leave the lows ringing, so one frequency is not the whole decay).</summary>
     internal static class ReverbAudioProbe
     {
         // The gunshot buses are appended last: saved ReverbPulseBus values keep their meaning.
@@ -35,10 +39,12 @@ namespace ArenaMapPort.Client
         static GameObject _object;
         static NativeSpatialAudio.State _owner;
         static readonly float[] Samples = new float[4096];
-        static double _started, _playedAt, _baseline, _early, _late, _dryPeak;
+        static double _started, _playedAt, _baseline, _early, _late, _far, _dryPeak;
         static bool _running, _played, _audioReset, _routeLogged;
-        static int _baselineN, _earlyN, _lateN;
-        const double Frequency = 1500;
+        static int _baselineN, _earlyN, _lateN, _farN;
+        const float DefaultFrequency = 1500f;
+        static double _frequency = DefaultFrequency; // the tone of the running pulse (the config value may change meanwhile)
+        static ConfigEntry<float> _frequencyKey;
         static ConfigEntry<float> _volume; // pulse level: the muted test host measures energy, so a loud pulse only raises the signal over the background
         // Pulse distance from the listener and the source's rolloff (metres) on the gun paths. Not a measured value.
         const float GunshotDistance = 2f, GunshotRolloff = 200f;
@@ -52,6 +58,9 @@ namespace ArenaMapPort.Client
             _volume = Plugin.Instance.Settings.Bind("Audio diagnostics", "ReverbPulseVolume", 0.08f,
                 new ConfigDescription("Test only: level of the ReverbPulse tone (0.08 = quiet). Raise it on a muted test host so the tail measurement stands clear of background audio; the numbers scale with it, compare runs at one level.",
                     new AcceptableValueRange<float>(0.01f, 1f)));
+            _frequencyKey = Plugin.Instance.Settings.Bind("Audio diagnostics", "ReverbPulseFrequency", DefaultFrequency,
+                new ConfigDescription("Test only: frequency in Hz of the ReverbPulse tone and of its readback (1500 = the value every recorded measurement before 2026-11-14 used). Lower values show how long the low end of a room rings; compare runs at one frequency. Read when a pulse starts.",
+                    new AcceptableValueRange<float>(100f, 8000f)));
             if (!DeveloperOptions.Enabled) return;
             Plugin.Instance.gameObject.AddComponent<Runner>();
             AudioSettings.OnAudioConfigurationChanged += deviceChanged => _audioReset = true;
@@ -185,14 +194,15 @@ namespace ArenaMapPort.Client
                                 $"Probe bus {_bus.Value} has no mixer group on {state.MapKey} (MapAmbience needs the imported ambient driver, which runs on Equator, Bay5, AirPit, Bowl, Iceberg and AutoService only)");
                         }
                         int rate = AudioSettings.outputSampleRate;
+                        _frequency = _frequencyKey.Value;
                         var pcm = new float[(int)(rate * 0.12)];
                         for (int i = 0; i < pcm.Length; i++)
-                            pcm[i] = (float)(Math.Sin(2 * Math.PI * Frequency * i / rate) * Math.Sin(Math.PI * i / pcm.Length));
+                            pcm[i] = (float)(Math.Sin(2 * Math.PI * _frequency * i / rate) * Math.Sin(Math.PI * i / pcm.Length));
                         _clip = AudioClip.Create("ArenaMapPort dry diagnostic pulse", pcm.Length, 1, rate, false);
                         if (!_clip.SetData(pcm, 0)) throw new InvalidOperationException("Pulse PCM rejected");
                         if (_route == Route.Mixer) _source.clip = _clip;
                         _started = AudioSettings.dspTime; _played = false; _running = true; _routeLogged = false;
-                        _baseline = _early = _late = _dryPeak = 0; _baselineN = _earlyN = _lateN = 0;
+                        _baseline = _early = _late = _far = _dryPeak = 0; _baselineN = _earlyN = _lateN = _farN = 0;
                         AudioListener.GetOutputData(Samples, 0); // Warm up the listener readback.
                         RoomReverb.Log();
                         Plugin.Log.LogDebug($"{RoomReverb.Tag} pulse begin bus={_bus.Value} group={(_route != Route.Mixer ? audio.GunshotMixerGroup?.name : _source.outputAudioMixerGroup?.name)} " +
@@ -200,7 +210,7 @@ namespace ArenaMapPort.Client
                     }
                     double time = AudioSettings.dspTime - _started;
                     AudioListener.GetOutputData(Samples, 0);
-                    double real = 0, imaginary = 0, step = 2 * Math.PI * Frequency / AudioSettings.outputSampleRate;
+                    double real = 0, imaginary = 0, step = 2 * Math.PI * _frequency / AudioSettings.outputSampleRate;
                     for (int i = 0; i < Samples.Length; i++)
                     { real += Samples[i] * Math.Cos(step * i); imaginary += Samples[i] * Math.Sin(step * i); }
                     double energy = (real * real + imaginary * imaginary) / (Samples.Length * Samples.Length);
@@ -217,11 +227,13 @@ namespace ArenaMapPort.Client
                     // Skip dry playback and at least one complete output buffer (4096/48k=85ms).
                     if (afterPlay >= 0.35 && afterPlay < 0.7) { _early += energy; _earlyN++; }
                     if (afterPlay >= 0.7 && afterPlay < 1.5) { _late += energy; _lateN++; }
-                    if (afterPlay < 1.6) return;
+                    if (afterPlay >= 1.5 && afterPlay < 3.0) { _far += energy; _farN++; }
+                    if (afterPlay < 3.1) return;
                     Plugin.Log.LogDebug($"{RoomReverb.Tag} pulse result bus={BusName()} dryPlaying={DryPlaying()} " +
                         $"baseline={Math.Sqrt(_baseline / Math.Max(1, _baselineN)):E4} dryPeak={Math.Sqrt(_dryPeak):E4} " +
                         $"tailEarly={Math.Sqrt(_early / Math.Max(1, _earlyN)):E4} tailLate={Math.Sqrt(_late / Math.Max(1, _lateN)):E4} " +
-                        $"blocks={_baselineN}/{_earlyN}/{_lateN}; output includes background audio");
+                        $"tailFar={Math.Sqrt(_far / Math.Max(1, _farN)):E4} freq={_frequency.ToString("0.#", CultureInfo.InvariantCulture)} " +
+                        $"blocks={_baselineN}/{_earlyN}/{_lateN}/{_farN}; output includes background audio");
                     Stop();
                 }
                 catch (Exception e) { Stop(); _request.Value = false; Plugin.Log.LogError(RoomReverb.Tag + " pulse failed: " + e); }
