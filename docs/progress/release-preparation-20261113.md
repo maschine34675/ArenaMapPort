@@ -158,3 +158,65 @@ nochmal überarbeiten sollten".
 - **Open:** the user's ear on revision 2 (live steps: `ShotAcousticsLab/HallCeiling = Concrete` for a longer ring, `HallClutter` 0.4 or
   0.6 for fewer highs). This replaces the "Open now" line of the section above, whose `HallClutter` advice belonged to revision 1.
   Everything else as in the section above.
+
+## Published - 2026-11-14 (user: "habe ich mir angehört, passt so. dann branch mergen, löschen, pushen und release auf github")
+
+The author listened to the final hall reverb table (revision 2) and approved it; the same message is the go for the publication.
+He had committed new screenshots under `assets/` himself (`498adbc`).
+
+- **Texts before the cut.** A three-lens audit of the texts that ship (release note against the records, consistency of the five texts,
+  the player's eye; read-only agents) found, and the lead fixed: Iceberg's shadow leak is a finding at shadow quality Low only; the key
+  sentence now reads the same everywhere; README and FORGE name 1500 Hz for the hall figures; the author's words are quoted in German;
+  the release note says which hall rooms were measured; the generated README.txt names the five maps with a DynamicMaps overview.
+  Build commit `b06f8dc`.
+- **Release build (17:48):** client Release WITHOUT DllOnly: `OK stage arena_<map>: 3 bundles encrypted (0 written) ... (unchanged)` for
+  all six maps (two wraps in the five older key files, one in Chop Shop's); server Release build; 0 warnings, 0 errors.
+- **Gates on the build machine:** .NET `erfolgreich: 3313, gesamt: 3313`; Python `Ran 3262 tests in 1097.706s`, `OK (skipped=68)`;
+  `DLL_VERSIONS_OK 0.6.0 client/server source, project and staged binaries`; `UNITY_LOG_TESTS_OK 8 cases`; `validate_map_descriptors.py`
+  OK (14 descriptors); `DISTRIBUTION_OK 6 maps 18 bundles 6 sidecars encrypted`; `validate_bundle_names.py` OK, 18 bundles;
+  `validate_port.py --map autoservice --distribution --package work/extract/autoservice-native-v2`: `PORT_VALIDATED` (479 materials,
+  4,270 meshes, 950 textures, 15 NavMesh tiles, 1,946 triangles; without `--package` the validator takes the old spike package and
+  fails with "source plan digest drift"); after the last text edits `test_changelog` (12) and `test_release_zips` (195) again, OK.
+- **Key files, 18 of 18 OK** (`verify-keys`, read-only): 0.6.2.0.48473 (this VM), 0.6.1.0.48206 (GPU-2's share) and **0.6.2.0.48767**
+  (`\\MASCHINE11`, a newer hotfix than the 0.6.2.0.48598 of the day before): the five older maps `wrap 0 (built for 0.6.1.0.48206)`,
+  Chop Shop `wrap 0 (built for 0.6.2.0.48473)`, each `unlocks the store's content key`.
+- **Host run (GPU-2, 17:59-18:08):** deploy `0 new, 2 to overwrite, 394 already identical` (both DLLs); the host's server was stopped
+  until Syncthing had delivered both (`2 file(s) identical on the host after 62.2 s`), `gpu-run start`: `16/16 identical`. Server
+  `Mod: ArenaMapPort Version: 0.6.0 ... geladen` (17:58:42), `Arena: Chop Shop is available in location selection.`; client `[Arena]
+  Escape from Tarkov: Arena 0.6.1.0.48206 ... (registry; 15,351 files, 76.1 GB verified)` and `Version 0.6.0 loaded. Maps: Arena:
+  Equator, Arena: Bay 5, Arena: Air Pit, Arena: Bowl, Arena: Iceberg, Arena: Chop Shop.` Plain PMC raids, bots None, each left through
+  the menu:
+
+| Map | Time | Load (`diff`) | Crowd `load total=` | NavMesh |
+|---|---|---|---|---|
+| Equator | 18:00 | location 5.3 s (1.6), game 33.0 s (14.8) | 2,191 ms | 10,395 / 4,567 |
+| Bay5 | 18:01 | 5.5 s (1.4), 26.2 s (8.5) | 2,077 ms | 22,130 / 10,220 |
+| Air Pit | 18:02 | 4.9 s (1.4), 25.9 s (8.7) | 2,156 ms | 11,811 / 5,433 |
+| Bowl | 18:03 | 5.2 s (1.4), 26.9 s (9.2) | 2,101 ms | 12,704 / 5,890 |
+| Iceberg | 18:04 | 5.9 s (1.7), 25.3 s (7.3) | none (no crowd) | 18,703 / 8,599 |
+| Chop Shop | 18:05 | 4.9 s (1.7), 26.2 s (9.1) | 2,078 ms (30 fans) | 4,246 / 1,946 |
+
+  Iceberg: `[EmissionCap] map=arena_iceberg cap=4.60 floor=1.80 (owned scenes loaded): 37 emissive material(s), 5 capped (largest
+  original 67.79 ... -> 4.60), 15 lifted (smallest original 0.29 ...), 20 written, 0 left alone (changed elsewhere), 0 gone; 22693
+  renderer(s) scanned in 23 ms` (18:04:47): the first host log of the 4.6 / 1.8 limits. Chop Shop: `BotZone.Init 'BotZone_Main':
+  markers=16 onNavMesh=16`; a second raid (18:07) with a teleport into the hall: `arena_autoservice: room=5/IndoorBrick class=Hall
+  dims=50.0x22.7x46.7 materials=ConcreteBlock,ConcreteBlock,AcousticTile,CeramicTile,ConcreteBlock,ConcreteBlock clutter=0.20
+  model=ShoeboxRoom` (the hall table reaches the room the author had heard before the change; not measured there). gpu-run's raid lines:
+  `warnings 0; errors 0` (Equator: `warnings 0 from mods, 4 Unity Log; errors 0`). Hideout opened in 7.8 s. No ArenaMapPort line at
+  Warning or above in the log file of the process (20,069 lines). Not captured: the re-seed lines of the Iceberg limits and of the
+  roar-bed volume (both revisions were already 1 on this host). Not run: a bot raid, an ArenaMode match, anything by eye or ear.
+- **Cut (18:19-18:23):** `python tools/release/make_release_zips.py --single --out work/releases/0.6.0/pixeldrain-b06f8dc --extract-check
+  work/tmp/extract-check-0.6.0-b06f8dc` (log `work/releases/0.6.0-make-b06f8dc.log`): `writing single ZIP (full): 396 files,
+  6,378,927,615 raw bytes`, **`maschine-ArenaMapPort-0.6.0.zip 6,348,672,857 B 059ff5644843c226873d5b5c7db67bcfb005b071129c92c09a24e53c527e39e5`** (5.91 GiB),
+  `extract-check OK: 396 files identical to dist, 4 generated entries ignored`, `RELEASE_ZIPS_BUILT`; `--verify-only`:
+  `RELEASE_ZIPS_VERIFIED 0.6.0 (single ZIP)`.
+- **Scan:** `scan_virustotal.py --version 0.6.0` (log `work/releases/0.6.0-vt.log`, record `work/releases/0.6.0/virustotal.json`; the
+  analyses stayed queued past the tool's wait twice and were read on the third call): client DLL
+  `57f2d09b86e3c8cb03018f1074bd9c09bf586ac954a8309a2f963617fbe1c078` 0 malicious, 0 suspicious of 75 engines (2026-11-14T17:10:11Z);
+  server DLL `f0b050752306e6ecc6d7094f4835faac47a084ab52b2c60cf2b08f973b3174d5` 0 of 75 (17:22:46Z); `VIRUSTOTAL_SCAN_CLEAN 0.6.0`.
+- **Upload:** `upload_pixeldrain.py --version 0.6.0 --release-dir work/releases/0.6.0/pixeldrain-b06f8dc --timeout 300` (dry run
+  first; log `work/releases/0.6.0-upload-b06f8dc.log`, record `pixeldrain.json` beside the ZIP): list https://pixeldrain.com/l/QDbri7yE, ZIP https://pixeldrain.com/u/R7HpSAPk
+  (direct https://pixeldrain.com/api/file/R7HpSAPk?download), checksum https://pixeldrain.com/u/hWQxcdv9.
+- **Publication:** the links, the checksum, the build commit and the scan lines went into `docs/releases/v0.6.0.md` (its checklist
+  comment removed; no placeholder left); this commit is the publication commit. What followed it (the fast-forward of `main`, the tag
+  `v0.6.0`, the push, the deletion of `feature/autoservice` and the GitHub release) is recorded in the next section.

@@ -1,4 +1,4 @@
-# Current distribution contract: Equator, Bay5, AirPit, Bowl, Iceberg and Chop Shop (0.6.0, prepared, not published; encrypted bundles; the 0.5.0 five-map and 0.4.0 four-map contracts below are kept as history)
+# Current distribution contract: Equator, Bay5, AirPit, Bowl, Iceberg and Chop Shop (0.6.0, published 2026-11-14; encrypted bundles; the 0.5.0 five-map and 0.4.0 four-map contracts below are kept as history)
 
 2026-11-13: the six-map 0.6.0 contract is the last section, "Release 0.6.0 contract". The two paragraphs below (2026-11-11) describe the state of the promotion day, when Chop Shop was pending; that state is superseded (its bundles, key and shader sidecar exist and are staged, `--plan` reads 396 files).
 
@@ -23,7 +23,7 @@ list above that need no bundle; the five missing ones are the three bundles, the
 maps 18 bundles 6 sidecars encrypted` only after U1 and the first stage. `tools/deploy-to-spt.ps1` refuses the whole-dist deploy while the server mod holds
 `db/arena_autoservice` and the client plugin lacks the map's bundles and key file (Iceberg rule 6); nothing deploys before item 14.
 
-The current contract is the six-map one of release 0.6.0 (prepared 2026-11-13, see the last section, "Release 0.6.0 contract"); the five-map one of release 0.5.0 (2026-11-07, section "Release 0.5.0 contract") is the last published one. Every table and count between here and that section describes an earlier stage; the 256-file layout of 0.4.0 (published 2026-10-30) is history.
+The current contract is the six-map one of release 0.6.0 (published 2026-11-14, see the last section, "Release 0.6.0 contract"); the five-map one of release 0.5.0 (2026-11-07, section "Release 0.5.0 contract") is history. Every table and count between here and that section describes an earlier stage; the 256-file layout of 0.4.0 (published 2026-10-30) is history.
 
 2026-10-31 (Iceberg overview): the current unpublished five-map staging adds
 `dynamicmaps/ArenaMapPort_Iceberg/ArenaMapPort_Iceberg.jsonc` and `Layers/Ground.svg`
@@ -584,7 +584,7 @@ The ZIP size, its SHA-256, the build commit, the download links and the VirusTot
 build commit `a18ecd7`, Pixeldrain https://pixeldrain.com/l/VHbxKwMB): the 359-file five-map contract above is the released one.
 
 
-## Release 0.6.0 contract - 2026-11-13 (six maps, one whole ZIP; PREPARED, NOT PUBLISHED)
+## Release 0.6.0 contract - 2026-11-13 (six maps, one whole ZIP; published 2026-11-14)
 
 Version 0.6.0 is the lead's choice by the project's pattern (a new map is a minor version, as 0.3.0 Bowl and 0.5.0 Iceberg); the user named no number and can still change it. The form is that of 0.4.0 and 0.5.0 unless the user says otherwise:
 ONE whole ZIP on Pixeldrain plus its one-line `.sha256`, a GitHub release with the notes and the checksum file as its only asset, tag `v0.6.0` on the publication commit. The cut is
@@ -608,3 +608,12 @@ Nothing is cut, scanned, uploaded, tagged or pushed. The ZIP size, its SHA-256, 
   registration and a loader rule for the five-entry official-text pack, so the 0.5.0 server cannot be mixed with this ZIP.
 - **Generated README.txt.** Single-ZIP wording; `Included locations` names Chop Shop; the crowd sentence lists five maps; the audio paragraph says that the roar level and Chop Shop's mix, crowd and gate sounds are not listened to; the encryption paragraph states six maps on 0.6.2 and the four-map 0.6.0 check.
 - **Not part of this contract.** No new public F12 setting; the developer keys `Lighting (arena_autoservice)/RoofDistantShadows` and `Lighting (arena_iceberg)/RoofDistantShadows` are new and developer-only; SPT 4.1.6 / EFT 0.16.9.5 unchanged; the Arena installation check, the map notices and the mode-plugin contracts unchanged.
+
+**Published 2026-11-14 as 0.6.0** (`maschine-ArenaMapPort-0.6.0.zip`, 6,348,672,857 B, SHA-256 `059ff5644843c226873d5b5c7db67bcfb005b071129c92c09a24e53c527e39e5`,
+build commit `b06f8dc`, Pixeldrain https://pixeldrain.com/l/QDbri7yE): the 396-file six-map contract above is the released one. Against the paragraphs of
+2026-11-13 above: the number 0.6.0 stood; the cut, the scans and the links are in [releases/v0.6.0.md](releases/v0.6.0.md); both DLLs are
+the release build (version 0.6.0); the key files of all six maps were checked again on the publication day on Arena 0.6.1.0.48206,
+0.6.2.0.48473 and 0.6.2.0.48767; the client DLL also carries the reworked big-hall gunshot reverb table (`RoomShotAcoustics`: walls
+ConcreteBlock, ceiling AcousticTile, floor CeramicTile, clutter 0.2, eight Hall rooms, a once-only re-seed), and the generated
+README.txt says that the author listened to Chop Shop as a whole and approved that table on 2026-11-14, that the roar level has not been
+listened to, and names the four checked Arena builds.

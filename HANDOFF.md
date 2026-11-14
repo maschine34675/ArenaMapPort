@@ -1,5 +1,16 @@
 # HANDOFF — dated working state
 
+## 0.6.0 PUBLISHED - 2026-11-14
+
+**Request (user, 2026-11-14, after listening to the final hall table):** "habe ich mir angehört, passt so. dann branch mergen, löschen, pushen und release auf github".
+Record: [release-preparation-20261113.md](docs/progress/release-preparation-20261113.md) "Published" (gates, host run, cut, scan, upload, what was pushed).
+
+1. **Published:** Pixeldrain list https://pixeldrain.com/l/QDbri7yE, ZIP https://pixeldrain.com/u/R7HpSAPk (direct https://pixeldrain.com/api/file/R7HpSAPk?download), checksum https://pixeldrain.com/u/hWQxcdv9. Tag `v0.6.0` on the publication commit, `main` fast-forwarded and pushed, GitHub release "ArenaMapPort 0.6.0" (note as body, `.sha256` asset), `feature/autoservice` deleted. Build commit `b06f8dc`, ZIP 6,348,672,857 B, 396 files.
+2. **What the release build passed:** .NET 3,313, Python 3,262 (68 skipped), `DLL_VERSIONS_OK 0.6.0`, `DISTRIBUTION_OK 6 maps 18 bundles 6 sidecars encrypted`, bundle names, `PORT_VALIDATED` for Chop Shop (`--package work/extract/autoservice-native-v2`), `verify-keys` 18 of 18 (0.6.1.0.48206, 0.6.2.0.48473, 0.6.2.0.48767), VirusTotal 0 of 75 twice; GPU-2: one raid per map and the hideout, 0 warnings, Iceberg `cap=4.60 floor=1.80`.
+3. **The author's ear:** the final hall reverb table is approved ("passt so"); Chop Shop as a whole ("passt alles"). Not listened to: the roar beds at -26 dBFS, Iceberg's ambience, lamp loops and gate sounds.
+4. **Left for the user:** the Forge entry; ArenaMode's whitelist pin (still 0.5.0, advisory) and its Chop Shop announcement; the body of the v0.5.0 GitHub release (still says ArenaMode has not adopted the contracts; not touched); whether older releases (0.3.0, 0.4.0, 0.5.0) stay online.
+5. **Next work starts on `main`.** The blocks below are the history of the release.
+
 ## Hall gunshot reverb, second round: the long ringing (revision 2) - 2026-11-14 (0.6.0 still NOT published)
 
 **Request (user, 2026-11-14, after listening to the first round below):** "habe ich mir angehört, ich glaube es ist eher das lange nachklingen das wir nochmal überarbeiten sollten".

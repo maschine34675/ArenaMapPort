@@ -4,7 +4,7 @@ ArenaMapPort imports the maps of Escape from Tarkov: Arena (read from the user's
 install) into SPT 4.1.6 (EFT 0.16.9.5, Unity 2022.3.43f1; the server declares `~4.1.5`) as separate locations: a Python extractor,
 a Unity 2022.3.43f1 batch importer that rebuilds scenes, materials, colliders and a fresh NavMesh into
 asset bundles, a BepInEx client plugin that repairs everything a ported scene lacks at raid time, and an
-SPT server mod that registers the locations. **Status note 2026-11-13: the version is 0.6.0, PREPARED and NOT published** (six maps, Chop Shop is the sixth; the last published version is 0.5.0, see the first paragraph of "Release configuration"; the paragraphs of this introduction that call Iceberg or Autoservice "not released" describe the state before that and stay as history). Fourteen maps retain development inputs; **Equator, Bay5, AirPit and Bowl** are released and
+SPT server mod that registers the locations. **Status note 2026-11-14: 0.6.0 is PUBLISHED** (six maps, Chop Shop is the sixth; see the first paragraph of "Release configuration"; the paragraphs of this introduction that call Iceberg or Autoservice "not released" describe the state before that and stay as history). Fourteen maps retain development inputs; **Equator, Bay5, AirPit and Bowl** are released and
 registered (the fifth map, Iceberg, is registered but not released: see its paragraph below; Equator and Bay5 were the first release; AirPit was added in 2026-10 on `feature/airpit` and shipped with 0.2.2/0.2.3; 0.2.0 was built
 and withdrawn on 2026-10-16; Bowl shipped with 0.3.0). All four have native playtest evidence. **Bowl** (the fourth map, on `main` since the 2026-10-18 fast-forward merge of `feature/bowl`; PLAN-BOWL item 8) was
 **released with 0.3.0 on 2026-10-24** (tag `v0.3.0`, GitHub release, Pixeldrain; the four-map release with Arena's door poses, the done signal
@@ -169,6 +169,13 @@ member name pinned in the client (`method_N`, `vmethod_N`) is verified there and
 `HarmonyPatches.Verify()`, which logs and skips a missing target instead of throwing.
 
 ## Release configuration
+
+**2026-11-14: 0.6.0 PUBLISHED** (user: "habe ich mir angehört, passt so. dann branch mergen, löschen, pushen und release auf github"; record
+[release-preparation-20261113.md](docs/progress/release-preparation-20261113.md) "Published"): Pixeldrain list https://pixeldrain.com/l/QDbri7yE, ZIP https://pixeldrain.com/u/R7HpSAPk (direct https://pixeldrain.com/api/file/R7HpSAPk?download), checksum https://pixeldrain.com/u/hWQxcdv9; tag `v0.6.0` on the publication commit, `main` fast-forwarded to it,
+GitHub release "ArenaMapPort 0.6.0" with the note as its body and the `.sha256` as its only asset; `feature/autoservice` is merged and deleted, work continues on `main`. Build commit `b06f8dc`; the cut
+`work/releases/0.6.0/pixeldrain-b06f8dc/maschine-ArenaMapPort-0.6.0.zip` (6,348,672,857 B, 396 files, extract-check and verify-only OK), VirusTotal 0 of 75 for both DLLs, host run on GPU-2 (six maps and the hideout, 0 warnings),
+`verify-keys` 18 of 18 on Arena 0.6.1.0.48206, 0.6.2.0.48473 and 0.6.2.0.48767. The author listened to the final hall reverb table and approved it the same day. Still not listened to: the roar beds at -26 dBFS, Iceberg's ambience, lamp loops and
+gate sounds. User items left: the Forge entry, ArenaMode's whitelist pin (0.5.0) and its Chop Shop announcement, the stale body of the v0.5.0 GitHub release (not touched). The 0.6.0 paragraph below describes the preparation and stays as history.
 
 **2026-11-13: 0.6.0 PREPARED, NOT PUBLISHED** (version number the lead's pick by the project's pattern, a new map is a minor version; the user named no number and can change it; record
 [release-preparation-20261113.md](docs/progress/release-preparation-20261113.md)): the first release with Chop Shop (`arena_autoservice`, the sixth map), the appended Bot spawn rows and in-pocket exits on all six maps,
