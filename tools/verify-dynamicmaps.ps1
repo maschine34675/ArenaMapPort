@@ -13,11 +13,11 @@ New-Item -ItemType Directory -Path $results -Force | Out-Null
 $trx = Join-Path $results 'result.trx'
 if (Test-Path -LiteralPath $trx) { Remove-Item -LiteralPath $trx }
 & dotnet test (Join-Path $repo 'ArenaMapPort.Server.Tests/ArenaMapPort.Server.Tests.csproj') -c Release --nologo -v quiet `
-    "-p:CustomAfterMicrosoftCommonTargets=$noStage" --filter 'FullyQualifiedName~DynamicMapAssetsTests|FullyQualifiedName~DynamicMapsOwnedCatalogTests' `
+    "-p:CustomAfterMicrosoftCommonTargets=$noStage" --filter 'FullyQualifiedName~DynamicMapAssetsTests|FullyQualifiedName~DynamicMapsOwnedCatalogTests|FullyQualifiedName~DynamicMapsIntegrationTests' `
     --logger 'trx;LogFileName=result.trx' --results-directory $results
 if ($LASTEXITCODE -ne 0) { throw 'DynamicMaps production-linked tests failed.' }
 [xml]$run = Get-Content -LiteralPath $trx -Raw
-foreach ($group in @('DynamicMapAssetsTests','DynamicMapsOwnedCatalogTests')) {
+foreach ($group in @('DynamicMapAssetsTests','DynamicMapsOwnedCatalogTests','DynamicMapsIntegrationTests')) {
     $cases = @($run.TestRun.Results.UnitTestResult | Where-Object testName -Like "*$group.*")
     if ($cases.Count -eq 0 -or @($cases | Where-Object outcome -ne 'Passed').Count -ne 0) { throw "Missing or incomplete test group: $group" }
 }

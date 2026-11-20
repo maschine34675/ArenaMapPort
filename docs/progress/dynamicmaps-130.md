@@ -54,3 +54,31 @@ does not write third-party files or configuration.
 Pending the parent integration run. Offline results alone do not establish rendered
 overview/minimap behavior, in-game marker alignment or the separate Domination overlay.
 No installation, host, configuration or map data was changed by this implementation leaf.
+
+## Independent-review corrections — 2026-11-20
+
+The first implementation (`f3f4ca6`, not deployed) passed its initial 22 cases but
+the parent review found two omissions: a postfix merge happens after native preference
+registration has already clamped an owned selection to Automatic when another addon
+shares that location; reparsing unchanged definitions also breaks the native reference
+equality check and resets the retained view when the map reopens.
+
+The revised adapter merges in a prefix on `RegisterMapPreferences`, within a per-dropdown
+`LoadMapDefsFromPath("Maps")` scope established by a prefix and removed by a finalizer.
+There is no second preference registration or manual UI refresh. Nested unrelated scans
+temporarily suppress the scope, and native exceptions retain their original propagation.
+The first native preference rebind now sees all choices. A weak per-dropdown cache keeps
+the same MapDef object while JSON/SVG timestamps and lengths match; changed, missing or
+invalid inputs invalidate only that package. This preserves retained viewport/floor state.
+
+Five additional production-linked cases cover native preference clamping, reference-based
+view retention, nested/exceptional scope cleanup, and the actual production Install hooks.
+The latter two use real Harmony on minimal native API fixtures, including a lowest-priority
+skip-original prefix after our scope prefix. The original native exception is preserved.
+Eight source mutants now include the
+exact early-preference/late-merge failure, forced reparsing and leaked scope. The actual
+1.3 DLL contract also checks that map-dictionary mutations finish before its one preference
+call and that dropdown refresh follows; removing that call is a third metadata negative
+control. The integration mutants move the actual installed preference prefix to a postfix
+and remove the installed finalizer; the real-patching tests must reject both. The earlier
+implementation description above is historical and superseded here.

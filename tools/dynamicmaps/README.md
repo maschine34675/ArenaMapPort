@@ -17,12 +17,16 @@ remain unchanged.
 
 - **1.2.1:** the existing additive loader and owned-image postfix remain in use.
 - **1.3.0:** its native scan now removes definitions absent from that scan and validates
-  images before returning a definition. After the complete native scan, ArenaMapPort
+  images before returning a definition. After native file collection but **before its
+  first preference registration**, ArenaMapPort
   deserializes only its six allowlisted definitions into the native `MapDef` type,
   validates/resolves their single ground layer, and adds them to the existing catalogue
-  once. Native map preferences and the current location filter are then refreshed.
+  once. The native preference/dropdown refresh then sees the complete choices.
   Vanilla and other addon definitions keep their identities. Deleted, malformed or
-  incomplete owned packages are removed/skipped independently. A structural API
+  incomplete owned packages are removed/skipped independently. A weak per-dropdown
+  cache retains unchanged definition identities across rescans, preserving viewport
+  and floor selection. A scoped prefix/finalizer restricts registration to the native
+  `Maps` scan and clears the scope even when native loading throws. A structural API
   mismatch disables the optional integration with one warning.
 
 Offline checks against both actual release DLLs, including catalogue/path regressions

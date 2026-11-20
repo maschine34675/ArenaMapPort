@@ -55,6 +55,15 @@ function Check($assembly, [string]$version) {
     Method $dropdown 'RegisterMapPreferences' @() 'System.Void' $false
     Method $dropdown 'FilteredMapDefs' @() 'System.Collections.Generic.IEnumerable`1<DynamicMaps.Data.MapDef>' $false
     Method $dropdown 'ChangeAvailableMapDefs' @('System.Collections.Generic.IEnumerable`1<DynamicMaps.Data.MapDef>') 'System.Void' $false
+    $load = $dropdown.Methods | Where-Object Name -eq 'LoadMapDefsFromPath'
+    $preferences = @($load.Body.Instructions | Where-Object { $_.Operand -is [Mono.Cecil.MethodReference] -and $_.Operand.Name -eq 'RegisterMapPreferences' })
+    $refresh = @($load.Body.Instructions | Where-Object { $_.Operand -is [Mono.Cecil.MethodReference] -and $_.Operand.Name -eq 'ChangeAvailableMapDefs' })
+    Require ($preferences.Count -eq 1 -and $refresh.Count -eq 1 -and $preferences[0].Offset -lt $refresh[0].Offset) 'preference registration before dropdown refresh'
+    $writes = @($load.Body.Instructions | Where-Object {
+        $_.Operand -is [Mono.Cecil.MethodReference] -and $_.Operand.DeclaringType.FullName -like 'System.Collections.Generic.Dictionary*' -and
+        $_.Operand.Name -in @('set_Item','Remove') -and $_.Operand.DeclaringType.FullName -like '*DynamicMaps.Data.MapDef*'
+    })
+    Require ($writes.Count -gt 0 -and @($writes | Where-Object Offset -gt $preferences[0].Offset).Count -eq 0) 'catalogue mutations finish before preferences'
 }
 
 foreach ($item in @(@('1.2.1',$DynamicMaps121), @('1.3.0',$DynamicMaps130))) {
@@ -62,6 +71,22 @@ foreach ($item in @(@('1.2.1',$DynamicMaps121), @('1.3.0',$DynamicMaps130))) {
     try {
         Check $assembly $item[0]
         Write-Output "DynamicMaps $($item[0]) actual DLL contract passed: $((Get-FileHash -LiteralPath $item[1]).Hash)"
+        if ($item[0] -eq '1.3.0') {
+            $load = $assembly.MainModule.GetType('DynamicMaps.UI.Controls.MapSelectDropdown').Methods | Where-Object Name -eq 'LoadMapDefsFromPath'
+            $call = $load.Body.Instructions | Where-Object { $_.Operand -is [Mono.Cecil.MethodReference] -and $_.Operand.Name -eq 'RegisterMapPreferences' }
+            $operand = $call.Operand
+            $opcode = $call.OpCode
+            $call.OpCode = [Mono.Cecil.Cil.OpCodes]::Nop
+            $call.Operand = $null
+            $rejected = $false
+            try { Check $assembly $item[0] } catch {
+                if ($_.Exception.Message -notlike '*contract mismatch*preference registration*') { throw }
+                $rejected = $true
+            }
+            Require $rejected 'missing preference hook negative control was accepted'
+            $call.OpCode = $opcode
+            $call.Operand = $operand
+        }
         # In-memory only: removing the real loader must make the same contract oracle reject this DLL.
         $dropdown = $assembly.MainModule.GetType('DynamicMaps.UI.Controls.MapSelectDropdown')
         $method = $dropdown.Methods | Where-Object Name -eq 'LoadMapDefsFromPath'

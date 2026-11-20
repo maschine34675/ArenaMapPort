@@ -4,13 +4,14 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Newtonsoft.Json;
 
 namespace ArenaMapPort.Client
 {
     /// <summary>
     /// DynamicMaps 1.3 prunes its catalogue on every scan and validates image paths before returning a definition.
-    /// Merge only our exact packages after that scan, preserving all native/addon entries and the active filter.
+    /// Merge our exact packages before the scan registers preferences, preserving native/addon choices and the active filter.
     /// The native definition type/serializer and UI refresh remain authoritative; no third-party files are written.
     /// </summary>
     internal sealed class DynamicMapsOwnedCatalog
@@ -21,7 +22,25 @@ namespace ArenaMapPort.Client
         readonly Type _definition;
         readonly FieldInfo _definitions, _writeTimes;
         readonly PropertyInfo _layers, _image, _bounds, _names, _name, _selection, _addon, _imageBounds, _gameBounds;
-        readonly MethodInfo _preferences, _filtered, _refresh;
+        internal readonly MethodInfo Preferences;
+        readonly Dictionary<object, Scan> _scans = new Dictionary<object, Scan>();
+        readonly ConditionalWeakTable<object, Dictionary<string, CachedDefinition>> _caches = new ConditionalWeakTable<object, Dictionary<string, CachedDefinition>>();
+
+        internal sealed class Scan
+        {
+            internal object Dropdown;
+            internal Scan Parent;
+            internal bool OwnsMaps;
+        }
+
+        sealed class CachedDefinition
+        {
+            internal object Value;
+            internal DateTime DefinitionTime, ImageTime;
+            internal long DefinitionLength, ImageLength;
+            internal bool Matches(FileInfo definition, FileInfo image) => DefinitionTime == definition.LastWriteTimeUtc
+                && DefinitionLength == definition.Length && ImageTime == image.LastWriteTimeUtc && ImageLength == image.Length;
+        }
 
         internal DynamicMapsOwnedCatalog(DynamicMapAssets assets, Type dropdown, Type definition, Type layer)
         {
@@ -41,17 +60,31 @@ namespace ArenaMapPort.Client
             _addon = Property(definition, "IsAddon", typeof(bool), writable: true);
             _imageBounds = Property(layer, "ImageBounds");
             _gameBounds = Property(layer, "GameBounds");
-            var sequence = typeof(IEnumerable<>).MakeGenericType(definition);
-            _preferences = Method(dropdown, "RegisterMapPreferences", typeof(void), Type.EmptyTypes);
-            _filtered = Method(dropdown, "FilteredMapDefs", sequence, Type.EmptyTypes);
-            _refresh = Method(dropdown, "ChangeAvailableMapDefs", typeof(void), new[] { sequence });
+            Preferences = Method(dropdown, "RegisterMapPreferences", typeof(void), Type.EmptyTypes);
         }
 
-        internal void Merge(object dropdown, string request, Action<string, string> warn)
+        internal Scan BeginScan(object dropdown, string request)
         {
-            if (request != "Maps") return;
+            _scans.TryGetValue(dropdown, out var parent);
+            var scan = new Scan { Dropdown = dropdown, Parent = parent, OwnsMaps = request == "Maps" };
+            _scans[dropdown] = scan;
+            return scan;
+        }
+
+        internal void EndScan(Scan scan)
+        {
+            if (scan == null) return;
+            if (!_scans.TryGetValue(scan.Dropdown, out var active) || !ReferenceEquals(active, scan)) return;
+            if (scan.Parent == null) _scans.Remove(scan.Dropdown);
+            else _scans[scan.Dropdown] = scan.Parent;
+        }
+
+        internal void PreparePreferences(object dropdown, Action<string, string> warn)
+        {
+            if (!_scans.TryGetValue(dropdown, out var scan) || !scan.OwnsMaps) return;
             var definitions = (IDictionary)_definitions.GetValue(dropdown);
             var times = (IDictionary)_writeTimes.GetValue(dropdown);
+            var cache = _caches.GetOrCreateValue(dropdown);
             foreach (var map in DynamicMapAssets.Maps)
             {
                 var path = _assets.DefinitionFor(map);
@@ -60,18 +93,30 @@ namespace ArenaMapPort.Client
                 times.Remove(path);
                 try
                 {
-                    if (!File.Exists(path) || !File.Exists(_assets.ImageFor(map)))
+                    var definition = new FileInfo(path);
+                    var image = new FileInfo(_assets.ImageFor(map));
+                    if (!definition.Exists || !image.Exists)
                         throw new InvalidDataException("Missing owned map definition or SVG.");
-                    var value = Read(path, map);
-                    var time = File.GetLastWriteTimeUtc(path);
-                    definitions[path] = value;
-                    times[path] = time;
+                    // Native scans prune our keys before getting here. Keep unchanged object identity in a weak,
+                    // per-dropdown cache so reopening the map does not unload its view or reset zoom/floor state.
+                    cache.TryGetValue(path, out var cached);
+                    if (cached == null || !cached.Matches(definition, image))
+                    {
+                        cached = new CachedDefinition { Value = Read(path, map), DefinitionTime = definition.LastWriteTimeUtc,
+                            DefinitionLength = definition.Length, ImageTime = image.LastWriteTimeUtc, ImageLength = image.Length };
+                        cache[path] = cached;
+                    }
+                    definitions[path] = cached.Value;
+                    times[path] = cached.DefinitionTime;
                 }
-                catch (Exception ex) { warn(map, "Rejected owned " + map + " overview: " + ex.GetBaseException().Message); }
+                catch (Exception ex)
+                {
+                    cache.Remove(path);
+                    warn(map, "Rejected owned " + map + " overview: " + ex.GetBaseException().Message);
+                }
             }
-            // Both calls are native: preserve addon preferences, sorting and the current location filter.
-            _preferences.Invoke(dropdown, null);
-            _refresh.Invoke(dropdown, new[] { _filtered.Invoke(dropdown, null) });
+            // Return to the FIRST native preference registration. Its following native dropdown refresh uses
+            // the complete catalogue, so another addon for the same location cannot reset an owned selection.
         }
 
         object Read(string path, string map)

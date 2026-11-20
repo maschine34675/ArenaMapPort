@@ -1,6 +1,9 @@
 using ArenaMapPort.Client;
 using Newtonsoft.Json;
 using Xunit;
+using Definition = DynamicMaps.Data.MapDef;
+using Layer = DynamicMaps.Data.MapLayerDef;
+using Dropdown = DynamicMaps.UI.Controls.MapSelectDropdown;
 
 namespace ArenaMapPort.Server.Tests;
 
@@ -45,7 +48,7 @@ public sealed class DynamicMapsOwnedCatalogTests : IDisposable
         dropdown.Definitions["Maps/Customs.jsonc"] = vanilla;
         dropdown.Definitions["Addons/Other/Customs.jsonc"] = addon;
         var warnings = new List<string>();
-        _catalog.Merge(dropdown, "Maps", (_, message) => warnings.Add(message));
+        dropdown.Scan(_catalog, "Maps", (_, message) => warnings.Add(message));
         Assert.Empty(warnings);
         Assert.Equal(DynamicMapAssets.Maps.Length + 2, dropdown.Definitions.Count);
         Assert.Same(vanilla, dropdown.Definitions["Maps/Customs.jsonc"]);
@@ -60,11 +63,11 @@ public sealed class DynamicMapsOwnedCatalogTests : IDisposable
             Assert.True(definition.IsAddon);
             Assert.Equal("Markers/exit.png", Assert.Single(definition.StaticMarkers));
         }
-        // Native 1.3's next complete scan prunes external entries. The single postfix must restore all,
+        // Native 1.3's next complete scan prunes external entries. The preference prefix must restore all,
         // without recursive scanning, duplication, replacing vanilla objects or losing the current filter.
         dropdown.PruneExternal();
         Assert.Equal(2, dropdown.Definitions.Count);
-        _catalog.Merge(dropdown, "Maps", (_, message) => warnings.Add(message));
+        dropdown.Scan(_catalog, "Maps", (_, message) => warnings.Add(message));
         Assert.Empty(warnings);
         Assert.Equal(DynamicMapAssets.Maps.Length + 2, dropdown.Definitions.Count);
         Assert.Same(vanilla, dropdown.Definitions["Maps/Customs.jsonc"]);
@@ -77,9 +80,9 @@ public sealed class DynamicMapsOwnedCatalogTests : IDisposable
     {
         WritePack("Equator");
         var dropdown = new Dropdown();
-        _catalog.Merge(dropdown, "OtherMaps", (_, _) => Assert.Fail("Unrelated request was processed"));
+        dropdown.Scan(_catalog, "OtherMaps", (_, _) => Assert.Fail("Unrelated request was processed"));
         Assert.Empty(dropdown.Definitions);
-        Assert.Equal(0, dropdown.Refreshes);
+        Assert.Equal(1, dropdown.Refreshes); // The untouched native scan still refreshes its own empty list.
     }
 
     [Fact]
@@ -89,19 +92,19 @@ public sealed class DynamicMapsOwnedCatalogTests : IDisposable
         var dropdown = new Dropdown();
         var foreign = new Definition { DisplayName = "Unrelated" };
         dropdown.Definitions["Unrelated.json"] = foreign;
-        _catalog.Merge(dropdown, "Maps", (_, _) => Assert.Fail("Valid fixture failed"));
+        dropdown.Scan(_catalog, "Maps", (_, _) => Assert.Fail("Valid fixture failed"));
         File.WriteAllText(_assets.DefinitionFor("Equator"), "malformed json");
         File.Delete(_assets.DefinitionFor("AirPit"));
         File.Delete(_assets.ImageFor("Bay5"));
         var warnings = new List<string>();
-        _catalog.Merge(dropdown, "Maps", (map, _) => warnings.Add(map));
+        dropdown.Scan(_catalog, "Maps", (map, _) => warnings.Add(map));
         Assert.Equal(new[] { "Equator", "Bay5", "AirPit" }, warnings);
         Assert.Equal(4, dropdown.Definitions.Count);
         Assert.Equal(3, dropdown.Times.Count);
         Assert.Same(foreign, dropdown.Definitions["Unrelated.json"]);
         Assert.True(dropdown.Definitions.ContainsKey(_assets.DefinitionFor("Bowl")));
         WritePack("Equator");
-        _catalog.Merge(dropdown, "Maps", (_, _) => { });
+        dropdown.Scan(_catalog, "Maps", (_, _) => { });
         Assert.True(dropdown.Definitions.ContainsKey(_assets.DefinitionFor("Equator")));
     }
 
@@ -135,7 +138,7 @@ public sealed class DynamicMapsOwnedCatalogTests : IDisposable
         });
         var dropdown = new Dropdown();
         var rejected = new List<string>();
-        _catalog.Merge(dropdown, "Maps", (map, _) => rejected.Add(map));
+        dropdown.Scan(_catalog, "Maps", (map, _) => rejected.Add(map));
         Assert.Contains("Equator", rejected);
         Assert.Empty(dropdown.Definitions);
         Assert.Empty(dropdown.Times);
@@ -147,43 +150,87 @@ public sealed class DynamicMapsOwnedCatalogTests : IDisposable
         Assert.Throws<MissingFieldException>(() => new DynamicMapsOwnedCatalog(_assets, typeof(object), typeof(Definition), typeof(Layer)));
     }
 
-    public sealed class Definition
+    [Fact]
+    public void OwnedPreferenceSurvivesFirstNativeRebindWhenAnotherAddonSharesTheLocation()
     {
-        public string DisplayName { get; set; } = "";
-        public object Bounds { get; set; } = new();
-        public List<string> MapInternalNames { get; set; } = [];
-        public Dictionary<string, Layer> Layers { get; set; } = new();
-        public List<string> StaticMarkers { get; set; } = [];
-        [JsonIgnore] public string SelectionId { get; set; } = "";
-        [JsonIgnore] public bool IsAddon { get; set; }
-        // If the old recursive/native-loader path is accidentally restored, the fixture fails.
-        public static Definition LoadFromPath(string path, string? addon = null) => throw new InvalidOperationException("Native validation ran before owned path resolution");
-    }
-
-    public sealed class Layer
-    {
-        public string ImagePath { get; set; } = "";
-        public object ImageBounds { get; set; } = new();
-        public List<object> GameBounds { get; set; } = [];
-    }
-
-    public sealed class Dropdown
-    {
-        readonly Dictionary<string, Definition> _mapDefs = new();
-        readonly Dictionary<string, DateTime> _writeTimes = new();
-        public Dictionary<string, Definition> Definitions => _mapDefs;
-        public Dictionary<string, DateTime> Times => _writeTimes;
-        public string? Filter { get; set; }
-        public List<Definition> Available { get; private set; } = [];
-        public int RegisteredCount { get; private set; }
-        public int Refreshes { get; private set; }
-        void RegisterMapPreferences() => RegisteredCount = _mapDefs.Count;
-        IEnumerable<Definition> FilteredMapDefs() => _mapDefs.Values.Where(v => Filter == null || v.MapInternalNames.Contains(Filter));
-        void ChangeAvailableMapDefs(IEnumerable<Definition> values) { Available = values.ToList(); Refreshes++; }
-        public void PruneExternal()
+        WritePack("Equator");
+        var dropdown = new Dropdown { Filter = "arena_equator" };
+        dropdown.Definitions["Addons/Other/Equator.jsonc"] = new Definition
         {
-            foreach (var key in _mapDefs.Keys.Where(Path.IsPathRooted).ToArray()) { _mapDefs.Remove(key); _writeTimes.Remove(key); }
-        }
+            DisplayName = "Third party Equator", MapInternalNames = ["arena_equator"]
+        };
+        dropdown.Preferred["arena_equator"] = "Equator";
+        dropdown.Scan(_catalog, "Maps", (_, _) => { });
+        Assert.Equal("Equator", dropdown.Preferred["arena_equator"]);
+        Assert.Equal("Equator", dropdown.Current!.DisplayName);
+        Assert.Equal(1, dropdown.PreferencePasses);
+        dropdown.Scan(_catalog, "Maps", (_, _) => { });
+        Assert.Equal("Equator", dropdown.Preferred["arena_equator"]);
+        Assert.Equal("Equator", dropdown.Current!.DisplayName);
+        Assert.Equal(2, dropdown.PreferencePasses);
+    }
+
+    [Fact]
+    public void UnchangedOwnedDefinitionRetainsViewportAndFloorButFileChangesInvalidateIt()
+    {
+        WritePack("Equator");
+        var dropdown = new Dropdown { Filter = "arena_equator" };
+        dropdown.Scan(_catalog, "Maps", (_, _) => { });
+        var original = dropdown.Current;
+        dropdown.Zoom = 2.75f;
+        dropdown.Floor = 2;
+        dropdown.Scan(_catalog, "Maps", (_, _) => { });
+        Assert.Same(original, dropdown.Current);
+        Assert.Equal(1, dropdown.MapLoads);
+        Assert.Equal(2.75f, dropdown.Zoom);
+        Assert.Equal(2, dropdown.Floor);
+
+        WritePack("Equator", d => d.DisplayName = "Revised Equator");
+        dropdown.Scan(_catalog, "Maps", (_, _) => { });
+        Assert.NotSame(original, dropdown.Current);
+        Assert.Equal("Revised Equator", dropdown.Current!.DisplayName);
+        Assert.Equal(2, dropdown.MapLoads);
+        Assert.Equal(1, dropdown.Zoom);
+        Assert.Equal(0, dropdown.Floor);
+        var beforeImageChange = dropdown.Current;
+        File.AppendAllText(_assets.ImageFor("Equator"), "<!-- revised -->");
+        dropdown.Scan(_catalog, "Maps", (_, _) => { });
+        Assert.NotSame(beforeImageChange, dropdown.Current);
+
+        // An invalid replacement must evict the old cache; repair is parsed even at the same file stamp.
+        File.Delete(_assets.ImageFor("Equator"));
+        dropdown.Scan(_catalog, "Maps", (_, _) => { });
+        Assert.False(dropdown.Definitions.ContainsKey(_assets.DefinitionFor("Equator")));
+        WritePack("Equator");
+        dropdown.Scan(_catalog, "Maps", (_, _) => { });
+        Assert.Equal("Equator", dropdown.Current!.DisplayName);
+        var otherDropdown = new Dropdown { Filter = "arena_equator" };
+        otherDropdown.Scan(_catalog, "Maps", (_, _) => { });
+        Assert.NotSame(dropdown.Current, otherDropdown.Current);
+    }
+
+    [Fact]
+    public void NestedOtherScansAndExceptionalNativeRegistrationCannotLeakTheMapsScope()
+    {
+        WritePack("Equator");
+        var dropdown = new Dropdown();
+        var outer = _catalog.BeginScan(dropdown, "Maps");
+        var inner = _catalog.BeginScan(dropdown, "OtherMaps");
+        _catalog.PreparePreferences(dropdown, (_, _) => Assert.Fail("Nested unrelated scan merged our maps"));
+        Assert.Empty(dropdown.Definitions);
+        _catalog.EndScan(inner);
+        _catalog.PreparePreferences(dropdown, (_, _) => { });
+        Assert.Single(dropdown.Definitions);
+        _catalog.EndScan(outer);
+        dropdown.Definitions.Clear();
+        _catalog.PreparePreferences(dropdown, (_, _) => Assert.Fail("Scope survived its finalizer"));
+        Assert.Empty(dropdown.Definitions);
+
+        dropdown.ThrowInPreferences = true;
+        Assert.Throws<IOException>(() => dropdown.Scan(_catalog, "Maps", (_, _) => { }));
+        dropdown.Definitions.Clear();
+        _catalog.PreparePreferences(dropdown, (_, _) => Assert.Fail("Exceptional scan leaked its scope"));
+        Assert.Empty(dropdown.Definitions);
     }
 
     public void Dispose()
