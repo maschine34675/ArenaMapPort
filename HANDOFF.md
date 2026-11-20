@@ -1,5 +1,16 @@
 # HANDOFF — dated working state
 
+## Yard (seventh map) started: surveys and plan - 2026-11-20
+
+**Request (user, 2026-11-20):** "ist veröffentlicht. dann gerne mit der nächsten map weitermachen: Yard". A go without further constraints, as Autoservice's was.
+Plan: [docs/PLAN-YARD.md](docs/PLAN-YARD.md) (28 items in phases A to D, 18 risks, nine user decisions with defaults). Record: [docs/progress/yard-release.md](docs/progress/yard-release.md).
+
+1. **Branch `feature/yard`** from `6a5c8c4` (= `main` `3b0ed79` plus the two unmerged, unpushed commits of `feature/chopshop-dynamicmaps`, another session's host-verified Chop Shop overview: the main checkout, `dist/` (398 files) and GPU-2 are in that state). Whether the overview goes to `main` first is the user's.
+2. **What Yard is:** Arena's `Arena_Yard`, called "Block" in Arena's own locale; a residential courtyard, main NavMesh component 87 x 174 m (8,064.5 m2, 4.2 times Chop Shop's); TeamFight with two sealed team pockets 130 m apart (south behind a rising gondola, north behind two rotating gate leaves), 20 markers, one capture point, eight monitors, 27 spectators, 50 ambient players, 19 acoustic rooms (no Hall). Catalog-only; the September spike package and bundles are stale (ids rehashed, indices moved) and are never an input again.
+3. **Done in this step (offline, read-only):** a scratch re-extract on Arena 0.6.2.0.48473 (`work/tmp/yard-survey/extract`, 44,908 objects, 0 errors) and five surveys (source and identity, gameplay and navigation, environment and audio, pipeline gap, grass); the plan was written from them, reviewed by two agents (27 findings, 26 applied) and read by the lead. Nothing was built, deployed or pushed.
+4. **Defaults until the user answers (plan section "Needs the user"):** name "Arena: Block"; summer only; server time with Arena's fill lights as authored; NO ported grass in the first candidate (the 10,132 clumps are a conditional project, item 23); crowd on; TeamFight only; no DynamicMaps overview in the first candidate; release number and form at item 26 (the one ZIP would be about 7.9 GB); the marker moved off vanilla Laboratory and host-checked.
+5. **Next:** Phase A, items 1 to 7 (housekeeping and plan roles, the new-map checklist test, two reviewed ballistic rules, Arena's border cubes from the Scripts scene, package v1 and v2 with the contract, the key-source row and index pins). Offline; no key is created before item 17.
+
 ## Chop Shop DynamicMaps overview — 2026-11-14 (after published 0.6.0)
 
 User request: add the missing overview. `feature/chopshop-dynamicmaps` adds the

@@ -128,6 +128,9 @@ dated state in one screen; read it before this index if you only have a minute.
   gaps); the "Pending U1" list holds what waits for the Unity build, the first stage and the host raids. Plan: [../PLAN-ICEBERG.md](../PLAN-ICEBERG.md).
 - [iceberg-source-061.md](iceberg-source-061.md) — Iceberg's Arena 0.5.4 spike package against the 0.6.1 native package v1
   (2026-10-30): the reworked CheckPoint layout, the +9 index shift, spawn-marker churn.
+- [yard-release.md](yard-release.md) — Yard as the seventh map (Arena's `Arena_Yard`, "Block" in Arena's locale; branch `feature/yard`, started
+  2026-11-20, plan [docs/PLAN-YARD.md](../PLAN-YARD.md)): the six surveys of the start (reference extraction, source and identity, gameplay and
+  navigation, environment and audio, pipeline gap, grass) and the dated work after them. Catalog-only so far.
 - [autoservice-release.md](autoservice-release.md) — Autoservice as the sixth map (branch `feature/autoservice`, started 2026-11-08):
   the four surveys on Arena 0.6.2 (TeamFight alone with 20 markers in two pockets, one capture point, four gates, 372 new border
   cubes, 30 body-rig fans so crowdless, new season-loop audio class, no emission cap, no water), the plan decisions and the open
