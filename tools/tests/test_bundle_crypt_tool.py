@@ -979,12 +979,15 @@ class KeySourcesTests(unittest.TestCase):
     LISTED = {"arena_equator": (3, 218_007_984), "arena_bay5": (8, 358_204_848), "arena_airpit": (7, 603_532_272), "arena_bowl": (8, 754_464_336),
               "arena_iceberg": (4, 560_470_032),
               # Autoservice (PLAN-AUTOSERVICE item 5, 2026-11-08): measured on 0.6.2.0.48473, the three streams are byte-size-identical on 0.6.1
-              "arena_autoservice": (3, 464_942_688)}
+              "arena_autoservice": (3, 464_942_688),
+              # Yard (PLAN-YARD item 7, 2026-11-20): measured on 0.6.2.0.48473 (sharedassets72 + 74 + 310, no .resource), sizes only
+              "arena_yard": (3, 639_778_432)}
     # maps with a row but not yet in the released set (their package or their promotion is pending); a map leaves this set when it joins RELEASE_MAP_KEYS
     # (Autoservice left it at its promotion, PLAN-AUTOSERVICE item 12, 2026-11-11; the set is empty and stays as the place for the next map's row)
-    PENDING_MAPS: tuple = ()
+    # Yard (PLAN-YARD item 7) is pending until its promotion (item 15): the row exists, the map is Catalog-only; it leaves this tuple then
+    PENDING_MAPS: tuple = ("arena_yard",)
     # maps whose accepted package carries more scenes than the key lists (the script, sound, ai and culling roles of the plan): the key scenes must be in it
-    ROLE_SCENE_MAPS = ("arena_autoservice",)
+    ROLE_SCENE_MAPS = ("arena_autoservice", "arena_yard")
 
     @classmethod
     def setUpClass(cls):
@@ -1032,7 +1035,7 @@ class KeySourcesTests(unittest.TestCase):
 
     def test_airpit_bowl_and_iceberg_match_their_extraction_plans(self):
         for key, plan_name in (("arena_airpit", "airpit"), ("arena_bowl", "bowl"), ("arena_iceberg", "iceberg"),
-                              ("arena_autoservice", "autoservice")):
+                              ("arena_autoservice", "autoservice"), ("arena_yard", "yard")):
             plan = json.loads((REPO / "tools/extract/plans" / f"{plan_name}.json").read_text(encoding="utf-8"))
             planned = {e["index"]: e["name"] for e in plan["scenes"] + plan["anchor_scenes"]}
             with self.subTest(key=key):
@@ -1042,7 +1045,9 @@ class KeySourcesTests(unittest.TestCase):
         packages = {"arena_equator": "equator-native-v5", "arena_bay5": "bay5-native-v5", "arena_airpit": "airpit-native-v10", "arena_bowl": "bowl-native-v2",
                     "arena_iceberg": "iceberg-native-v2",
                     # the accepted package of Phase A (v2 adds the ambient-audio export); a missing manifest is skipped like every other map's
-                    "arena_autoservice": "autoservice-native-v2"}
+                    "arena_autoservice": "autoservice-native-v2",
+                    # no accepted package yet (PLAN-YARD items 5 and 6: v1, then v2 with the audio export); a missing manifest is skipped
+                    "arena_yard": "yard-native-v2"}
         checked = 0
         for key, package in packages.items():
             path = REPO / "work/extract" / package / "manifest.json"

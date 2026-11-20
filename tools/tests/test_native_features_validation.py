@@ -693,3 +693,29 @@ class BallisticTwinMatchingTests(unittest.TestCase):
             v.validate_ballistic_bundle(readers,{'scene':[lamp_obj,glass_obj,glass_obj2,metal_obj]})
             # a third package twin with no built counterpart is still missing
             with self.assertRaises(ValueError):v.validate_ballistic_bundle(readers,{'scene':[lamp_obj,glass_obj,glass_obj2,metal_obj,dict(glass_obj,id='x')]})
+
+
+class ReviewedPhysicsLessOwnersTests(unittest.TestCase):
+    """Yard 2026-11-20: the independent validator keeps the same three reviewed owners as the extractor, and only those."""
+    def test_the_validator_and_the_extractor_pin_the_same_three_owners(self):
+        import extract_ballistics as B
+        self.assertEqual(v.REVIEWED_PHYSICS_LESS_OWNERS,B.REVIEWED_PHYSICS_LESS_OWNERS)
+        self.assertEqual(len(v.REVIEWED_PHYSICS_LESS_OWNERS),3)
+        self.assertEqual({name for name,_ in v.REVIEWED_PHYSICS_LESS_OWNERS},{'Arena_Yard','Arena_Yard_TeamFight'})
+
+
+class ReviewedPhysicsLessSkipTests(unittest.TestCase):
+    """The skip rule itself (fixer, 2026-11-20): scoped to scene AND full path AND a collider-less owner."""
+    PATH='SBG_Arena_Yard/OO/FRONT/Pipe_broken/Pipe_broken_LOD0'
+
+    def test_a_listed_path_without_physics_is_skipped(self):
+        self.assertTrue(v.is_reviewed_physics_less_owner('Arena_Yard',self.PATH,False))
+
+    def test_a_listed_path_with_a_collider_is_not(self):
+        self.assertFalse(v.is_reviewed_physics_less_owner('Arena_Yard',self.PATH,True))
+
+    def test_the_same_leaf_elsewhere_or_in_another_scene_is_not(self):
+        self.assertFalse(v.is_reviewed_physics_less_owner('Arena_Yard','SBG_Arena_Yard/OO/BACK/Pipe_broken/Pipe_broken_LOD0',False))
+        self.assertFalse(v.is_reviewed_physics_less_owner('Arena_Yard','Pipe_broken_LOD0',False))
+        self.assertFalse(v.is_reviewed_physics_less_owner('Arena_Yard_TeamFight',self.PATH,False))
+        self.assertFalse(v.is_reviewed_physics_less_owner('Arena_Equator',self.PATH,False))

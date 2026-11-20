@@ -2347,6 +2347,8 @@ public sealed class CryptoRealDataTests
         ("arena_iceberg", 4, 560_470_032),
         // Autoservice (PLAN-AUTOSERVICE item 5, 2026-11-08; not released, no package or key yet): measured on 0.6.2.0.48473
         ("arena_autoservice", 3, 464_942_688),
+        // Yard (PLAN-YARD item 7, 2026-11-20; Catalog-only, no package or key yet): sharedassets72 635,475,616 + sharedassets74 2,980,928 + sharedassets310 1,321,888, no .resource; measured on 0.6.2.0.48473
+        ("arena_yard", 3, 639_778_432),
     };
 
     static string RepoRoot()

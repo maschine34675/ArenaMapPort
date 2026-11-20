@@ -29,6 +29,10 @@ port cannot provide) is accepted only when the contract pins it in states.forced
 with that mixer's name. Its record keeps the authored fields (the source payload must round-trip),
 gains 'mixerGroupName' and the marker 'mixerPolicy': 'group', and the Unity importer routes it
 like its group (check_mixer_policy, apply_mixer_policy).
+A decoded clip that is all-zero PCM is refused (validate_wav) unless the contract pins it in states.silent_clips (id -> clip
+name; PLAN-YARD item 6, 2026-11-20: Yard's ``amb_yard_cat_06`` is a 3,642 Hz, 3,200-byte stub in Arena's own sharedassets163.resource
+that decodes to zeros). The set of silent clips must equal the pin exactly, so an Arena update that silences or fixes a clip stops
+the export; the clip is exported as authored (a bank may still pick it: a random pick of silence is Arena's own behaviour).
 Dropped components (PLAN-AUTOSERVICE item 4, 2026-11-08): a contract may pin states.dropped_players and
 states.dropped_support (id -> leaf name). The exporter reads and verifies such a record and does NOT export it;
 the audit lands in the index as ``dropped`` (only present when something was dropped, so the accepted packages
@@ -363,15 +367,18 @@ def export(source, package, map_key='arena_bay5'):
     expected_players=expected_group_members(players,contract)
     if collections.Counter(grouped)!=collections.Counter(expected_players): raise ValueError('group coverage')
     result={'schemaVersion':schema,'mapKey':map_key,'sourceScene':source_scene,'componentCounts':dict(counts),'players':players,'support':support,'banks':banks,'clips':[], 'bankSchema':{'path':bank_schema_path.relative_to(source).as_posix(),'sha256':hashlib.sha256(bank_schema_path.read_bytes()).hexdigest()},'sourceSceneSha256':hashlib.sha256((source/source_scene).read_bytes()).hexdigest()}
+    silent_pins=pinned.get('silent_clips') or {}; silent_found={}
     for key,obj in clips.items():
         clip=obj.read(); tree=obj.read_typetree(); cd={'id':key,'name':clip.m_Name,'metadata':tree}
         samples=clip.samples
         if len(samples)!=1: raise ValueError(f'{key}: expected one clip, got {len(samples)}')
         _,data=next(iter(samples.items()))
         filename=key.replace(':','_')+'.wav'
-        cd['decoded']=validate_wav(data,tree,'audio/'+filename)
+        cd['decoded']=validate_wav(data,tree,'audio/'+filename,silent_ok=silent_pins.get(key)==clip.m_Name)
+        if cd['decoded'].pop('silent',False): silent_found[key]=clip.m_Name
         (output/filename).write_bytes(data)
         result['clips'].append(cd)
+    if silent_found!=silent_pins: raise ValueError('audio silent_clips changed')
     if dropped['players'] or dropped['support']: result['dropped']=dropped  # absent for every map that drops nothing
     validate_graph(result)
     payload=json.dumps(result,indent=2,allow_nan=False).encode('utf-8')
@@ -385,13 +392,14 @@ def drop_record(obj, kind, leaf, preserve_states, allowed, reason):
     if actual!=leaf: raise ValueError(f'{identity(obj)}: dropped component is {actual!r}, the contract pins {leaf!r}')
     return {'id':identity(obj),'kind':kind,'path':h['path'],'leaf':leaf,'activeInHierarchy':h['activeInHierarchy'],'reason':reason}
 
-def validate_wav(data, metadata, filename):
+def validate_wav(data, metadata, filename, silent_ok=False):
     if data[:4]!=b'RIFF': raise ValueError('expected decoded WAV')
     with wave.open(io.BytesIO(data)) as wav:
         if wav.getnchannels()!=metadata['m_Channels'] or wav.getframerate()!=metadata['m_Frequency'] or wav.getsampwidth()!=2: raise ValueError('decoded format drift')
         if abs(wav.getnframes()/wav.getframerate()-metadata['m_Length'])>2/wav.getframerate(): raise ValueError('decoded duration drift')
-        if not any(wav.readframes(wav.getnframes())): raise ValueError('silent decoded clip')
-        return {'file':filename,'channels':wav.getnchannels(),'sampleRate':wav.getframerate(),'frames':wav.getnframes(),'sampleWidth':2,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}
+        silent=not any(wav.readframes(wav.getnframes()))
+        if silent and not silent_ok: raise ValueError('silent decoded clip')
+        return {**({'silent':True} if silent else {}),'file':filename,'channels':wav.getnchannels(),'sampleRate':wav.getframerate(),'frames':wav.getnframes(),'sampleWidth':2,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}
 
 def validate_graph(data):
     key=data['mapKey']; audio=find_audio_contract(key)

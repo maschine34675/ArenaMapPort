@@ -1,2 +1,4 @@
-# test_score_monitors.py demands LF bytes in these sidecars; core.autocrlf=true would check them out CRLF.
-tools/maps/*.monitors.json text eol=lf
+# Every sidecar under tools/maps is read by tests and validators that compare bytes or generate files from them (test_score_monitors demands
+# LF bytes in the monitors sidecars; core.autocrlf=true would check them out CRLF, which broke a fresh clone once). The index holds LF for all of
+# them already (git ls-files --eol), so this rule changes no committed byte: it only fixes what a checkout writes (PLAN-YARD item 2).
+tools/maps/**/*.json text eol=lf

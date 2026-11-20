@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace ArenaMapPort.Editor.Import
 {
-    /// <summary>Rebuilds the Equator, Bay5, AirPit, Bowl, Iceberg and Autoservice source ambient graphs with target native components.
+    /// <summary>Rebuilds the Equator, Bay5, AirPit, Bowl, Iceberg, Autoservice and Yard source ambient graphs with target native components.
     /// The inactive root defers stock Awake/playback until the client has real audio services.
     ///
     /// What is pinned where. The exact census of every map (players, support components, banks, clips, group
@@ -34,6 +34,7 @@ namespace ArenaMapPort.Editor.Import
         public const string BowlRootName = "ArenaMapPort_BowlNativeAudio"; // PLAN-BOWL item 4/9, contract audio.root
         public const string IcebergRootName = "ArenaMapPort_IcebergNativeAudio"; // PLAN-ICEBERG item 5, contract audio.root
         public const string AutoServiceRootName = "ArenaMapPort_AutoServiceNativeAudio"; // PLAN-AUTOSERVICE item 4, contract audio.root
+        public const string YardRootName = "ArenaMapPort_YardNativeAudio"; // PLAN-YARD item 6, contract audio.root
 
         // Group GameObject name -> the native mixer group the client routes it to. The package names the same mixer in
         // each group's mixerName; a mismatch means the source graph and the client routing table disagree.
@@ -43,6 +44,9 @@ namespace ArenaMapPort.Editor.Import
         // four far_fight players force Arena's CommonAmbOutBypass (contract states.forced_mixer_players, marker mixerPolicy "group") and
         // are routed like their group, CommonAmbOutEffects; its dropped components (three Winter-only season loops, the inactive spline
         // chain) never reach this importer, the exporter leaves them out of the index.
+        // Yard (PLAN-YARD item 6) needs no new row either: CommonAmbientOutGroup (31) and CommonAmbientInGroup (5) only; its 14 inactive players
+        // are listed in no group (contract group_coverage "active_players", as Equator's two dogs), and its one silent source clip
+        // (amb_yard_cat_06, contract states.silent_clips) is imported as authored.
         static readonly Dictionary<string, string> GroupMixers = new Dictionary<string, string>
         {
             ["CommonAmbientInGroup"] = "CommonAmbInEffects",
@@ -64,6 +68,7 @@ namespace ArenaMapPort.Editor.Import
                 case "arena_bowl": return BowlRootName;
                 case "arena_iceberg": return IcebergRootName;
                 case "arena_autoservice": return AutoServiceRootName;
+                case "arena_yard": return YardRootName;
                 default: throw new InvalidDataException("Native audio has no owned root for map " + mapKey);
             }
         }
@@ -78,6 +83,7 @@ namespace ArenaMapPort.Editor.Import
                 case "arena_bowl": return "Bowl";
                 case "arena_iceberg": return "Iceberg";
                 case "arena_autoservice": return "AutoService";
+                case "arena_yard": return "Yard";
                 default: throw new InvalidDataException("Native audio has no asset folder for map " + mapKey);
             }
         }

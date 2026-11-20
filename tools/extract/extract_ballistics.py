@@ -38,6 +38,43 @@ MATERIAL_NAMES = frozenset("None Asphalt Body Cardboard Chainfence Concrete Fabr
 # Pebbles over the material Rubber. Any other pair still fails the extraction closed ("preset/material disagreement").
 REVIEWED_PRESET_MATERIAL_PAIRS = frozenset({("Chainfence", "MetalThin"), ("Gravel", "Concrete"), ("Pebbles", "Rubber")})
 
+# Yard, 2026-11-20 (Arena 0.6.2.0.48473), two reviewed rules that are pinned by SCENE NAME and HIERARCHY PATH of the owner,
+# never by an id (object ids rehash per Arena build) and never globally: no other owner of any map is affected.
+#
+# (1) Four colliders carry the preset Glass over the material MetalThin: the 'Decor_metal_02_A_BALLISTIC_metalthin'
+# MeshColliders (layer 30, enabled, not triggers, hit role 0/0, surface sound 0) of the four 'Decor_metal_02_A' parts of the
+# gondola 'DOORS/Construction_Cradle_02/Construction_Cradle_02_A' in Arena_Yard_TeamFight_DesignStuff (level317). Their names say
+# metal and the payload material is MetalThin; the preset is a slip of Arena's authors. They import as authored (EFT keeps
+# TypeOfMaterial and Preset as two fields), like Bowl's Chainfence/MetalThin pair, but only on these four owners: the pair is
+# deliberately NOT in REVIEWED_PRESET_MATERIAL_PAIRS, so a released map still refuses Glass over MetalThin.
+_CRADLE = "DOORS/Construction_Cradle_02/Construction_Cradle_02_A/Construction_Cradle_02 Group/"
+REVIEWED_OWNER_PAIRS = {
+    ("Arena_Yard_TeamFight_DesignStuff",
+     _CRADLE + name + "/Decor_metal_02_A_BALLISTIC_metalthin"): frozenset({("Glass", "MetalThin")})
+    for name in ("Decor_metal_02_A", "Decor_metal_02_A (1)", "Decor_metal_02_A (2)", "Decor_metal_02_A (3)")}
+
+# (2) Three BallisticCollider owners have no physical collider at all: they are the render-only LOD0 child meshes
+# (MeshFilter + MeshRenderer, layer 12) 'Pipe_broken_LOD0' (Arena_Yard, level72) and the two 'video_player_LOD0' of the
+# 'Home_theater (2)' / 'Home_theater (3)' props (Arena_Yard_TeamFight, level310). A BallisticCollider only labels the hits of
+# a collider on its own object, so without one it does nothing; the plain augmenter refuses it ("owner physics or state
+# differ") and the package validator requires an imported collider under every component. These three are left out of the
+# package on purpose (the same decision as Air Pit's four video_player_LOD0 in level38, which scene_select.ScopedFile records as
+# 'ballistic orphans'), and the validator pins the same three paths. Any other physics-less owner still fails closed.
+REVIEWED_PHYSICS_LESS_OWNERS = frozenset({
+    ("Arena_Yard", "SBG_Arena_Yard/OO/FRONT/Pipe_broken/Pipe_broken_LOD0"),
+    ("Arena_Yard_TeamFight", "SBG_Arena_Yard_TeamFight/OO/Props_Flat/Home_theater (2)/Video_player/video_player_LOD0"),
+    ("Arena_Yard_TeamFight", "SBG_Arena_Yard_TeamFight/OO/Props_Flat/Home_theater (3)/Video_player/video_player_LOD0")})
+
+
+def owner_path(by_id, owner_id):
+    """Slash-joined hierarchy path of a scene-JSON object (names from the root down), or None when it is unknown."""
+    names, seen, current = [], set(), by_id.get(owner_id)
+    while current is not None and current["id"] not in seen:
+        seen.add(current["id"])
+        names.append(current["name"])
+        current = by_id.get(current.get("parent_id"))
+    return "/".join(reversed(names)) if names else None
+
 
 def reviewed_hit_role(hit, net, material):
     """The original hit role / network id pairs that import as a plain material component.
@@ -220,7 +257,7 @@ def decode_payload(raw):
             "values": dict(zip(VALUE_FIELDS, values))}
 
 
-def _component(reader, source_file_name, contract, bindings):
+def _component(reader, source_file_name, contract, bindings, owner_pairs=None):
     raw = reader.get_raw_data()
     decoded = decode_payload(raw)
     source, target = bindings
@@ -231,8 +268,9 @@ def _component(reader, source_file_name, contract, bindings):
     rows = contract["source_presets"]["presets"]
     _require(index == -900 or 0 <= index < len(rows), "unmapped source preset index")
     preset = rows[index] if index != -900 else None
+    allowed = REVIEWED_PRESET_MATERIAL_PAIRS | (owner_pairs(str(decoded["owner_id"])) if owner_pairs else frozenset())
     _require(preset is None or preset["material_id"] == decoded["material"] or
-             (preset["name"], material) in REVIEWED_PRESET_MATERIAL_PAIRS, "preset/material disagreement")
+             (preset["name"], material) in allowed, "preset/material disagreement")
     _require(reviewed_hit_role(decoded["hit"], decoded["net"], material), "unreviewed hit role/network identity")
     _require(decoded["surface"] == 0 or (decoded["surface"] == 12 and material == "WoodThick"),
              "unreviewed surface sound encoding")
@@ -259,11 +297,16 @@ created its hierarchy/physics. Unrelated objects and their original state are un
     by_id = {o["id"]: o for o in objects}
     _require(len(by_id) == len(objects), "duplicate scene object IDs")
     pending, source_owners = [], set()
+    scene_name = scene_json.get("scene_name")
     basename = Path(source_file.name).name
+
+    def owner_pairs(owner_id):
+        return REVIEWED_OWNER_PAIRS.get((scene_name, owner_path(by_id, owner_id)), frozenset())
+
     for reader in source_file.objects.values():
         if reader.type.name != "MonoBehaviour" or script_name(reader) != SCRIPT_NAME:
             continue
-        component = _component(reader, basename, contract, bindings)
+        component = _component(reader, basename, contract, bindings, owner_pairs)
         owner_id = component["source"]["object_id"]
         _require(owner_id in by_id and owner_id not in source_owners, "missing or duplicate ballistic owner")
         source_owners.add(owner_id)
@@ -281,6 +324,8 @@ created its hierarchy/physics. Unrelated objects and their original state are un
                 physics.append((source_component.type.name, bool(tree.get("m_Enabled", 1)), bool(tree.get("m_IsTrigger", 0))))
         imported = [(c["type"], c.get("enabled", True), c.get("is_trigger", False))
                     for c in owner["components"] if c["type"] in PHYSICS_TYPES]
+        if not physics and not imported and (scene_name, owner_path(by_id, owner_id)) in REVIEWED_PHYSICS_LESS_OWNERS:
+            continue  # reviewed rule (2): an inert component on a render-only mesh is not imported
         _require(all(type(enabled) is bool and type(trigger) is bool for _, enabled, trigger in imported) and
                  physics and Counter(physics) == Counter(imported), "source/imported owner physics or state differ")
         existing = [c for c in owner["components"] if c["type"] == "BallisticCollider"]

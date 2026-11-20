@@ -17,6 +17,9 @@
   Autoservice (arena_autoservice) is not built here either (PLAN-AUTOSERVICE item 1, 2026-11-08): work/extract/autoservice is the superseded Arena 0.5.4
   spike package and work/build/autoservice is the U1 output directory (the spike build moved to work/build/autoservice-spike-20260915). Autoservice is built
   from work/extract/autoservice-native-v<N> with an explicit -PackageDir through tools/build_all.ps1 -FullMap; see docs/progress/autoservice-release.md.
+  Yard (arena_yard) is not built here either (PLAN-YARD item 1, 2026-11-20): work/extract/yard is the superseded Arena 0.5.4 spike package and
+  work/build/yard is the U1 output directory (the spike build moved to work/build/yard-spike-20260915). Yard is built from work/extract/yard-native-v<N>
+  with an explicit -PackageDir through tools/build_all.ps1 -FullMap; see docs/PLAN-YARD.md and docs/progress/yard-release.md.
   This script does not deploy to the live SPT installation.
 .EXAMPLE
   .\tools\build_remaining.ps1
@@ -27,7 +30,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string[]]$Maps = @('airpit2','prison','railwaystation','yard','factory','custom','shoreline','woods'),
+    [string[]]$Maps = @('airpit2','prison','railwaystation','factory','custom','shoreline','woods'),
     [ValidateRange(1,86400)][int]$ReproTimeoutSeconds = 1800,
     [switch]$Rebuild,
     [switch]$Stage
@@ -35,12 +38,13 @@ param(
 $ErrorActionPreference = 'Stop'
 if ($Stage) { throw 'Additional maps are parked. -Stage cannot write them into the release (Equator, Bay5, AirPit, Bowl, Iceberg); omit -Stage to retain development builds in work/.' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$allMaps = @('airpit2','prison','railwaystation','yard','factory','custom','shoreline','woods')
+$allMaps = @('airpit2','prison','railwaystation','factory','custom','shoreline','woods')
 if (-not $Maps.Count -or (@($Maps | Sort-Object -Unique).Count -ne $Maps.Count)) { throw 'Specify a nonempty unique map list.' }
 if ($Maps -ccontains 'airpit') { throw 'airpit is no longer built by this runner: it would use the superseded Arena 0.5.4 package work/extract/airpit. Build it from work/extract/airpit-native-v8 with an explicit -PackageDir through tools/build_all.ps1 (docs/progress/airpit-release.md).' }
 if ($Maps -ccontains 'bowl') { throw 'bowl is no longer built by this runner: it would use the superseded Arena 0.5.4 package work/extract/bowl and overwrite work/build/bowl. Build it from work/extract/bowl-native-v2 with an explicit -PackageDir and -FullMap through tools/build_all.ps1 (docs/progress/bowl-release.md).' }
 if ($Maps -ccontains 'iceberg') { throw 'iceberg is no longer built by this runner: it would use the superseded Arena 0.5.4 package work/extract/iceberg. Build it from work/extract/iceberg-native-v2 with an explicit -PackageDir and -FullMap through tools/build_all.ps1 (docs/progress/iceberg-release.md).' }
 if ($Maps -ccontains 'autoservice') { throw 'autoservice is no longer built by this runner: it would use the superseded Arena 0.5.4 spike package work/extract/autoservice and overwrite work/build/autoservice. Build it from work/extract/autoservice-native-v<N> with an explicit -PackageDir and -FullMap through tools/build_all.ps1 (docs/PLAN-AUTOSERVICE.md, docs/progress/autoservice-release.md).' }
+if ($Maps -ccontains 'yard') { throw 'yard is no longer built by this runner: it would use the superseded Arena 0.5.4 spike package work/extract/yard and overwrite work/build/yard. Build it from work/extract/yard-native-v<N> with an explicit -PackageDir and -FullMap through tools/build_all.ps1 (docs/PLAN-YARD.md, docs/progress/yard-release.md).' }
 foreach ($stem in $Maps) { if ($stem -cnotin $allMaps) { throw "Unknown additional map: $stem" } }
 
 Push-Location -LiteralPath $repo

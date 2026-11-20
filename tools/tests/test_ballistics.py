@@ -185,6 +185,82 @@ class BallisticsTests(unittest.TestCase):
         self.assertEqual((component["material"], component["preset_name"]), ("WoodThin", "MetalThin"))
         self.assertEqual(component["target_preset_id"], 4)  # the target table lists MetalThin at index 4
 
+    @staticmethod
+    def place(scene, scene_name, path):
+        """Rename the fixture's owner (id 10) into the hierarchy ``path`` of ``scene_name`` (ancestors get ids 11, 12, ...)."""
+        names = path.split("/")
+        scene["scene_name"] = scene_name
+        owner = scene["objects"][0]
+        owner["name"] = names[-1]
+        parent = None
+        for number, name in enumerate(reversed(names[:-1])):
+            ancestor = {"id": str(11 + number), "name": name, "active": owner["active"], "parent_id": None, "components": []}
+            scene["objects"].append(ancestor)
+            (owner if parent is None else parent)["parent_id"] = ancestor["id"]
+            parent = ancestor
+        return scene
+
+    def test_glass_over_metalthin_is_reviewed_for_the_four_cradle_colliders_only(self):
+        # Yard 2026-11-20: the four 'Decor_metal_02_A_BALLISTIC_metalthin' colliders under DOORS/Construction_Cradle_02 carry the preset
+        # Glass over the material MetalThin. The pair is scoped to those four owners (scene name + hierarchy path), never global.
+        self.assertNotIn(("Glass", "MetalThin"), B.REVIEWED_PRESET_MATERIAL_PAIRS)
+        scene_name = "Arena_Yard_TeamFight_DesignStuff"
+        keys = sorted(B.REVIEWED_OWNER_PAIRS)
+        self.assertEqual(len(keys), 4)
+        self.assertTrue(all(k[0] == scene_name and k[1].startswith(
+            "DOORS/Construction_Cradle_02/Construction_Cradle_02_A/Construction_Cradle_02 Group/Decor_metal_02_A")
+            and k[1].endswith("/Decor_metal_02_A_BALLISTIC_metalthin") for k in keys))
+        self.assertEqual({k[1].split("/")[-2] for k in keys},
+                         {"Decor_metal_02_A", "Decor_metal_02_A (1)", "Decor_metal_02_A (2)", "Decor_metal_02_A (3)"})
+        self.assertTrue(all(v == frozenset({("Glass", "MetalThin")}) for v in B.REVIEWED_OWNER_PAIRS.values()))
+        for scene_key, path in keys:
+            file, scene, _, _, _ = fixture()
+            file.objects[20].get_raw_data = lambda: raw(material=101, preset=4)  # Glass preset (104) over MetalThin (101)
+            self.place(scene, scene_key, path)
+            with self.subTest(path=path):
+                self.assertEqual(B.augment_scene(scene, file, contract()), 1)
+                component = scene["objects"][0]["components"][-1]
+                self.assertEqual((component["material"], component["preset_name"]), ("MetalThin", "Glass"))
+        # The same payload anywhere else still fails: another scene, another path, a sibling name outside the four.
+        scene_key, path = keys[0]
+        for other_scene, other_path in ((("Arena_Yard", path)), (scene_name, path.replace("A (1)/", "A (9)/")),
+                                        (scene_name, path.replace("Cradle_02_A/", "Cradle_02_B/")), (scene_name, "Other/leaf")):
+            file, scene, _, _, _ = fixture()
+            file.objects[20].get_raw_data = lambda: raw(material=101, preset=4)
+            self.place(scene, other_scene, other_path)
+            original = deepcopy(scene)
+            with self.subTest(other=(other_scene, other_path)), self.assertRaisesRegex(HardExtractError, "preset/material disagreement"):
+                B.augment_scene(scene, file, contract())
+            self.assertEqual(scene, original)
+
+    def test_three_reviewed_physics_less_owners_are_left_out_and_every_other_one_still_fails(self):
+        # Yard 2026-11-20: Pipe_broken_LOD0 (level72) and the two video_player_LOD0 (level310) are render-only meshes with an inert
+        # BallisticCollider. They are left out of the package; the pin is scene name + hierarchy path, and a physics-less owner
+        # anywhere else (or with another name) fails closed as before.
+        reviewed = sorted(B.REVIEWED_PHYSICS_LESS_OWNERS)
+        self.assertEqual([k[0] for k in reviewed], ["Arena_Yard", "Arena_Yard_TeamFight", "Arena_Yard_TeamFight"])
+        self.assertEqual([k[1].split("/")[-1] for k in reviewed], ["Pipe_broken_LOD0", "video_player_LOD0", "video_player_LOD0"])
+        for scene_key, path in reviewed:
+            file, scene, _, tree, _ = fixture()
+            tree["m_Component"] = [{"component": {"m_PathID": 20}}]
+            scene["objects"][0]["components"] = []
+            self.place(scene, scene_key, path)
+            with self.subTest(path=path):
+                self.assertEqual(B.augment_scene(scene, file, contract()), 0)
+                self.assertEqual(scene["objects"][0]["components"], [])
+        for scene_key, path in (("Arena_Yard", reviewed[1][1]), ("Arena_Yard_TeamFight", reviewed[0][1]),
+                                ("Arena_Yard", reviewed[0][1] + " (1)"), ("Arena_Yard", "x/video_player_LOD0")):
+            file, scene, _, tree, _ = fixture()
+            tree["m_Component"] = [{"component": {"m_PathID": 20}}]
+            scene["objects"][0]["components"] = []
+            self.place(scene, scene_key, path)
+            with self.subTest(other=(scene_key, path)), self.assertRaisesRegex(HardExtractError, "owner physics or state differ"):
+                B.augment_scene(scene, file, contract())
+        # An owner on a reviewed path that does carry a collider is imported normally (the rule never hides a real collider).
+        file, scene, _, _, _ = fixture()
+        self.place(scene, *reviewed[0])
+        self.assertEqual(B.augment_scene(scene, file, contract()), 1)
+
     def test_lamp_glass_role_imports_as_plain_glass_and_other_lamp_roles_fail(self):
         # Iceberg 2026-10-30: car lights and industrial lamps carry EHitType.Lamp (1) with network id 0 on Glass.
         self.assertTrue(B.reviewed_hit_role(1, 0, "Glass"))

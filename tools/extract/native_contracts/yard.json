@@ -1,0 +1,107 @@
+{
+ "schema_version": 1,
+ "map_key": "arena_yard",
+ "notes": [
+  "Pins from the first native extraction of Yard on Arena 0.6.2.0.48473 (2026-11-20, package yard-native-v1, docs/progress/yard-source-062.md, PLAN-YARD item 5): BallisticCollider per scene {'72': 3668, '162': 0, '73': 10, '310': 1304, '317': 65, '74': 97} = 5144 (the survey's 5147 minus the three reviewed physics-less owners that the package leaves out), StaticDeferredDecal 526 (326 + 3 + 165 + 32), CullingLightObject 96 (92 in the Light scene + 4 in TeamFight_DesignStuff), VolumetricLight 44 (42 + 2), LightFlicker 0, NavMeshModifier 53 (19 in level72 + 14 in level310 + 20 in level317) + NavMeshModifierVolume 90 (43 in level72 + 47 in level310), SmallPhysicsObject 4 (SoundType 6 MediumGeneric x1 in level72, 9 SmallBox x2 and 5 HardPlastic x1 in level310), rain cover 9 IndoorTrigger / 0 DryPlane / weather obstacle False. Every number equals the S0/S3 survey expectation of PLAN-YARD.",
+  "implicit_scene_identity stays false: generic packages always record source.map_key.",
+  "Reviewed ballistic rules (extract_ballistics.py, pinned by scene name and hierarchy path, never by id): the four 'Decor_metal_02_A_BALLISTIC_metalthin' MeshColliders under DOORS/Construction_Cradle_02 (level317) carry the preset Glass over the material MetalThin (imported as authored, only on those four owners: REVIEWED_OWNER_PAIRS, not the global pair list); three physics-less owners (Pipe_broken_LOD0 in level72, two video_player_LOD0 in level310) are render-only meshes whose inert BallisticCollider is left out of the package (REVIEWED_PHYSICS_LESS_OWNERS, mirrored by validate_native_features).",
+  "The shader census of package v1 (30 distinct shader names over the 750 package materials, 29 without the native decal shader) is pinned in tools/tests/test_native_contracts.py (YardContractTests).",
+  "Audio (package v2, PLAN-YARD item 6, 2026-11-20): Sound scene level163 (Arena_Yard_Sound, plan role 'sound'), schema 2, 50 players (26 AmbientSoundPlayer, 22 SeasonAmbientSoundPlayer with the keys Spring, SpringEarly, Summer, Autumn, AutumnLate and none for Winter, 2 LoopAmbientSoundPlayer), 2 AmbientSoundPlayerGroup (CommonAmbientOutGroup 31 on CommonAmbOutEffects, CommonAmbientInGroup 5 on CommonAmbInEffects, in source order), 13 banks, 145 clips. group_coverage is 'active_players': the groups list exactly the 36 active players and the 14 players under an inactive ancestor (states.inactive_players, one renamed sibling pigeon_flying~2) are in no group, as Equator's two dogs. Reviewed states: zero_min_distance_players = the two loop hums fridge (volume 0.05, maxDistance 7) and electricity (0.03, 10); no AudioSource of the source has Loop set (the loop-kind players set it in Awake); no forced mixer, no play-on-awake, no season-loop class, nothing dropped. New reviewed state silent_clips: Arena's own clip amb_yard_cat_06 (sharedassets163.assets:109, 3,642 Hz, 3,200 B of sharedassets163.resource) decodes to all-zero PCM; the exporter refuses a silent clip unless it is pinned here by id and name, exports it as authored (a bank may pick it: a random pick of silence is Arena's own behaviour), and validate_native_features requires a pinned clip to be silent. The counts and ids come from the exporter's own strict reader on Arena 0.6.2.0.48473 (tools/tests/test_yard_audio.py pins them)."
+ ],
+ "scenes": {
+  "72": "Arena_Yard",
+  "162": "Arena_Yard_Grass",
+  "73": "Arena_Yard_DesignStuff",
+  "310": "Arena_Yard_TeamFight",
+  "317": "Arena_Yard_TeamFight_DesignStuff",
+  "74": "Arena_Yard_Light"
+ },
+ "ballistics": {
+  "72": 3668,
+  "162": 0,
+  "73": 10,
+  "310": 1304,
+  "317": 65,
+  "74": 97
+ },
+ "require_unsliced": true,
+ "implicit_scene_identity": false,
+ "features": {
+  "static_decals": 526,
+  "light_culling": {
+   "culling_light_object_count": 96,
+   "volumetric_light_count": 44,
+   "light_flicker_count": 0
+  },
+  "raincover": {
+   "indoor_trigger_count": 9,
+   "dry_plane_count": 0,
+   "weather_obstacle": false
+  },
+  "navmesh_modifiers": {
+   "modifiers": 53,
+   "volumes": 90
+  },
+  "small_physics_objects": 4
+ },
+ "audio": {
+  "feature": "ambient_audio",
+  "schema": 2,
+  "scene": "level163",
+  "root": "ArenaMapPort_YardNativeAudio",
+  "players": {
+   "AmbientSoundPlayer": 26,
+   "SeasonAmbientSoundPlayer": 22,
+   "LoopAmbientSoundPlayer": 2
+  },
+  "support": {
+   "AmbientSoundPlayerGroup": 2
+  },
+  "banks": 13,
+  "clips": 145,
+  "group_coverage": "active_players",
+  "states": {
+   "grouped_players": 36,
+   "disabled_players": [],
+   "inactive_players": {
+    "level163:615": "crow (2)",
+    "level163:626": "water_drops (3)",
+    "level163:640": "water_drops (1)",
+    "level163:663": "sparrow (2)",
+    "level163:665": "water_drops (3)",
+    "level163:669": "indoor_wind (2)",
+    "level163:720": "sparrow_in_garbage (2)",
+    "level163:738": "water_drops (5)",
+    "level163:741": "sparrow (4)",
+    "level163:760": "water_drops (5)",
+    "level163:771": "pigeon_flying~2",
+    "level163:775": "indoor_wind (4)",
+    "level163:776": "sparrow_in_garbage (4)",
+    "level163:784": "sparrow (6)"
+   },
+   "groups": {
+    "CommonAmbientOutGroup": {
+     "mixer": "CommonAmbOutEffects",
+     "players": 31
+    },
+    "CommonAmbientInGroup": {
+     "mixer": "CommonAmbInEffects",
+     "players": 5
+    }
+   },
+   "group_mixers": [
+    "CommonAmbOutEffects",
+    "CommonAmbInEffects"
+   ],
+   "loops": {},
+   "loop_players": [],
+   "zero_min_distance_players": {
+    "level163:672": "fridge",
+    "level163:734": "electricity"
+   },
+   "silent_clips": {
+    "sharedassets163.assets:109": "amb_yard_cat_06"
+   }
+  }
+ }
+}

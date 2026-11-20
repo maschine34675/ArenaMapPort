@@ -58,6 +58,11 @@ Schema (version 1; every key is required unless marked optional, unknown keys ar
                                             SeasonLoopAmbientSoundPlayers and its inactive spline chain; ``players``
                                             and ``support`` then count the EXPORTED components only, and no dropped
                                             id may also carry another per-player pin),
+                                            silent_clips{clip id: clip name} (optional, default {}: the decoded clips
+                                            that are all-zero PCM in Arena's own data, PLAN-YARD item 6: Yard's
+                                            ``amb_yard_cat_06``, a 3,642 Hz stub; the exporter refuses a silent clip
+                                            unless it is pinned here by id AND name, and a pinned clip that is no
+                                            longer silent or no longer there fails too, so the set must match exactly),
                                             zero_min_distance_players{id: leaf name} (optional, default {}:
                                             the players that author minDistance 0, the reviewed rule of
                                             extract_bay5_audio.parse_player; every other map pins none, so a
@@ -303,8 +308,9 @@ def _groups(value, where: str) -> dict:
 
 def _parse_states(raw, where: str, audio: dict):
     raw = _object(raw, where, _STATE_KEYS, optional=("forced_mixer_players", "zero_min_distance_players",
-                                                     "dropped_players", "dropped_support"))
+                                                     "dropped_players", "dropped_support", "silent_clips"))
     states = {
+        "silent_clips": _leaf_map(raw.get("silent_clips", {}), where + ".silent_clips", "clip"),
         "dropped_players": _leaf_map(raw.get("dropped_players", {}), where + ".dropped_players", "player"),
         "dropped_support": _leaf_map(raw.get("dropped_support", {}), where + ".dropped_support", "support component"),
         "forced_mixer_players": _leaf_map(raw.get("forced_mixer_players", {}), where + ".forced_mixer_players", "player"),
@@ -333,6 +339,8 @@ def _parse_states(raw, where: str, audio: dict):
     if states["grouped_players"] != grouped or not 0 <= grouped <= players:
         _fail(where + ".grouped_players",
               f"{states['grouped_players']} disagrees with {players} players under '{audio['group_coverage']}' coverage")
+    if len(states["silent_clips"]) > audio["clips"]:
+        _fail(where + ".silent_clips", f"{len(states['silent_clips'])} entries for {audio['clips']} clips")
     if len(states["zero_min_distance_players"]) > players:
         _fail(where + ".zero_min_distance_players", f"{len(states['zero_min_distance_players'])} entries for {players} players")
     pinned_elsewhere = (set(states["forced_mixer_players"]) | set(states["zero_min_distance_players"]) |

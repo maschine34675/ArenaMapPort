@@ -237,8 +237,7 @@ presets from `work/build/preset`. Accepted v5 source packages remain unchanged.
 Acoustics, room tones, original flares, water data, loading screens and banners are
 included for these two maps. Optional ArenaMode audio/UI payloads remain included
 when their extraction manifests exist. No development/debug plugin or user config
-is packaged. `AdditionalMapBuilds.props` is retained as development metadata and
-is no longer imported by the client build. `build_remaining.ps1 -Stage` is refused;
+is packaged. `tools/maps/AdditionalMapBuilds.props` was removed on 2026-11-20 (nothing imported it any more). `build_remaining.ps1 -Stage` is refused;
 its extraction/build workflow remains available without that switch.
 
 Run `python tools/validate/validate_distribution.py` after both Release builds.
@@ -280,7 +279,7 @@ The 14 stems are `equator`, `bay5`, `airpit`, `airpit2`, `autoservice`, `bowl`, 
 | Bay5 | `work/build/bay5/` | `work/build/preset/arena_bay5_preset.bundle` | `material-shaders.arena_bay5.json` |
 | Each additional map | `work/build/<stem>/` | `work/build/preset/arena_<stem>_preset.bundle` | `material-shaders.arena_<stem>.json` |
 
-The client project's existing explicit Equator/Bay5 item lists remain authoritative. The 12 additional maps are explicitly listed in `tools/maps/AdditionalMapBuilds.props`; Release staging calls `tools/validate/validate_port.py --map <stem>` before accepting their outputs. A recursive search across `work/build/` is not a valid substitute: diagnostic/S1 bundles can share filenames with the full map.
+The client project's existing explicit Equator/Bay5 item lists remain authoritative. The additional maps are no longer listed in a props file (`tools/maps/AdditionalMapBuilds.props` was removed on 2026-11-20); Release staging calls `tools/validate/validate_port.py --map <stem>` before accepting their outputs. A recursive search across `work/build/` is not a valid substitute: diagnostic/S1 bundles can share filenames with the full map.
 
 Server Release build staging copies the server DLL and its `db/` files into the repository's `dist/` tree. Server tests must also use `-c Release`, because their referenced server project stages its own build output.
 

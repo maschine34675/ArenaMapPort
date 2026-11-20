@@ -130,7 +130,11 @@ dated state in one screen; read it before this index if you only have a minute.
   (2026-10-30): the reworked CheckPoint layout, the +9 index shift, spawn-marker churn.
 - [yard-release.md](yard-release.md) — Yard as the seventh map (Arena's `Arena_Yard`, "Block" in Arena's locale; branch `feature/yard`, started
   2026-11-20, plan [docs/PLAN-YARD.md](../PLAN-YARD.md)): the six surveys of the start (reference extraction, source and identity, gameplay and
-  navigation, environment and audio, pipeline gap, grass) and the dated work after them. Catalog-only so far.
+  navigation, environment and audio, pipeline gap, grass) and the dated work after them (Phase A of 2026-11-20: package `yard-native-v2`, contract,
+  key-source row, the user's confirmed defaults). Catalog-only so far.
+- [yard-source-062.md](yard-source-062.md) — Yard's source note for Arena 0.6.2.0.48473 (2026-11-20): the 0.5.4 to 0.6.2 delta (index shifts,
+  rehashed ids, 11 material swaps, the Rigidbody origin), the native census of package v1/v2, the two reviewed ballistic rules, the border-cube
+  sidecar (104 cubes of the excluded Scripts scene), the shader census (30 names) and the Phase A review statements.
 - [autoservice-release.md](autoservice-release.md) — Autoservice as the sixth map (branch `feature/autoservice`, started 2026-11-08):
   the four surveys on Arena 0.6.2 (TeamFight alone with 20 markers in two pockets, one capture point, four gates, 372 new border
   cubes, 30 body-rig fans so crowdless, new season-loop audio class, no emission cap, no water), the plan decisions and the open

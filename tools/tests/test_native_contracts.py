@@ -150,13 +150,13 @@ def partial_block() -> dict:
 class ContractFilesTests(unittest.TestCase):
     def test_repository_contracts_load_and_validator_uses_them(self):
         contracts = L.load_contracts()
-        self.assertEqual(set(contracts), {'arena_equator', 'arena_bay5', 'arena_airpit', 'arena_bowl', 'arena_iceberg', 'arena_autoservice'})
+        self.assertEqual(set(contracts), {'arena_equator', 'arena_bay5', 'arena_airpit', 'arena_bowl', 'arena_iceberg', 'arena_autoservice', 'arena_yard'})
         self.assertEqual(set(v.MAPS), set(contracts))
         for key, contract in contracts.items():
             self.assertEqual(contract['key'], key)
             self.assertEqual(v.MAPS[key], contract)
         files = sorted(p.stem for p in L.CONTRACT_DIR.glob('*.json'))
-        self.assertEqual(files, ['airpit', 'autoservice', 'bay5', 'bowl', 'equator', 'iceberg'])
+        self.assertEqual(files, ['airpit', 'autoservice', 'bay5', 'bowl', 'equator', 'iceberg', 'yard'])
 
     def test_load_contract_by_key_fails_for_unknown_map(self):
         self.assertEqual(L.load_contract('arena_airpit')['key'], 'arena_airpit')
@@ -203,8 +203,8 @@ class GoldenLegacyTests(unittest.TestCase):
         # Added with the item-13 review: the loop is pinned by leaf name too (the importer and the client look it
         # up as 'electricity'), the single indoor group by name, mixer and member count (25 players - 2 dogs).
         states = v.MAPS['arena_equator']['audio']['states']
-        self.assertEqual(set(states), set(LEGACY_EQUATOR_STATES) | {'groups', 'loops', 'forced_mixer_players', 'zero_min_distance_players', 'dropped_players', 'dropped_support'})
-        self.assertEqual((states['dropped_players'], states['dropped_support']), ({}, {}))  # optional pins, normalised to {}: only Autoservice drops components
+        self.assertEqual(set(states), set(LEGACY_EQUATOR_STATES) | {'groups', 'loops', 'forced_mixer_players', 'zero_min_distance_players', 'dropped_players', 'dropped_support', 'silent_clips'})
+        self.assertEqual((states['dropped_players'], states['dropped_support'], states['silent_clips']), ({}, {}, {}))  # optional pins, normalised to {}: only Autoservice drops components, only Yard pins a silent clip
         self.assertEqual(states['zero_min_distance_players'], {})  # optional pin, normalised to {}: only Iceberg has zero-minDistance players
         self.assertEqual(states['forced_mixer_players'], {})  # optional pin, normalised to {} (Bowl pins metal_rigging)
         self.assertEqual(states['loops'], {'level56:965': 'electricity'})
@@ -278,7 +278,7 @@ class GoldenLegacyTests(unittest.TestCase):
                                   'CommonAmbientInGroup': {'mixer': 'CommonAmbInEffects', 'players': 22}},
                        'group_mixers': ['CommonAmbOutEffects', 'CommonAmbInEffects'],
                        'loops': {}, 'loop_players': [], 'forced_mixer_players': {}, 'zero_min_distance_players': {},
-                       'dropped_players': {}, 'dropped_support': {}}})
+                       'dropped_players': {}, 'dropped_support': {}, 'silent_clips': {}}})
         # AirPit is the first map with both an Out and an In group: the Out group comes first in source order
         # (kept in the group_mixers mirror), but the pins themselves are keyed by group name.
         self.assertEqual(audio['states']['group_mixers'][0], 'CommonAmbOutEffects')
@@ -1445,6 +1445,111 @@ class AutoserviceContractTests(unittest.TestCase):
         sys.path.insert(0, str(REPO / 'tools' / 'extract'))
         import extract_ballistics
         self.assertIn(('Pebbles', 'Rubber'), extract_ballistics.REVIEWED_PRESET_MATERIAL_PAIRS)
+
+
+class YardContractTests(unittest.TestCase):
+    """PLAN-YARD item 5: the pins of the first native extraction of Yard (Arena 0.6.2.0.48473, 2026-11-20)."""
+
+    def test_contract_pins_the_extraction_of_package_v1(self):
+        contract = v.MAPS['arena_yard']
+        self.assertEqual(contract['scenes'], {72: 'Arena_Yard', 162: 'Arena_Yard_Grass', 73: 'Arena_Yard_DesignStuff',
+                                              310: 'Arena_Yard_TeamFight', 317: 'Arena_Yard_TeamFight_DesignStuff',
+                                              74: 'Arena_Yard_Light'})
+        self.assertEqual(contract['ballistics'], {72: 3668, 162: 0, 73: 10, 310: 1304, 317: 65, 74: 97})
+        # the survey's 5,147 minus the three reviewed physics-less owners the package leaves out
+        self.assertEqual(sum(contract['ballistics'].values()), 5147 - 3)
+        self.assertEqual(contract['features'], {
+            'static_decals': 526,
+            'light_culling': {'culling_light_object_count': 96, 'volumetric_light_count': 44, 'light_flicker_count': 0},
+            'raincover': {'indoor_trigger_count': 9, 'dry_plane_count': 0, 'weather_obstacle': False},
+            'navmesh_modifiers': {'modifiers': 53, 'volumes': 90},
+            'small_physics_objects': 4})
+        audio = contract['audio']  # package v1 carried none; package v2 added the Sound scene census (item 6)
+        self.assertEqual((audio['feature'], audio['schema'], audio['scene'], audio['root'], audio['group_coverage']),
+                         ('ambient_audio', 2, 'level163', 'ArenaMapPort_YardNativeAudio', 'active_players'))
+        self.assertEqual(audio['players'], {'AmbientSoundPlayer': 26, 'SeasonAmbientSoundPlayer': 22, 'LoopAmbientSoundPlayer': 2})
+        self.assertEqual((audio['support'], audio['banks'], audio['clips']), ({'AmbientSoundPlayerGroup': 2}, 13, 145))
+        states = audio['states']
+        self.assertEqual((len(states['inactive_players']), len(states['zero_min_distance_players']), len(states['silent_clips']),
+                          len(states['dropped_players']), len(states['dropped_support']), len(states['forced_mixer_players']),
+                          states['grouped_players']), (14, 2, 1, 0, 0, 0, 36))
+        self.assertEqual(states['group_mixers'], ['CommonAmbOutEffects', 'CommonAmbInEffects'])
+        self.assertTrue(contract['require_unsliced'])
+        self.assertFalse(contract['implicit_scene_identity'])
+
+    def test_package_v2_adds_only_the_ambient_audio(self):
+        v1, v2 = package_dir('yard-native-v1'), package_dir('yard-native-v2')
+        if v1 is None or v2 is None:
+            self.skipTest('work/extract/yard-native-v1/v2 not present')
+        manifest = v.read_json(v2 / 'manifest.json')
+        self.assertEqual(v.map_contract(manifest)[0], 'arena_yard')
+        self.assertEqual(manifest['native_features']['required'], ['ballistics', 'ambient_audio'])
+        self.assertEqual((manifest['native_audio']['players'], manifest['native_audio']['banks'], manifest['native_audio']['clips']), (50, 13, 145))
+        old = v.read_json(v1 / 'manifest.json')
+        self.assertEqual((len(manifest['meshes']), len(manifest['materials']), len(manifest['textures']), len(manifest['warnings'])),
+                         (len(old['meshes']), len(old['materials']), len(old['textures']), len(old['warnings'])))
+        for name in ('Arena_Yard', 'Arena_Yard_Grass', 'Arena_Yard_DesignStuff', 'Arena_Yard_TeamFight',
+                     'Arena_Yard_TeamFight_DesignStuff', 'Arena_Yard_Light'):
+            self.assertEqual((v1 / 'scenes' / (name + '.json')).read_bytes(), (v2 / 'scenes' / (name + '.json')).read_bytes(), name)
+
+    def test_package_v1_manifest_and_shader_census(self):
+        package = package_dir('yard-native-v1')
+        if package is None:
+            self.skipTest('work/extract/yard-native-v1 not present')
+        manifest = v.read_json(package / 'manifest.json')
+        self.assertEqual(v.map_contract(manifest)[0], 'arena_yard')
+        self.assertEqual((len(manifest['meshes']), len(manifest['materials']), len(manifest['textures']),
+                          len(manifest['warnings']), len(manifest['errors'])), (6077, 750, 1428, 137, 0))
+        self.assertEqual(manifest['native_features']['required'], ['ballistics'])
+        self.assertNotIn('native_audio', manifest)
+        shaders = Counter(v.read_json(path)['shader'] for path in (package / 'materials').glob('*.json'))
+        # The survey's scratch extract without native features counted 29 names over 652 materials; the native decals add 98
+        # materials of one more shader (Decal/DeferredDecalDiffuseNormalsDynamicEditor). Four names are new to the six accepted
+        # packages, one material each (PLAN-YARD section 0 "Shaders"); the Baked SMap shader has seven.
+        self.assertEqual((len(shaders), sum(shaders.values())), (30, 750))
+        self.assertEqual(shaders['Decal/DeferredDecalDiffuseNormalsDynamicEditor'], 98)
+        self.assertEqual(shaders['p0/Reflective/Bumped Specular SMap Baked'], 7)
+        for name in ('Impostors/Examples/StandardCrossfade', 'Hidden/Amplify Impostors/Octahedron Impostor',
+                     'Custom/WireNetting', 'Nature/SpeedTree'):
+            self.assertEqual(shaders[name], 1, name)
+
+    def test_package_v1_native_census_per_scene(self):
+        package = package_dir('yard-native-v1')
+        if package is None:
+            self.skipTest('work/extract/yard-native-v1 not present')
+        census = {}
+        for name in ('Arena_Yard', 'Arena_Yard_Grass', 'Arena_Yard_DesignStuff', 'Arena_Yard_TeamFight',
+                     'Arena_Yard_TeamFight_DesignStuff', 'Arena_Yard_Light'):
+            scene = v.read_json(package / 'scenes' / (name + '.json'))
+            census[name] = Counter(c['type'] for o in scene['objects'] for c in o['components'])
+        total = sum(census.values(), Counter())
+        self.assertEqual({k: total[k] for k in ('BallisticCollider', 'StaticDeferredDecal', 'NavMeshModifier', 'NavMeshModifierVolume',
+                                                'CullingLightObject', 'VolumetricLight', 'LightFlicker', 'SmallPhysicsObject', 'Rigidbody')},
+                         {'BallisticCollider': 5144, 'StaticDeferredDecal': 526, 'NavMeshModifier': 53, 'NavMeshModifierVolume': 90,
+                          'CullingLightObject': 96, 'VolumetricLight': 44, 'LightFlicker': 0, 'SmallPhysicsObject': 4, 'Rigidbody': 13})
+        self.assertEqual({n: c['BallisticCollider'] for n, c in census.items()},
+                         {'Arena_Yard': 3668, 'Arena_Yard_Grass': 0, 'Arena_Yard_DesignStuff': 10, 'Arena_Yard_TeamFight': 1304,
+                          'Arena_Yard_TeamFight_DesignStuff': 65, 'Arena_Yard_Light': 97})
+
+    def test_plan_names_its_four_scene_roles(self):
+        # PLAN-YARD item 1: scripts 75, sound 163, ai 320, culling 153; the winter Scripts scene 254 has no role.
+        sys.path.insert(0, str(REPO / 'tools' / 'extract'))
+        import source_plan
+        plan = source_plan.load_plan(REPO / 'tools' / 'extract' / 'plans' / 'yard.json')
+        self.assertEqual({role: (source_plan.scene_for_role(plan, role)['index'], source_plan.scene_for_role(plan, role)['name'])
+                          for role in ('scripts', 'sound', 'ai', 'culling')},
+                         {'scripts': (75, 'Arena_Yard_Scripts'), 'sound': (163, 'Arena_Yard_Sound'),
+                          'ai': (320, 'Arena_Yard_AI'), 'culling': (153, 'Arena_Yard_TeamFight_Culling')})
+        self.assertEqual([r.get('role') for r in plan['excluded_scenes'] if r['index'] == 254], [None])
+
+    def test_the_two_reviewed_ballistic_rules_are_scoped_and_not_global(self):
+        # PLAN-YARD item 3: Glass over MetalThin is pinned to four owners, never added to the pair list the released maps use.
+        sys.path.insert(0, str(REPO / 'tools' / 'extract'))
+        import extract_ballistics
+        self.assertEqual(extract_ballistics.REVIEWED_PRESET_MATERIAL_PAIRS,
+                         frozenset({('Chainfence', 'MetalThin'), ('Gravel', 'Concrete'), ('Pebbles', 'Rubber')}))
+        self.assertEqual(len(extract_ballistics.REVIEWED_OWNER_PAIRS), 4)
+        self.assertEqual(len(extract_ballistics.REVIEWED_PHYSICS_LESS_OWNERS), 3)
 
 
 if __name__ == '__main__':

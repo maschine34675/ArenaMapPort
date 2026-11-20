@@ -538,6 +538,22 @@ def ballistic_owner(reader):
     return owner
 
 
+# Yard, 2026-11-20: the three BallisticCollider owners without any physical collider that the extractor leaves out on purpose
+# (extract_ballistics.REVIEWED_PHYSICS_LESS_OWNERS; this list is kept independently on purpose). A source component whose
+# owner has no collider and whose (scene, hierarchy path) is listed here is expected to be ABSENT from the package; any other
+# component missing from it still fails.
+REVIEWED_PHYSICS_LESS_OWNERS = frozenset({
+    ('Arena_Yard','SBG_Arena_Yard/OO/FRONT/Pipe_broken/Pipe_broken_LOD0'),
+    ('Arena_Yard_TeamFight','SBG_Arena_Yard_TeamFight/OO/Props_Flat/Home_theater (2)/Video_player/video_player_LOD0'),
+    ('Arena_Yard_TeamFight','SBG_Arena_Yard_TeamFight/OO/Props_Flat/Home_theater (3)/Video_player/video_player_LOD0')})
+
+
+def is_reviewed_physics_less_owner(scene,path,has_physics):
+    """True only for a listed (scene, full hierarchy path) whose owner has no physical collider: the one case a source
+    ballistic component may be absent from the package. A same-named leaf elsewhere, or a listed path with a collider, is not."""
+    return (not has_physics) and (scene,path) in REVIEWED_PHYSICS_LESS_OWNERS
+
+
 def validate_ballistic_source(package, manifest, scenes):
     import UnityPy
     root=Path(manifest['source']['arena_data_root']); target=Path(manifest['source']['target_data_root'])
@@ -558,7 +574,7 @@ def validate_ballistic_source(package, manifest, scenes):
                     key=c['source']['component_id']; require(key not in actual,'duplicate ballistic source component')
                     actual[key]=(obj,c)
         env=UnityPy.load(str(root/f'level{index}'),str(root/'globalgamemanagers.assets'))
-        found=set()
+        found=set();reviewed=set()
         for reader in list(env.objects):
             if Path(reader.assets_file.name).name!=f'level{index}' or reader.type.name!='MonoBehaviour': continue
             if script_identity(reader)[:2]!=('BallisticCollider','EFT.Ballistics'): continue
@@ -573,6 +589,10 @@ def validate_ballistic_source(package, manifest, scenes):
                             not any(x['type'] in PHYSICS for x in objects[str(owner_id)]['components']),
                             scene+': hidden ballistic orphan owner has a physical collider '+key)
                     hidden.add(key);continue
+            if scope is None and key not in actual:
+                lone=unity_go(reader)
+                if is_reviewed_physics_less_owner(scene,'/'.join(n[0] for n in reversed(lone['chain'])),bool(physics_states(lone['components'],True))):
+                    reviewed.add(key);continue  # reviewed rule: an inert component on a render-only mesh is left out
             found.add(key)
             require(key in actual,scene+': missing ballistic component '+key)
             owner,c=actual[key]; expected=ballistic_expected(reader,source_table,target_table)
@@ -586,6 +606,9 @@ def validate_ballistic_source(package, manifest, scenes):
             compare(dict(physics_states(owner['components'])),dict(physics_states(native['components'],True)),
                     'ballistic source physical collider states '+key)
         require(set(actual)==found,scene+': extra ballistic source identities')
+        if scope is None:
+            require(len(reviewed)==sum(1 for name,_ in REVIEWED_PHYSICS_LESS_OWNERS if name==scene),
+                    scene+': reviewed physics-less ballistic owners differ from the source')
         if scope is not None:
             require(hidden=={component for _,component in scope.orphans},scene+': hidden ballistic orphans differ from the source')
         require(len(found)==contract['ballistics'][index],scene+': ballistic source census changed');total+=len(found)
@@ -659,12 +682,14 @@ def wave_data(data):
         return (wav.getnchannels(),wav.getframerate(),wav.getnframes()),wav.readframes(wav.getnframes())
 
 
-def check_wave(package,clip):
+def check_wave(package,clip,silent_pins=None):
     d=clip['decoded'];payload=child(package,d['file']).read_bytes()
     require(digest(payload)==d['sha256'] and len(payload)==d['bytes'],'clip package hash/size '+clip['id'])
     dimensions,pcm=wave_data(payload)
     compare(dimensions,(d['channels'],d['sampleRate'],d['frames']),'PCM dimensions '+clip['id'])
-    require(d['sampleWidth']==2 and pcm and any(pcm),'empty/silent decoded audio '+clip['id'])
+    # an all-zero clip is accepted only as a contract-pinned one (states.silent_clips, id AND name), and a pinned clip must be silent
+    pinned=clip['id'] in (silent_pins or {}) and silent_pins[clip['id']]==clip.get('name')
+    require(d['sampleWidth']==2 and pcm and (any(pcm)!=pinned),'empty/silent decoded audio '+clip['id'])
     return dimensions,pcm
 
 
@@ -794,7 +819,7 @@ def validate_audio_source(package,manifest,data):
         compare_storage(obj.read_typetree(),clip['metadata'],'source audio metadata '+clip['id'])
         compare(obj.read().m_Name,clip['name'],'source clip name')
         samples=obj.read().samples;require(len(samples)==1,'source clip decode cardinality')
-        compare(check_wave(package,clip),wave_data(next(iter(samples.values()))),'source decoded audio '+clip['id'])
+        compare(check_wave(package,clip,(audio['states'] or {}).get('silent_clips')),wave_data(next(iter(samples.values()))),'source decoded audio '+clip['id'])
 
 
 def validate_package(package,manifest):
@@ -1007,7 +1032,7 @@ def validate_audio_bundle(readers,package,data):
         reader=candidates[0];clips[item['id']]=reader;tree=reader.read_typetree();d=item['decoded']
         check_fields(tree,{'m_Channels':d['channels'],'m_Frequency':d['sampleRate'],'m_BitsPerSample':16,'m_CompressionFormat':0},'built PCM clip '+item['id'])
         samples=reader.read().samples;require(len(samples)==1,'built clip decode cardinality')
-        compare(wave_data(next(iter(samples.values()))),check_wave(package,item),'built PCM payload '+item['id'])
+        compare(wave_data(next(iter(samples.values()))),check_wave(package,item,(audio['states'] or {}).get('silent_clips')),'built PCM payload '+item['id'])
     for source_id,item in data['banks'].items():
         reader=banks[source_id];tree=reader.read_typetree()
         mapping={'CustomLength':'customLength','BaseVolume':'baseVolume','BasePitch':'basePitch','DeltaVolume':'deltaVolume',

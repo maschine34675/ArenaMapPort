@@ -53,6 +53,14 @@
       { "index": 65, "scene": "Arena_AutoService_DesignStuff", "files": [] },
       { "index": 66, "scene": "Arena_AutoService_Light", "files": ["sharedassets66.assets.resS"] },
       { "index": 136, "scene": "Arena_AutoService_TeamFight_DesignStuff", "files": [] }
+    ],
+    "arena_yard": [
+      { "index": 72, "scene": "Arena_Yard", "files": ["sharedassets72.assets.resS"] },
+      { "index": 73, "scene": "Arena_Yard_DesignStuff", "files": [] },
+      { "index": 74, "scene": "Arena_Yard_Light", "files": ["sharedassets74.assets.resS"] },
+      { "index": 162, "scene": "Arena_Yard_Grass", "files": [] },
+      { "index": 310, "scene": "Arena_Yard_TeamFight", "files": ["sharedassets310.assets.resS"] },
+      { "index": 317, "scene": "Arena_Yard_TeamFight_DesignStuff", "files": [] }
     ]
   }
 }

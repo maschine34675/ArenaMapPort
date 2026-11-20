@@ -40,7 +40,7 @@ public sealed class AmbientAudioProfilesTests
 
     static int Total(JsonElement census) => census.EnumerateObject().Sum(p => p.Value.GetInt32());
 
-    // The released profiles plus the staged ones (none since Autoservice's lock-step promotion, PLAN-AUTOSERVICE item 12): the generic
+    // The released profiles plus the staged ones (Yard's since PLAN-YARD item 6; none between Autoservice's promotion and then): the generic
     // contract and consistency tests cover both, the released-set tests below see only AmbientAudioProfiles.All.
     static IEnumerable<AmbientAudioProfile> Everything => AmbientAudioProfiles.All.Concat(AmbientAudioProfiles.Staged);
 
@@ -61,8 +61,9 @@ public sealed class AmbientAudioProfilesTests
     public void StagedProfilesAreCatalogOnlyMapsOutsideTheReleasedTable()
     {
         // A profile written ahead of its map's promotion must not be reachable through the released table (the driver binds config keys for
-        // every entry of All and would find the map through TryGet). Autoservice's item 12 emptied Staged: the next map's profile waits there.
-        Assert.Empty(AmbientAudioProfiles.Staged);
+        // every entry of All and would find the map through TryGet). Autoservice's item 12 emptied Staged; Yard's profile waits there since
+        // PLAN-YARD item 6 and leaves with its promotion (item 15).
+        Assert.Equal(new[] { "arena_yard" }, AmbientAudioProfiles.Staged.Select(p => p.MapKey).ToArray());
         Assert.True(AmbientAudioProfiles.TryGet("arena_autoservice", out _));
         foreach (var staged in AmbientAudioProfiles.Staged)
         {
