@@ -1,5 +1,7 @@
 # Progress log index
 
+- [dynamicmaps-130.md](dynamicmaps-130.md) — DynamicMaps 1.3.0 owned-folder loader, retained 1.2.1 path, actual-release contract checks and catalogue/path regression controls; native acceptance is recorded separately after integration.
+
 This folder is the project's append-only build/fix/validate history: one file per milestone, audit,
 fix or validation round, each with host-test or command-output evidence. Files are **appended to, never
 rewritten** — a later pass that changes something adds a new dated section or a new file rather than

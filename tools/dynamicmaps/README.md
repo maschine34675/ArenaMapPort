@@ -1,11 +1,42 @@
 # ArenaMapPort DynamicMaps tools
 
-Generates a local map pack for the installed DynamicMaps 1.2.1. The map uses the
+Generates a local map pack for DynamicMaps 1.2.1 and 1.3.0. The map uses the
 existing extracted colliders and native triangulation of each map's built NavMesh.
 Generation does not change scene bundles or DynamicMaps configuration. ArenaMapPort's
-optional client integration adds these maps to installed DynamicMaps 1.2.1 in memory.
+optional client integration adds these maps to installed DynamicMaps in memory.
 Game-derived output remains under ignored `work/`; do not commit it or assume
 redistribution permission from this tool's availability.
+
+## DynamicMaps versions and owned storage
+
+Both versions load overview files directly from
+`BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/`. No maps or temporary files are
+created in DynamicMaps' `Maps` or `Addons` directories, and no third-party config is
+written by ArenaMapPort. SVGs, JSON definitions and their historical image tokens
+remain unchanged.
+
+- **1.2.1:** the existing additive loader and owned-image postfix remain in use.
+- **1.3.0:** its native scan now removes definitions absent from that scan and validates
+  images before returning a definition. After the complete native scan, ArenaMapPort
+  deserializes only its six allowlisted definitions into the native `MapDef` type,
+  validates/resolves their single ground layer, and adds them to the existing catalogue
+  once. Native map preferences and the current location filter are then refreshed.
+  Vanilla and other addon definitions keep their identities. Deleted, malformed or
+  incomplete owned packages are removed/skipped independently. A structural API
+  mismatch disables the optional integration with one warning.
+
+Offline checks against both actual release DLLs, including catalogue/path regressions
+and source-mutant controls:
+
+```powershell
+pwsh -NoProfile -File tools/verify-dynamicmaps.ps1 `
+  -DynamicMaps121 '<1.2.1 release>/BepInEx/plugins/mpstark-dynamicmaps/DynamicMaps.dll' `
+  -DynamicMaps130 '<1.3.0 release>/BepInEx/plugins/mpstark-dynamicmaps/DynamicMaps.dll'
+```
+
+The checks suppress data staging and require no extracted scene files. This is an
+offline contract check; native acceptance is recorded in
+[the 1.3.0 progress record](../../docs/progress/dynamicmaps-130.md).
 
 ## Generate
 
