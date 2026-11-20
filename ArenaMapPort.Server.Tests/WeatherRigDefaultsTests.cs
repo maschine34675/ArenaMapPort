@@ -108,10 +108,41 @@ public sealed class WeatherRigDefaultsTests
     }
 
     [Fact]
+    public void YardHasARigRowWithAHighZeroLevelDerivedFromItsFloorsAndStaysUnreachedBeforeItsPromotion()
+    {
+        var yard = Row.Of(ArenaMapRegistry.Yard.Key);
+        // PLAN-YARD item 13 (2026-11-20): the Reserve donor rig and the neutral tuning of AirPit and Bowl, like every released map. Arena's TeamFight mesh
+        // floor is y 6.15 and the 20 spawn markers stand at y 6.18..7.50; the lowest floor 6.15 minus the 4.4 m rule is 1.75, started at 1.7. INFERRED by that
+        // rule, not measured: the first host raid compares ZeroLevelOverride values. Without this row the unlisted map would silently get Donor Off and 0.
+        Assert.Equal("Reserve_Base_Scripts", yard.Donor);
+        Assert.True(yard.UseDonorCameraPrefab);
+        Assert.True(yard.ReserveTextureBudget);
+        Assert.Equal(1.7f, yard.ZeroLevel);
+        Assert.Equal(Row.Of(ArenaMapRegistry.Bowl.Key) with { ZeroLevel = 1.7f }, yard);
+        Assert.True(yard.ZeroLevel < 6.15f - 4f);                        // the dome sits well below the lowest floor
+        Assert.False(MapLightingDefaults.BindsAuthoredSunKeys(ArenaMapRegistry.Yard));   // no Directional light in its imported scenes
+    }
+
+    [Fact]
+    public void YardsRowChangesNoReleasedMapsRow()
+    {
+        // The six released rows, spelled out (values pinned by the tests above and by their released builds): none of them moved with Yard's row.
+        Assert.Equal((-4.4f, 0.5f), (Row.Of(ArenaMapRegistry.Equator.Key).ZeroLevel, Row.Of(ArenaMapRegistry.Equator.Key).AmbientIntensity));
+        Assert.Equal(-8.2f, Row.Of(ArenaMapRegistry.Bay5.Key).ZeroLevel);
+        Assert.Equal(-4.4f, Row.Of(ArenaMapRegistry.AirPit.Key).ZeroLevel);
+        Assert.Equal(-4.4f, Row.Of(ArenaMapRegistry.Bowl.Key).ZeroLevel);
+        Assert.Equal(-3.7f, Row.Of(ArenaMapRegistry.Iceberg.Key).ZeroLevel);
+        Assert.Equal(-8.2f, Row.Of(ArenaMapRegistry.AutoService.Key).ZeroLevel);
+        foreach (var map in ArenaMapRegistry.All)
+            if (map != ArenaMapRegistry.Yard) Assert.NotEqual(1.7f, Row.Of(map.Key).ZeroLevel);
+    }
+
+    [Fact]
     public void EveryOtherCatalogMapKeepsDonorOffAndNeutralValues()
     {
-        var parked = ArenaMapRegistry.Catalog.Except(ArenaMapRegistry.All).ToArray();
-        Assert.Equal(8, parked.Length);
+        // Yard (PLAN-YARD item 13) has its own rig row while it is Catalog-only; after its promotion it is in All and drops out of the Except anyway.
+        var parked = ArenaMapRegistry.Catalog.Except(ArenaMapRegistry.All).Where(m => m != ArenaMapRegistry.Yard).ToArray();
+        Assert.Equal(7, parked.Length);
         foreach (var map in parked) Assert.Equal(Neutral, Row.Of(map.Key));
         Assert.Equal(Neutral, Row.Of("bigmap"));
         Assert.Equal(Neutral, Row.Of(null));
@@ -122,7 +153,8 @@ public sealed class WeatherRigDefaultsTests
     {
         var active = ArenaMapRegistry.Catalog.Where(m => MapLightingDefaults.Rig(m.Key).Donor != MapLightingDefaults.OffDonor)
             .Select(m => m.Key);
-        Assert.Equal(ArenaMapRegistry.All.Select(m => m.Key).Order(), active.Order());
+        // Plus Yard, whose row exists from PLAN-YARD item 13 on although it joins ArenaMapRegistry.All only at item 15 (a union, so it holds after the promotion too).
+        Assert.Equal(ArenaMapRegistry.All.Select(m => m.Key).Append(ArenaMapRegistry.Yard.Key).Distinct().Order(), active.Order());
     }
 
     [Fact]

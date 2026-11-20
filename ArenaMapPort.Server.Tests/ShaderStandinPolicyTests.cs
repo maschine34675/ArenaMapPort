@@ -33,6 +33,7 @@ public sealed class ShaderStandinPolicyTests
             var hasKey = doc.RootElement.TryGetProperty("shader_fallback_names", out var names);
             var expected = hasKey ? names.EnumerateArray().Select(e => e.GetString()).ToArray() : new string[0];
             Assert.Equal(expected, map.ShaderFallbackNames);
+            if (map == ArenaMapRegistry.Yard) continue;   // pending until PLAN-YARD item 15: YardListIsPendingOrTheDecidedSix pins it
             Assert.Equal(map == ArenaMapRegistry.Bay5 || map == ArenaMapRegistry.AirPit || map == ArenaMapRegistry.Bowl || map == ArenaMapRegistry.AutoService,
                 map.ShaderFallbackNames.Length > 0);
         }
@@ -109,10 +110,170 @@ public sealed class ShaderStandinPolicyTests
         "Custom/Billboard_FogSheet_Simple", "Cloth/ClothShader", "Cloth/ClothShader_backface", "p0/Reflective/Bumped Specular SMap Baked",
     };
 
+    // Yard (PLAN-YARD item 13, 2026-11-20): the four of AutoService plus the two names EFT carries nowhere (the SpeedTree 7 leaf shader and the Amplify
+    // trunk shader). The descriptor list and the sidecar row are item 15's; the policy rows below are decided now and pinned here.
+    static readonly string[] YardNames =
+    {
+        "Custom/Billboard_FogSheet_Simple", "Cloth/ClothShader", "Cloth/ClothShader_backface", "p0/Reflective/Bumped Specular SMap Baked",
+        "Nature/SpeedTree", "Impostors/Examples/StandardCrossfade",
+    };
+
+    // The maps that have decided shader rows of their own or are Yard (Catalog-only, pending): every OTHER map is never active and never substitutes.
     static IEnumerable<string> OtherMapKeys() =>
         ArenaMapRegistry.Catalog.Select(m => m.Key)
             .Where(k => k != ArenaMapRegistry.Bay5.Key && k != ArenaMapRegistry.AirPit.Key && k != ArenaMapRegistry.Bowl.Key &&
-                        k != ArenaMapRegistry.AutoService.Key);
+                        k != ArenaMapRegistry.AutoService.Key && k != ArenaMapRegistry.Yard.Key);
+
+    [Fact]
+    public void YardListIsPendingOrTheDecidedSixAndItsRowsAreDecided()
+    {
+        // The descriptor list (item 15) is either still empty (Catalog-only) or exactly the decided six, in this order.
+        var listed = ArenaMapRegistry.Yard.ShaderFallbackNames;
+        Assert.True(listed.Length == 0 || listed.SequenceEqual(YardNames), string.Join(", ", listed));
+        // The policy rows do not depend on the list being present: with the list empty TryGetFallback is false (allow-list first), so nothing is reached;
+        // the rows are read through the allow-list only when item 15 has written it, so they are asserted via the targets of the names the list will hold.
+        var yard = ArenaMapRegistry.Yard.Key;
+        if (listed.Length == 0)
+        {
+            foreach (var name in YardNames) Assert.False(ShaderStandinPolicy.TryGetFallback(yard, name, out _), name);
+            Assert.False(ShaderStandinPolicy.UsesFallbackTable(yard));
+            return;
+        }
+        Assert.Equal("Unlit/Transparent Colored", Target(yard, "Custom/Billboard_FogSheet_Simple"));
+        Assert.Equal("p0/Cutout/Bumped Diffuse", Target(yard, "Cloth/ClothShader"));
+        Assert.Equal(ShaderStandinPolicy.TwoSidedClothShader, Target(yard, "Cloth/ClothShader_backface"));
+        Assert.Equal("p0/Reflective/Bumped Specular SMap", Target(yard, "p0/Reflective/Bumped Specular SMap Baked"));
+        Assert.Equal(ShaderStandinPolicy.TwoSidedClothShader, Target(yard, "Nature/SpeedTree"));
+        Assert.Equal("Diffuse", Target(yard, "Impostors/Examples/StandardCrossfade"));
+    }
+
+    [Fact]
+    public void YardTargetRowsArePinnedBeforeThePromotion()
+    {
+        var t = ShaderStandinPolicy.YardFallbackTable;
+        Assert.Equal(3, t.Count);
+        Assert.Equal(ShaderStandinPolicy.TwoSidedClothShader, t["Cloth/ClothShader_backface"]);
+        Assert.Equal(ShaderStandinPolicy.TwoSidedClothShader, t["Nature/SpeedTree"]);
+        Assert.Equal("Diffuse", t["Impostors/Examples/StandardCrossfade"]);
+    }
+
+    [Fact]
+    public void YardFollowsOnlyItsOwnSwitchAndTakesTheClothFixButNotTheRockFix()
+    {
+        var yard = ArenaMapRegistry.Yard.Key;
+        Assert.True(ShaderStandinPolicy.YardStandinsDefault);
+        Assert.True(ShaderStandinPolicy.FallbacksActive(yard, false, false, false, false, yardSwitch: true));
+        Assert.True(ShaderStandinPolicy.FallbacksActive(yard, false, false, false, autoServiceSwitch: false, yardSwitch: true));
+        Assert.False(ShaderStandinPolicy.FallbacksActive(yard, true, true, true, true, yardSwitch: false));
+        Assert.False(ShaderStandinPolicy.FallbacksActive(yard, true, true, true, true));          // the sixth parameter defaults to off: a caller must pass it
+        // Neither switch of another map turns Yard on, and Yard's switch turns no other map on (the NoOther... tests below cover the rest of the grid).
+        Assert.True(ShaderStandinPolicy.UsesExtendedStandins(yard));
+        foreach (var name in new[] { "Cloth/ClothShader", "Cloth/ClothShader_backface" })
+        {
+            var fix = ShaderStandinPolicy.FixFor(yard, name);
+            Assert.Equal("_BumpMap", Assert.Single(fix.Textures).To);
+            Assert.Equal("_Cutoff", Assert.Single(fix.Floats).Name);
+            Assert.Equal(0f, fix.Floats[0].Value);
+        }
+        // The two new names have NO fix: the leaf cutoff stays the material's 0.5 (zeroing it would draw every leaf card as a full quad) and the
+        // bark takes plain Diffuse; the fog sheet and the Baked reflective get nothing either (FixFor is name-based, so the rock fix would answer for
+        // the rock name on any extended map; the allow-list keeps that name away from Yard, as it does for AutoService).
+        foreach (var name in new[] { "Nature/SpeedTree", "Impostors/Examples/StandardCrossfade", "Custom/Billboard_FogSheet_Simple",
+                     "p0/Reflective/Bumped Specular SMap Baked" })
+        {
+            var fix = ShaderStandinPolicy.FixFor(yard, name);
+            Assert.Empty(fix.Textures);
+            Assert.Empty(fix.Floats);
+        }
+        Assert.False(ShaderStandinPolicy.HidesFogSheets(yard, FogSheetMode.Hidden));
+    }
+
+    // PLAN-YARD item 13, the pin that no released map changed: a golden table of what the policy answers for each of the six released maps over every
+    // name that matters (the six shipped table names, Bowl's tarp shader, Yard's two new names and the names that resolve in EFT without a row). The
+    // expectations are spelled out here by the pre-Yard rules, independently of ShaderStandinPolicy's own tables, so a Yard row that leaks into a released
+    // map (a shared dictionary, an IsYard test in a wrong place, Yard's extra names in another map's allow-list) fails here.
+    static readonly string[] CensusNames =
+    {
+        "Custom/WorldTriplanarFresnelPro", "ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)", "Cloth/ClothShader", "Cloth/ClothShader_backface",
+        "Custom/Billboard_FogSheet_Simple", "p0/Reflective/Bumped Specular SMap Baked", "p0/Reflective/Bumped Specular_TwoSided",
+        "Nature/SpeedTree", "Impostors/Examples/StandardCrossfade", "Diffuse", "Nature/SpeedTree8", "Nature/SpeedTreeEFT",
+        "Hidden/Amplify Impostors/Octahedron Impostor", "Custom/WireNetting", "p0/Reflective/Bumped Specular SMap", "Standard", "",
+    };
+
+    static string ExpectedTarget(string mapKey, string name)
+    {
+        string shipped = name switch
+        {
+            "Custom/WorldTriplanarFresnelPro" => "p0/Reflective/Bumped Specular SMap",
+            "ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)" => "MK4/Rock",
+            "Cloth/ClothShader" => "p0/Cutout/Bumped Diffuse",
+            "Cloth/ClothShader_backface" => "p0/Cutout/Bumped Diffuse",
+            "Custom/Billboard_FogSheet_Simple" => "Unlit/Transparent Colored",
+            "p0/Reflective/Bumped Specular SMap Baked" => "p0/Reflective/Bumped Specular SMap",
+            _ => null,
+        };
+        const string twoSided = "Legacy Shaders/Transparent/Cutout/Bumped Diffuse 2 side";
+        if (mapKey == ArenaMapRegistry.Bay5.Key) return shipped;                                              // all six rows, the single-sided backface
+        if (mapKey == ArenaMapRegistry.AirPit.Key)
+        {
+            if (name == "Cloth/ClothShader_backface") return twoSided;
+            return name is "Custom/Billboard_FogSheet_Simple" or "Cloth/ClothShader" or "ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)" ? shipped : null;
+        }
+        if (mapKey == ArenaMapRegistry.Bowl.Key) return name == "p0/Reflective/Bumped Specular_TwoSided" ? twoSided : null;
+        if (mapKey == ArenaMapRegistry.AutoService.Key)
+        {
+            if (name == "Cloth/ClothShader_backface") return twoSided;
+            return name is "Custom/Billboard_FogSheet_Simple" or "Cloth/ClothShader" or "p0/Reflective/Bumped Specular SMap Baked" ? shipped : null;
+        }
+        return null;                                                                                          // Equator and Iceberg: no fallback table
+    }
+
+    static bool ExpectedExtended(string mapKey) => mapKey == ArenaMapRegistry.AirPit.Key || mapKey == ArenaMapRegistry.AutoService.Key;
+
+    [Fact]
+    public void NoReleasedMapsFallbackActiveTargetOrFixChangedWithYardsRows()
+    {
+        var released = ArenaMapRegistry.All.Select(m => m.Key).ToArray();
+        Assert.Equal(6, released.Length);
+        foreach (var key in released)
+        {
+            Assert.True(ExpectedExtended(key) == ShaderStandinPolicy.UsesExtendedStandins(key), key);
+            foreach (var name in CensusNames)
+            {
+                var expected = ExpectedTarget(key, name);
+                Assert.True((expected != null) == ShaderStandinPolicy.TryGetFallback(key, name, out var got), $"{key} {name}");
+                Assert.Equal(expected ?? string.Empty, got);
+                // FixFor: the cloth fix on the two cloth names of an extended map, the rock fix on the rock name of an extended map, nothing else, nowhere.
+                var fix = ShaderStandinPolicy.FixFor(key, name);
+                bool cloth = ExpectedExtended(key) && (name is "Cloth/ClothShader" or "Cloth/ClothShader_backface");
+                bool rock = ExpectedExtended(key) && name == ShaderStandinPolicy.RockShader;   // FixFor is name-based: the allow-list, not FixFor, keeps the rock off AutoService
+                Assert.True((cloth ? 1 : rock ? 2 : 0) == fix.Textures.Length, $"{key} {name} textures");
+                Assert.True((cloth ? 1 : 0) == fix.Floats.Length, $"{key} {name} floats");
+            }
+            // FallbacksActive over the whole switch grid, Yard's switch included: Yard's flag never reaches a released map.
+            foreach (var legacy in new[] { false, true })
+                foreach (var airPit in new[] { false, true })
+                    foreach (var bowl in new[] { false, true })
+                        foreach (var autoService in new[] { false, true })
+                            foreach (var yardSwitch in new[] { false, true })
+                            {
+                                bool expectedActive = key == ArenaMapRegistry.Bay5.Key ? legacy : key == ArenaMapRegistry.AirPit.Key ? airPit :
+                                    key == ArenaMapRegistry.Bowl.Key ? bowl : key == ArenaMapRegistry.AutoService.Key && autoService;
+                                Assert.True(expectedActive == ShaderStandinPolicy.FallbacksActive(key, legacy, airPit, bowl, autoService, yardSwitch),
+                                    $"{key} {legacy} {airPit} {bowl} {autoService} {yardSwitch}");
+                                Assert.True(expectedActive == ShaderStandinPolicy.FallbacksActive(key, legacy, airPit, bowl, autoService), $"{key} (five arguments)");
+                            }
+        }
+        // The shared table and every released allow-list are byte-for-byte what they were: six rows, none for Yard's two extra names.
+        Assert.Equal(6, ShaderStandinPolicy.FallbackTable.Count);
+        Assert.False(ShaderStandinPolicy.FallbackTable.ContainsKey("Nature/SpeedTree"));
+        Assert.False(ShaderStandinPolicy.FallbackTable.ContainsKey("Impostors/Examples/StandardCrossfade"));
+        foreach (var map in ArenaMapRegistry.All)
+        {
+            Assert.DoesNotContain("Nature/SpeedTree", map.ShaderFallbackNames);
+            Assert.DoesNotContain("Impostors/Examples/StandardCrossfade", map.ShaderFallbackNames);
+        }
+    }
 
     [Fact]
     public void OnlyBay5AndAirPitConsultTheFallbackTable()

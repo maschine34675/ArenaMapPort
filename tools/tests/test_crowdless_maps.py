@@ -56,8 +56,10 @@ class PartitionTests(unittest.TestCase):
         body = re.search(r"static string DesignScene\(string key\)\s*\{(?P<body>.*?)\n        \}\n", source, re.S).group("body")
         returns = dict(re.findall(r'case "(arena_[a-z0-9]+)": return (null|"[A-Za-z_0-9]+");', body))
         scenes = {key: value.strip('"') for key, value in returns.items() if value != "null"}
-        self.assertEqual(scenes, {f"arena_{name}": scene for name, scene in extract_spectator.MAP_SCENES.items()})
+        # the staged crowd maps plus the pending ones (Yard, PLAN-YARD item 14: its client row is dormant until item 15 stages it)
+        self.assertEqual(scenes, {f"arena_{name}": scene for name, scene in extract_spectator.ALL_MAP_SCENES.items()})
         self.assertEqual({key for key, value in returns.items() if value == "null"}, set(VD.CROWDLESS_MAP_KEYS))
+        self.assertNotIn("arena_yard", VD.CROWDLESS_MAP_KEYS)      # Yard has a crowd (27 fans): it is pending, never crowdless
         self.assertIn("default: return null;", body)
 
     def test_the_csproj_names_no_map_for_the_spectator_staging(self):

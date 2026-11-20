@@ -45,7 +45,7 @@ from the raw bytes (no typetree exists for player-built script classes):
       word 3             float, unknown (-1 / -2 / 0)
       word 4             float, duration in seconds (kept UNSCALED; the client scales it)
       word 5             int kind: 1 = move to a LOCAL position, 2 = rotate to LOCAL euler angles, 3 = switch (SetActive / emissive)
-      word 7             int DOTween ease: 1 Linear, 16 InOutQuint, 37 INTERNAL_Custom (use the stored curve); a switch carries 17
+      word 7             int DOTween ease: 1 Linear, 16 InOutQuint, 27 OutBack (Yard's cradle), 37 INTERNAL_Custom (use the stored curve); a switch carries 17
                          (the unused default), which is not read
       word 11            int curve key count n, then n x 7 words (time, value, inSlope, outSlope, weightedMode, inWeight, outWeight),
                          then the words 2, 2, 4 (the curve's wrap modes and rotation order), then a 38-word payload whose words
@@ -80,7 +80,7 @@ the 0.978 m the scene's colliders of equator_roller_shutters_01 stand below the 
 row has the reasons). Its four lamps (`DOORS/LIGHT_1..4`) are DotAnimator switch rows under one lamp-group barrier `DOORS`.
 
 Sidecar schema 2 adds to every pose: "source" (clip / dotanimator / borrowed), "ease" (smoothstep = the client's stand-in for
-Bowl's clips, linear, inOutQuint, curve), "curve" (null, or Hermite keys [time, value, inSlope, outSlope] on a 0..1 timeline,
+Bowl's clips, linear, inOutQuint, curve, outBack: DOTween OutBack, constant 1.70158), "curve" (null, or Hermite keys [time, value, inSlope, outSlope] on a 0..1 timeline,
 used when ease is "curve") and "at" (null, or the WORLD position of the barrier root instance, which tells repeated hierarchy
 paths apart). "part" may be "" (the barrier root itself moves: Bay5's rollers). A part name may repeat among the direct
 children of a barrier (AirPit's 16 passport leaves reuse 6 names): such rows are told apart by their closed position, which
@@ -124,7 +124,12 @@ KEY_SOURCES = REPO / "tools" / "bundle" / "key-sources.json"
 SOURCE_CLIP, SOURCE_DOT, SOURCE_BORROWED = "clip", "dotanimator", "borrowed"
 SOURCES = (SOURCE_CLIP, SOURCE_DOT, SOURCE_BORROWED)
 EASE_SMOOTHSTEP, EASE_LINEAR, EASE_IN_OUT_QUINT, EASE_CURVE = "smoothstep", "linear", "inOutQuint", "curve"
-EASES = (EASE_SMOOTHSTEP, EASE_LINEAR, EASE_IN_OUT_QUINT, EASE_CURVE)
+# outBack (2026-11-20, Yard's construction cradle, DOTween Ease 27 read from EFT's DOTween.dll): DOTween's OutBack with its default
+# overshoot constant 1.70158 (DOTween.defaultEaseOvershootOrAmplitude); the sidecar stores no overshoot field, the name IS that constant.
+# The vocabulary grew inside schema 2 (no version bump: a bump would rewrite the six released sidecars).
+EASE_OUT_BACK = "outBack"
+OUT_BACK_OVERSHOOT = 1.70158
+EASES = (EASE_SMOOTHSTEP, EASE_LINEAR, EASE_IN_OUT_QUINT, EASE_CURVE, EASE_OUT_BACK)
 CURVE_DECIMALS = 5
 AT_TOLERANCE = 0.05       # m, two barrier roots closer than this are the same instance (client DoorPosesOf uses the same)
 
@@ -252,9 +257,18 @@ DOT_SOURCES = {
         "descriptor": REPO / "tools" / "maps" / "autoservice.json",
         "scans": [{"root": "DOORS", "depth": 1, "at": False, "switches": True}],
     },
+    # Yard (2026-11-20, plan item 9): three DotAnimators below DOORS, no Animator, no clip, no lamp. Barrier = DOORS/<unit> (depth 2),
+    # part = the moved child: DOORS/Metal_gate_1 (north gate; leaves gate_door_1 / gate_door_2 turn +90 / -90 degrees about local z,
+    # 1.7 s, linear) and DOORS/Construction_Cradle_02 (south; the gondola Construction_Cradle_02_A rises +2.446 m in 8.0 s, DOTween
+    # ease 27 = OutBack). Both paths are unique in the scene, so no `at`.
+    "arena_yard": {
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "descriptor": REPO / "tools" / "maps" / "yard.json",
+        "scans": [{"root": "DOORS", "depth": 2, "at": False}],
+    },
 }
 DOT_SCRIPT = "CommonAssets.Scripts.Game.Modes.Data.DotAnimator"
-DOTWEEN_EASE = {1: EASE_LINEAR, 16: EASE_IN_OUT_QUINT, 37: EASE_CURVE}   # DOTween.Ease numbers (EFT's Managed/DOTween.dll)
+DOTWEEN_EASE = {1: EASE_LINEAR, 16: EASE_IN_OUT_QUINT, 27: EASE_OUT_BACK, 37: EASE_CURVE}   # DOTween.Ease numbers (EFT's Managed/DOTween.dll)
 DOT_KIND_MOVE, DOT_KIND_ROTATE, DOT_KIND_SWITCH = 1, 2, 3
 DOT_HEADER_WORDS = 5
 DOT_ELEMENT_WORDS = 53
@@ -655,7 +669,7 @@ def decode_dot_animator(raw: bytes) -> DotAnimator:
 
 
 def dot_ease_name(number: int) -> str:
-    """The sidecar ease of a DOTween Ease number; anything but Linear (1), InOutQuint (16) and the custom curve (37) stops the tool."""
+    """The sidecar ease of a DOTween Ease number; anything but Linear (1), InOutQuint (16), OutBack (27) and the custom curve (37) stops the tool."""
     if number not in DOTWEEN_EASE:
         raise DoorPoseError(f"DOTween ease {number} is not one of {dict(sorted(DOTWEEN_EASE.items()))}: add it to the "
                             "sidecar schema and the client before porting this gate")
@@ -709,6 +723,12 @@ def ease_fraction(ease: str, curve: list | None, k: float) -> float:
     if ease == EASE_IN_OUT_QUINT:
         t = 2.0 * k
         return 0.5 * t ** 5 if t < 1.0 else 0.5 * ((t - 2.0) ** 5 + 2.0)
+    if ease == EASE_OUT_BACK:
+        # DOTween EaseManager.Evaluate, Ease.OutBack: (t = k - 1) * t * ((s + 1) * t + s) + 1 with s = 1.70158
+        if k <= 0.0 or k >= 1.0:
+            return k                                  # exact ends (k is clamped to 0..1 above)
+        t = k - 1.0
+        return t * t * ((OUT_BACK_OVERSHOOT + 1.0) * t + OUT_BACK_OVERSHOOT) + 1.0
     if ease == EASE_CURVE:
         if not curve:
             raise DoorPoseError("ease 'curve' without keys")
@@ -935,12 +955,19 @@ SIDECAR_COMMENT_SWITCHES = (
     "matched within 0.05 m. A borrowed row whose clip says \"static open pose\" takes the open pose from a neighbour that stands "
     "open in the scene (AirPit's bus doors); its seconds are the port's, not Arena's.")
 
+# Appended only to a sidecar with an ease "outBack" row (Yard, 2026-11-20), so every other file keeps its text byte for byte.
+SIDECAR_COMMENT_OUT_BACK = (
+    " ease outBack = DOTween's Ease.OutBack with its default overshoot constant 1.70158 (Arena's DotAnimator ease number 27): the "
+    "path fraction is (k-1)^2 * ((s+1)(k-1) + s) + 1 for the elapsed fraction k, reaches 1 at k = 1 and passes it (about 1.1) "
+    "on the way, so the node overshoots its open pose by about a tenth of the travel before it settles on it.")
+
 
 def render_sidecar(key: str, source: dict, poses: list[dict]) -> str:
     identities = [(p["barrier"], p["part"], p["node"], tuple(p["at"]) if p.get("at") else None) for p in poses]
     extra = any(p.get("switch") is not None for p in poses) or len(set(identities)) != len(identities)
     doc = {
-        "_comment": SIDECAR_COMMENT + (SIDECAR_COMMENT_SWITCHES if extra else ""),
+        "_comment": (SIDECAR_COMMENT + (SIDECAR_COMMENT_SWITCHES if extra else "")
+                     + (SIDECAR_COMMENT_OUT_BACK if any(p.get("ease") == EASE_OUT_BACK for p in poses) else "")),
         "schema_version": SCHEMA_VERSION,
         "key": key,
         "source": source,

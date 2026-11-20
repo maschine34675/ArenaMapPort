@@ -1416,5 +1416,95 @@ class AutoserviceSidecarTests(unittest.TestCase):
             self.assertNotIn("spawn_markers_east", data["counts"])
 
 
+YARD_PACKAGE = "yard-native-v2"
+
+
+class YardSidecarTests(unittest.TestCase):
+    """tools/maps/yard.modes.json (PLAN-YARD item 8): the default pocket rule, the light-centroid capture point, the 7.9 ratio."""
+
+    def data(self):
+        path = MAPS / "yard.modes.json"
+        if not path.is_file():
+            self.skipTest("yard.modes.json not generated yet")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_equals_a_fresh_extraction_of_the_package_it_names(self):
+        text = (MAPS / "yard.modes.json").read_text(encoding="utf-8")
+        package = WORK / "extract" / json.loads(text)["source_package"]["name"]
+        self.assertEqual(package.name, YARD_PACKAGE)
+        if not (package / "manifest.json").is_file():
+            self.skipTest(f"{package.name} package is local only")
+        data, _ = quiet(M.extract_package, package)
+        self.assertEqual(text, M.dumps(data))
+
+    def test_yard_has_no_per_map_rule_the_default_pocket_rule_applies(self):
+        self.assertNotIn("arena_yard", M.TEAM_BOUND_RULES)
+        self.assertNotIn("arena_yard", M.SIDE_BOUND_RULES)
+        self.assertEqual(sorted(M.SIDE_BOUND_RULES), ["arena_autoservice"])       # the tables are untouched by Yard
+        self.assertEqual(sorted(M.TEAM_BOUND_RULES), ["arena_iceberg"])
+        data = self.data()
+        self.assertEqual(data["side_rule"]["method"], "pocket_split")
+        self.assertEqual(sorted(data["spawn_markers"]), ["north", "south"])
+        self.assertNotIn("capture_points", data)
+        self.assertNotIn("stages", data)
+
+    def test_the_pocket_split_passes_at_ratio_7_9_with_twenty_markers_ten_each(self):
+        data = self.data()
+        self.assertEqual(data["counts"], {"capture_zones": 2, "spawn_bounds": 2, "spawn_markers_north": 10, "spawn_markers_south": 10})
+        points = [(m["position"][0], m["position"][2]) for side in data["spawn_markers"].values() for m in side]
+        self.assertEqual(len(points), 20)
+        pockets = M.split_pockets(points)
+        self.assertIsNotNone(pockets)
+        _a, _b, cut, spread = pockets
+        self.assertAlmostEqual(cut, 129.6377, places=3)
+        self.assertAlmostEqual(spread, 16.4019, places=3)
+        self.assertAlmostEqual(cut / spread, 7.9, delta=0.01)
+        self.assertGreater(cut / spread, 3.0 * M.POCKET_SEPARATION)      # no explicit rule needed (Chop Shop passed at 2.12 and needed one)
+        record = data["side_rule"]
+        self.assertEqual((record["cut_distance"], record["pocket_spread"]), (round(cut, 4), round(spread, 4)))
+        self.assertEqual(record["naming"], "north = the pocket with the larger mean z, south = the other")
+        north, south = record["pockets"]["north"]["centroid_xz"], record["pockets"]["south"]["centroid_xz"]
+        self.assertGreater(north[1] - south[1], 130.0)                    # the pockets lie 139 m apart in z and 9 m in x
+        self.assertLess(abs(north[0] - south[0]), 10.0)
+
+    def test_the_two_bounds_belong_to_the_two_pockets_and_hold_their_markers(self):
+        data = self.data()
+        bounds = {b["name"]: b for b in data["spawn_bounds"]}
+        self.assertEqual({n: b["side"] for n, b in bounds.items()}, {"SPAWN_BOUND_FIGHTER": "south", "SPAWN_BOUND_FIGHTER (1)": "north"})
+        for side, name in (("south", "SPAWN_BOUND_FIGHTER"), ("north", "SPAWN_BOUND_FIGHTER (1)")):
+            for marker in data["spawn_markers"][side]:
+                with self.subTest(marker=marker["name"]):
+                    self.assertGreaterEqual(M.box_margin(bounds[name], marker["position"]), -M.BOUND_EDGE_TOLERANCE)
+        self.assertEqual({m["stem"] for m in data["spawn_markers"]["south"]}, {"Usec house"})
+        self.assertEqual({m["stem"] for m in data["spawn_markers"]["north"]}, {"Bear house"})
+
+    def test_the_capture_point_is_the_light_centroid_not_the_zone_root(self):
+        data = self.data()
+        capture = data["capture_point"]
+        self.assertEqual(capture["method"], "capture_point_light_centroid")
+        self.assertEqual(capture["position"], [-45.9245, 6.1262, 71.9087])
+        self.assertEqual(len(capture["lights"]), 2)
+        for zone in data["capture_zones"]:
+            # the two methods disagree on this map (they agreed to 0.06 m on AirPit): the zone root is 37.4 m away, its children are decals
+            self.assertAlmostEqual(zone["distance_to_capture_point"], 37.44, delta=0.02)
+            self.assertEqual(zone["anchor_position"], [-10.461, 6.1226, 83.9136])
+
+    def test_the_two_capture_methods_disagree_on_a_synthetic_map_the_way_they_do_here(self):
+        lights = [{"position": [-62.5, 6.1, 72.0], "label": "A"}, {"position": [-29.3, 6.1, 72.0], "label": "B"}]
+        zones = [{"anchor_position": [-10.0, 6.1, 84.0]}]
+        found = M.resolve_capture_point(lights, zones)
+        self.assertEqual(found["method"], "capture_point_light_centroid")
+        self.assertAlmostEqual(found["position"][0], -45.9, places=6)
+        self.assertEqual(M.resolve_capture_point([], zones)["method"], "capture_zone_anchor")
+
+    def test_the_released_maps_have_no_yard_records(self):
+        for stem in STEMS + ("bowl", "iceberg", "autoservice"):
+            path = MAPS / f"{stem}.modes.json"
+            if not path.is_file():
+                continue
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertNotEqual(data["map_key"], "arena_yard")
+
+
 if __name__ == "__main__":
     unittest.main()

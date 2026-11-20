@@ -1,0 +1,361 @@
+{
+  "_comment": "PLAN-YARD item 8 (docs/progress/yard-release.md, 2026-11-20): optional sidecar read by tools/server/make_base_json.py next to tools/maps/yard.json. OFFLINE DRAFT, not walked on the host: the first Yard raid (plan item 17) must confirm every row with uibridge_teleport dryRun=true, and tools/validate/spawn_coverage.py on the BUILT NavMesh (plan item 20) replaces the Arena-mesh numbers below. Positions are measured on Arena's own NavMeshData of this map (sharedassets281.assets path 2, identity placement, main component 8,064.5 m2) and on the port's colliders of package yard-native-v2 (spawn_placement_probe), Arena 0.6.2.0.48473. Player rows: four of Arena's 20 TeamFight SpawnPointMarkers at their world positions and yaws (rounded to 0.01 m and 0.1 degree), two in each pocket: the south pocket (raised platform behind the cradle, the 'Usec house' markers) holds 'All' = Usec house (10) and 'Usec' = Usec house (9); the north pocket (behind the two gate leaves, the 'Bear house' markers) holds 'Bear' = Bear house (7) and a second 'All' = Bear house (6). They were chosen after the exit boxes: every Player row keeps at least 2.5 m to the edge of both exit boxes (rule R3, 3.89 m and 2.74 m measured) and the two south rows are the markers with the most border room outside the box (1.27 and 1.32 m in Arena's mesh; the south platform is tight). The faction split copies the released maps (Usec at one end, Bear at the other, an All point at each end); whether ArenaMode's team boxes agree is for the host. Bot rows: 18. Fourteen come from Arena's own AI points (the 7 AICorePoints and the 11 born points `p1`..`p1 (10)` of Arena_Yard_AI, tools/maps/yard.ai.json) under the rules of the original rows of the other maps: at least 8 m from a gate's swept footprint (the cradle's 6.3 x 1.2 m plate, the north gate leaves' 2 m swing), at least 10 m from every pocket marker, 5 m outside both spawn bounds, 5 m from every Player row, 2.5 m from an exit box edge, border clearance of at least 1.35 m in Arena's mesh. Dropped: core point 2 (6.6 m from the cradle), born points p1 and p1 (1) (1.6 m and 6.5 m from it) and p1 (6) (2.3 m from the north gate); the 8 m gate bar is this layout's choice (the Autoservice rows used 10 m): it keeps core point 5 (8.7 m from the north gate leaf's swing) and gives the 14 rows the plan counted. Eight born points kept less than 1.35 m of clearance (0.66 to 1.19 m) and moved onto open floor (at most 2.0 m, the best-clearance spot that keeps 2.0 m to every other row): born-02 1.82 m, born-03 0.75 m, born-04 1.82 m, born-05 1.82 m, born-07 1.90 m, born-08 1.52 m, born-09 1.95 m, born-10 1.95 m. The four born-point pairs stand 2.2 to 2.9 m apart in Arena's data and 2.0 to 2.9 m after the moves; they are separate rows on purpose (ArenaMode counts distinct coordinates). Four fill rows have no Arena source: fill-01 to fill-04 stand on the 0.5 m cells of Arena's mesh where the 14 native rows leave the largest gaps in the yard (greedy farthest-cell selection over the cells north of z 17, candidates 10 m from the gates, 7 m from pocket markers, 1.5 m outside the bounds, 1.6 m of border clearance, floor within 0.1 m of the collider floor, at least 4 m from every other row; mean distance to the nearest row 15.4 m -> 10.3 m, largest 41.9 m -> 24.1 m). Coverage of ArenaMode's 25 m rule (the walkable cells outside the pocket footprints, 1 m cells, rows farther than 25 m in 3D): 7,729 cells, every one has at least 12 such rows (median 16); the 14 native rows alone gave a minimum of 8 and a median of 13, so the fill rows are for variety and for the yard's southern third, not for the rule. The south band z < 17 outside the pocket is where Arena's mesh is cut straight at its own bake volume (plan risk 4); no row stands there. All 22 rows stand on the main component, the 18 Bot rows within 0.02 m of Arena's surface and the four Player rows (Arena's own markers) within 0.25 m, and every row passes the offline placement probe. Every Bot row is in BotZone_Main with radius 25 and the categories Bot and BotPmc; no id starts with arena_yard-tdm-v1- (ArenaMode's own prefix) and ArenaMode has no donor row on this map yet. waves and boss_waves are the released maps' (identical on AirPit, Bowl, Iceberg and Chop Shop), BotMax 8. No loot, no scav raids.",
+  "zone": "BotZone_Main",
+  "max_bots": 8,
+  "player_spawns": [
+    {
+      "id": "arena_yard-player-all",
+      "name": "SpawnPoint_Player_All",
+      "sides": [
+        "All"
+      ],
+      "position": [
+        -12.68,
+        7.27,
+        9.88
+      ],
+      "rotation": 283.2,
+      "radius": 5
+    },
+    {
+      "id": "arena_yard-player-usec",
+      "name": "SpawnPoint_Player_Usec",
+      "sides": [
+        "Usec"
+      ],
+      "position": [
+        -14.86,
+        7.27,
+        13.3
+      ],
+      "rotation": 283.2,
+      "radius": 5
+    },
+    {
+      "id": "arena_yard-player-bear",
+      "name": "SpawnPoint_Player_Bear",
+      "sides": [
+        "Bear"
+      ],
+      "position": [
+        -10.83,
+        6.18,
+        145.09
+      ],
+      "rotation": 165.0,
+      "radius": 5
+    },
+    {
+      "id": "arena_yard-player-north-all",
+      "name": "SpawnPoint_Player_North_All",
+      "sides": [
+        "All"
+      ],
+      "position": [
+        -7.22,
+        6.19,
+        146.59
+      ],
+      "rotation": 204.3,
+      "radius": 5
+    }
+  ],
+  "bot_spawns": [
+    {
+      "id": "arena_yard-bot-core-01",
+      "position": [
+        -61.97,
+        6.15,
+        54.27
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-core-03",
+      "position": [
+        -5.08,
+        6.15,
+        57.92
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-core-04",
+      "position": [
+        -12.88,
+        6.17,
+        87.03
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-core-05",
+      "position": [
+        -6.31,
+        6.16,
+        116.92
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-core-06",
+      "position": [
+        -36.5,
+        6.15,
+        112.19
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-core-07",
+      "position": [
+        -60.81,
+        6.15,
+        89.13
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-born-02",
+      "position": [
+        5.94,
+        6.18,
+        45.0
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-born-03",
+      "position": [
+        7.68,
+        6.2,
+        45.99
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-born-04",
+      "position": [
+        7.13,
+        7.38,
+        74.38
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-born-05",
+      "position": [
+        6.73,
+        7.38,
+        71.56
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-born-07",
+      "position": [
+        -56.14,
+        6.15,
+        98.7
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-born-08",
+      "position": [
+        -55.12,
+        6.15,
+        100.55
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-born-09",
+      "position": [
+        -59.78,
+        6.25,
+        49.32
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-born-10",
+      "position": [
+        -57.7,
+        6.25,
+        47.36
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-fill-01",
+      "position": [
+        -32.5,
+        6.15,
+        23.5
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-fill-02",
+      "position": [
+        10.5,
+        6.15,
+        25.5
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-fill-03",
+      "position": [
+        -56.5,
+        6.21,
+        22.5
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_yard-bot-fill-04",
+      "position": [
+        -35.5,
+        6.15,
+        65.5
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    }
+  ],
+  "waves": [
+    {
+      "time_min": 10,
+      "time_max": 30,
+      "slots_min": 2,
+      "slots_max": 3
+    },
+    {
+      "time_min": 90,
+      "time_max": 150,
+      "slots_min": 1,
+      "slots_max": 2
+    },
+    {
+      "time_min": 240,
+      "time_max": 330,
+      "slots_min": 2,
+      "slots_max": 3
+    },
+    {
+      "time_min": 420,
+      "time_max": 540,
+      "slots_min": 1,
+      "slots_max": 2
+    },
+    {
+      "time_min": 600,
+      "time_max": 720,
+      "slots_min": 1,
+      "slots_max": 2
+    }
+  ],
+  "boss_waves": [
+    {
+      "boss_name": "pmcUSEC",
+      "escort_type": "pmcUSEC",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcUSEC",
+      "escort_type": "pmcUSEC",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcBEAR",
+      "escort_type": "pmcBEAR",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcBEAR",
+      "escort_type": "pmcBEAR",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    }
+  ]
+}

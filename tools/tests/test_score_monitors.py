@@ -531,10 +531,10 @@ class SidecarTests(unittest.TestCase):
         for name, entry in entries.items():
             if name not in ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService"):
                 self.assertIsNone(entry.get("ScoreMonitors"), name)
-        # exactly the released maps have a sidecar (the scaffolding that let a sidecar exist ahead of its promotion, VD.PENDING_MIRROR_KEYS, is
-        # empty since Autoservice's item 12, as it was after Iceberg's)
+        # exactly the released maps and the staged one have a sidecar (the scaffolding that lets a sidecar exist ahead of its promotion,
+        # VD.PENDING_MIRROR_KEYS, was empty after Autoservice's item 12 and holds Yard since PLAN-YARD item 9, 2026-11-20; item 15 empties it)
         staged = [key.removeprefix("arena_") for key in VD.PENDING_MIRROR_KEYS]
-        self.assertEqual(staged, [])
+        self.assertEqual(staged, ["yard"])
         self.assertEqual(sorted(p.name.removesuffix(".monitors.json") for p in (REPO / "tools" / "maps").glob("*.monitors.json")), sorted(STEMS + tuple(staged)))
         self.assertEqual(len(entries["AutoService"]["ScoreMonitors"]), 4)
         self.assertEqual(sorted(KEYS.values()), sorted(VD.RELEASE_MAP_KEYS))
@@ -865,9 +865,9 @@ class IcebergTypeWordTests(unittest.TestCase):
 
     def test_the_maps_table_has_the_iceberg_row_with_its_package(self):
         self.assertEqual(E.MAPS["arena_iceberg"], {"stem": "iceberg", "package": "iceberg-native-v2"})
-        self.assertEqual([k for k in E.MAPS if k not in ("arena_iceberg", "arena_autoservice")],
-                         ["arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"])   # the released rows are untouched (Autoservice's staged row is the last one)
-        self.assertEqual(list(E.MAPS)[-1], "arena_autoservice")
+        self.assertEqual([k for k in E.MAPS if k not in ("arena_iceberg", "arena_autoservice", "arena_yard")],
+                         ["arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"])   # the released rows are untouched (Yard's staged row is the last one)
+        self.assertEqual(list(E.MAPS)[-2:], ["arena_autoservice", "arena_yard"])
         self.assertEqual(E.MAPS["arena_bowl"], {"stem": "bowl", "package": "bowl-native-v2"})
 
     def test_the_map_scenes_follow_the_descriptors_load_order_and_the_key_table(self):
@@ -1077,6 +1077,157 @@ class RealAutoserviceMonitorTests(unittest.TestCase):
                 _gf, _gp, _en, _sf, _sp, _name, tail_at = DOORS.parse_mono_head(obj.get_raw_data())
                 words.append(struct.unpack("<ii", obj.get_raw_data()[tail_at:])[1])
         self.assertEqual(sorted(words), [0, 0, 2, 2])
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Yard (2026-11-20, PLAN-YARD item 9): eight holders in the TeamFight design scene (level 317), five timers and three alive boards, all active.
+# Catalog-only until item 15: the descriptor has no ScoreMonitors rows yet, so the validator waives the registry mirror (PENDING_MIRROR_KEYS).
+# ---------------------------------------------------------------------------------------------------------------
+
+YARD = "arena_yard"
+YARD_SCENE = "Arena_Yard_TeamFight_DesignStuff"
+YARD_ROWS = [
+    ("TV/Arena_Home_theater (3)", [-1.3004, 17.6102, 72.5792], 0, 2.546, 270.0),
+    ("TV/Arena_Home_theater (5)", [-1.3004, 17.6102, 81.3602], 2, 2.546, 270.0),
+    ("TV/Arena_Home_theater (6)", [-37.525, 12.4117, 84.6822], 2, 2.0, 90.0),
+    ("TV/Arena_Home_theater (7)", [-17.3668, 13.3711, 128.4082], 0, 2.7505, 180.0),
+    ("TV/Arena_Home_theater (9)", [-20.9698, 17.3294, 16.9741], 0, 3.3172, 0.0),
+    ("TV/Arena_Home_theater (10)", [-70.9319, 15.5565, 71.4692], 2, 2.7313, 90.0),
+    ("TV/Arena_Home_theater (11)", [-66.7743, 15.5375, 51.9587], 0, 2.7313, 45.0),
+    ("TV/Arena_Home_theater (14)", [-37.5247, 12.4055, 90.7957], 0, 2.0, 90.0),
+]
+
+
+class YardMonitorSidecarTests(unittest.TestCase):
+    """tools/maps/yard.monitors.json (tracked): no Arena file, no registry."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = sidecar_doc("yard")
+        cls.rows = cls.doc["monitors"]
+
+    def test_header_scenes_and_mount(self):
+        key_sources = json.loads((REPO / "tools" / "bundle" / "key-sources.json").read_text(encoding="utf-8"))["maps"][YARD]
+        table = {e["scene"]: e["index"] for e in key_sources}
+        descriptor = map_json("yard")
+        self.assertEqual((self.doc["schema_version"], self.doc["key"]), (1, YARD))
+        self.assertEqual(self.doc["source"]["tool"], "tools/extract/extract_score_monitors.py")
+        self.assertEqual(self.doc["_comment"], E.SIDECAR_COMMENT)
+        # every scene of the map that key-sources lists was read, in the map's load order (the Scripts scene has no level in the table)
+        self.assertEqual([(e["scene"], e["level"]) for e in self.doc["source"]["scenes"]], [(n, table[n]) for n in descriptor["all_scene_names"] if n in table])
+        self.assertEqual([e["level"] for e in self.doc["source"]["scenes"]], [72, 162, 73, 310, 317, 74])
+        self.assertEqual(self.doc["mount"], E.MOUNT)
+
+    def test_eight_holders_all_in_the_teamfight_design_scene_all_active_with_a_face(self):
+        self.assertEqual(len(self.rows), 8)
+        self.assertEqual({r["scene"] for r in self.rows}, {YARD_SCENE})                    # the main, grass, design, TeamFight and light scenes hold none
+        self.assertTrue(all(r["active_in_scene"] for r in self.rows))
+        for row in self.rows:
+            with self.subTest(path=row["path"], at=row["at"]):
+                self.assertEqual(tuple(row), ROW_KEYS)
+                self.assertEqual((row["template"], row["confirmed"], row["face"]), E.TYPE_WORDS[row["arena_type"]])
+                self.assertRegex(row["path"], r"^TV/Arena_Home_theater \(\d+\)$")
+                self.assertTrue(all(math.isfinite(v) for v in row["at"]))
+                self.assertEqual(row["world_size_m"], [round(1930 * 0.00054 * row["prop_scale"], 3), round(1163 * 0.00054 * row["prop_scale"], 3)])
+        E.check_unique_rows(YARD, self.rows)
+        self.assertEqual(len({r["path"] for r in self.rows}), 8)                            # eight distinct props
+        # a claim lights every row that is active in the imported scene and carries a face (type words 0, 1, 2 and 6): all eight
+        self.assertEqual(sum(1 for r in self.rows if r["active_in_scene"] and r["face"] != "none"), 8)
+
+    def test_five_timers_three_alive_boards_no_score_word(self):
+        self.assertEqual(sorted((r["arena_type"], r["face"]) for r in self.rows), [(0, "timer")] * 5 + [(2, "alive")] * 3)
+        self.assertEqual([(r["path"], r["at"], r["arena_type"], r["prop_scale"], r["viewer_yaw"]) for r in self.rows],
+                         [(p, a, t, s, y) for p, a, t, s, y in YARD_ROWS])
+        self.assertFalse([r for r in self.rows if r["arena_type"] in (1, 6)])                # no score board: the Team Deathmatch score has no screen here
+        self.assertEqual({r["template"] for r in self.rows}, {"MonitorTimer", "MonitorAlivePlayers"})
+
+    def test_the_text_is_what_the_cli_writes(self):
+        text = sidecar_path("yard").read_text(encoding="utf-8")                              # text mode: CRLF reads as LF
+        self.assertEqual(E.render_sidecar(self.doc), text)
+        self.assertNotRegex(text, r"[0-9a-fA-F]{32,}")
+        self.assertNotIn("sharedassets", text)
+
+    def test_the_extractor_row_and_the_map_scenes(self):
+        self.assertEqual(E.MAPS[YARD], {"stem": "yard", "package": "yard-native-v2"})
+        self.assertEqual(E.map_scenes(YARD), [("Arena_Yard", 72), ("Arena_Yard_Grass", 162), ("Arena_Yard_DesignStuff", 73), ("Arena_Yard_TeamFight", 310),
+                                              ("Arena_Yard_TeamFight_DesignStuff", 317), ("Arena_Yard_Light", 74)])
+
+    def test_the_registry_literals_parse_back_and_the_validator_waives_the_mirror_until_item_15(self):
+        literals = E.render_csharp(self.rows).split("\n")
+        self.assertEqual(len(literals), 8)
+        registry_rows = [VD.parse_cs_value(line.strip().rstrip(",")) for line in literals]
+        self.assertEqual(registry_rows, [{k: r[k] for k in VD.SCORE_MONITOR_MIRRORED} for r in self.rows])
+        self.assertIn(YARD, VD.PENDING_MIRROR_KEYS)
+        self.assertNotIn(YARD, VD.RELEASE_MAP_KEYS)
+        # the sidecar validates in itself while the registry has no rows; the rows the descriptor will carry (item 15) mirror it
+        self.assertEqual(VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), None), [])
+        self.assertEqual(VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), registry_rows), [])
+        changed = copy.deepcopy(registry_rows)
+        changed[1]["arena_type"] = 0
+        self.assertTrue(any("differs from the registry in arena_type" in e for e in VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), changed)))
+        self.assertTrue(any("registry's ScoreMonitors" in e for e in VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), registry_rows[:7])))
+        with patch.object(VD, "PENDING_MIRROR_KEYS", ()):
+            self.assertTrue(any("registry's ScoreMonitors" in e for e in VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), None)))
+
+    def test_the_client_draws_a_face_on_all_eight(self):
+        # ScoreMonitorLayout.FaceOf (ArenaMapPort.Client) knows 0, 1, 6 and 2 and gives every other word none
+        text = (REPO / "ArenaMapPort.Client" / "ScoreMonitorLayout.cs").read_text(encoding="utf-8")
+        body = text[text.index("internal static ScoreMonitorFace FaceOf(int arenaType)"):]
+        body = body[:body.index("}\n        }") + 10]
+        known = {int(n) for n in re.findall(r"case (\d+):", body)}
+        self.assertTrue({r["arena_type"] for r in self.rows} <= known)
+
+    def test_the_released_maps_sidecars_are_untouched(self):
+        for stem in STEMS:
+            self.assertNotIn("arena_yard", sidecar_path(stem).read_text(encoding="utf-8"), stem)
+        self.assertEqual({stem: len(sidecar_doc(stem)["monitors"]) for stem in STEMS},
+                         {"equator": 11, "bay5": 8, "airpit": 8, "bowl": 16, "iceberg": 6, "autoservice": 4})
+
+
+@unittest.skipUnless(HAVE_ARENA, "Arena is not installed")
+class RealYardMonitorTests(unittest.TestCase):
+    """Yard's sidecar against the installed Arena (skipped without it). ARENAMAPPORT_EXTRACT_ROOT points the package cross-check at
+    another work/extract (a worktree has no ignored work/ folder)."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not (ARENA_DATA / "level317").is_file() or not (ARENA_DATA / "level73").is_file():
+            raise unittest.SkipTest("Arena has no Yard levels")
+        try:
+            import UnityPy  # noqa: F401
+        except ImportError:
+            raise unittest.SkipTest("UnityPy is not installed")
+        cls.data_dir, cls.version = DOORS.find_arena("auto")
+        cls.root = Path(os.environ.get("ARENAMAPPORT_EXTRACT_ROOT", E.EXTRACT_ROOT))
+        cls.doc, cls.notes = E.extract_map(YARD, cls.data_dir, cls.version, cls.root)
+
+    def test_the_tracked_sidecar_is_what_the_installed_arena_yields(self):
+        tracked = sidecar_doc("yard")
+        self.assertEqual(self.doc["monitors"], tracked["monitors"])
+        self.assertEqual(self.doc["mount"], tracked["mount"])
+        self.assertEqual(self.doc["source"]["scenes"], tracked["source"]["scenes"])
+        self.assertEqual(E.render_sidecar(dict(self.doc, source=tracked["source"])), sidecar_path("yard").read_text(encoding="utf-8"))
+
+    def test_the_rows_are_cross_checked_against_the_v2_package_when_it_exists(self):
+        if not (self.root / E.MAPS[YARD]["package"]).is_dir():
+            self.skipTest("work/extract/yard-native-v2 is not present")
+        self.assertTrue(any("8 prop(s) found once in yard-native-v2" in n for n in self.notes), self.notes)
+
+    def test_no_holder_hides_in_a_scene_the_sidecar_did_not_list(self):
+        counted = {}
+        for name, level in E.map_scenes(YARD):
+            scene = DOORS.ArenaScene(self.data_dir, level)
+            counted[name] = sum(1 for obj in scene.files[scene.level_name].values() if obj.type.name == "MonoBehaviour" and scene.mono_class(obj) == E.HOLDER_CLASS)
+        self.assertEqual(counted, {"Arena_Yard": 0, "Arena_Yard_Grass": 0, "Arena_Yard_DesignStuff": 0, "Arena_Yard_TeamFight": 0, YARD_SCENE: 8, "Arena_Yard_Light": 0})
+
+    def test_the_type_words_are_the_confirmed_ones(self):
+        scene = DOORS.ArenaScene(self.data_dir, 317)
+        words = []
+        for pid, obj in scene.files[scene.level_name].items():
+            if obj.type.name == "MonoBehaviour" and scene.mono_class(obj) == E.HOLDER_CLASS:
+                _gf, _gp, _en, _sf, _sp, _name, tail_at = DOORS.parse_mono_head(obj.get_raw_data())
+                words.append(struct.unpack("<ii", obj.get_raw_data()[tail_at:])[1])
+        self.assertEqual(sorted(words), [0, 0, 0, 0, 0, 2, 2, 2])
 
 
 if __name__ == "__main__":

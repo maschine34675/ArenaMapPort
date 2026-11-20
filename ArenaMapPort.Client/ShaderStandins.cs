@@ -88,6 +88,11 @@ namespace ArenaMapPort.Client
         internal static bool AutoServiceStandinsEnabled =>
             _autoServiceStandins != null ? _autoServiceStandins.Value : ShaderStandinPolicy.AutoServiceStandinsDefault;
 
+        // Yard (PLAN-YARD item 13): Catalog-only until item 15, so no config key is bound yet (a Bind would put "MaterialFixes/YardShaderStandins" into every
+        // user's developer archive although no raid of the map can run). Until then the switch is the policy default; item 15 adds the field, the Bind
+        // ("YardShaderStandins", ShaderStandinPolicy.YardStandinsDefault) and passes this property as the sixth argument of FallbacksActive in ShaderRebind.
+        internal static bool YardStandinsEnabled => ShaderStandinPolicy.YardStandinsDefault;
+
         internal static FogSheetMode FogMode =>
             _fogSheetMode != null ? _fogSheetMode.Value : ShaderStandinPolicy.FogSheetModeDefault;
 

@@ -658,12 +658,17 @@ namespace ArenaMapPort.Client
                     }
                     continue;
                 }
-                DoorPoseModel.Lerp3(n.ClosedPosition, n.OpenPosition, k, out float px, out float py, out float pz);
+                // An ease that overshoots (outBack, Yard's cradle: up to 1.1 of the way) is interpolated unclamped, so the node passes its
+                // open pose and comes back; the other eases keep the clamped lerp and slerp (exact ends either way).
+                bool overshoot = DoorPoseModel.OvershootsEnd(n.Ease);
+                DoorPoseModel.PathLerp3(n.ClosedPosition, n.OpenPosition, k, overshoot, out float px, out float py, out float pz);
                 n.Node.localPosition = new Vector3(px, py, pz);
                 if (!n.WriteRotation) continue;
                 if (n.Slerp)
                 {
-                    n.Node.localRotation = k <= 0f ? n.ClosedRotation : k >= 1f ? n.OpenRotation : Quaternion.Slerp(n.ClosedRotation, n.OpenRotation, k);
+                    n.Node.localRotation = k <= 0f ? n.ClosedRotation
+                        : k == 1f || (k > 1f && !overshoot) ? n.OpenRotation
+                        : Quaternion.SlerpUnclamped(n.ClosedRotation, n.OpenRotation, k);
                 }
                 else
                 {

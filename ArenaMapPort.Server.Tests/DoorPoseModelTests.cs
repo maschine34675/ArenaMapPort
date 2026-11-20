@@ -283,6 +283,7 @@ public sealed class DoorPoseModelTests
     [InlineData("linear", 0.3f, 0.3f)]
     [InlineData("inOutQuint", 0.25f, 0.015625f)]
     [InlineData("curve", 0.4f, 0.79929f)]
+    [InlineData("outBack", 0.5f, 1.0876975f)]   // (-0.5)^2 * (2.70158 * -0.5 + 1.70158) + 1
     public void EaseOfDispatchesOnTheNamedEase(string ease, float k, float expected)
     {
         Assert.Equal(expected, DoorPoseModel.EaseOf(ease, DepotCurve, k), 5);
@@ -293,6 +294,7 @@ public sealed class DoorPoseModelTests
     [InlineData("linear")]
     [InlineData("inOutQuint")]
     [InlineData("curve")]
+    [InlineData("outBack")]
     public void EveryEaseIsExactAtBothEndsWhateverIsAskedOfIt(string ease)
     {
         foreach (float below in new[] { 0f, -1f, float.NegativeInfinity, float.NaN })
@@ -314,11 +316,13 @@ public sealed class DoorPoseModelTests
     [InlineData("smoothstep", true)]
     [InlineData("linear", true)]
     [InlineData("inOutQuint", true)]
+    [InlineData("outBack", true)]
+    [InlineData("OutBack", false)]
     [InlineData("InOutQuint", false)]
     [InlineData("bounce", false)]
     [InlineData("", false)]
     [InlineData(null, false)]
-    public void OnlyTheFourNamedEasesAreUsableWithoutACurve(string ease, bool usable)
+    public void OnlyTheFiveNamedEasesAreUsableWithoutACurve(string ease, bool usable)
     {
         Assert.Equal(usable, DoorPoseModel.EaseIsUsable(ease, null, out string why));
         Assert.Equal(usable, why == null);
@@ -1518,7 +1522,11 @@ public sealed class DoorPoseWiringTests
         var apply = Between(gates, "static void ApplyPose(PosedPart posed, float progress)", "// Hold: back to the closed pose");
         Assert.Contains("float k = DoorPoseModel.EaseOf(n.Ease, n.Curve, progress);", apply);
         Assert.Contains("if (!n.WriteRotation) continue;", apply);
-        Assert.Contains("n.Node.localRotation = k <= 0f ? n.ClosedRotation : k >= 1f ? n.OpenRotation : Quaternion.Slerp(n.ClosedRotation, n.OpenRotation, k);", apply);
+        // an ease that overshoots (outBack) is slerped unclamped, every other ease keeps the clamped result: exact closed / open ends either way
+        Assert.Contains("bool overshoot = DoorPoseModel.OvershootsEnd(n.Ease);", apply);
+        Assert.Contains("n.Node.localRotation = k <= 0f ? n.ClosedRotation", apply);
+        Assert.Contains(": k == 1f || (k > 1f && !overshoot) ? n.OpenRotation", apply);
+        Assert.Contains(": Quaternion.SlerpUnclamped(n.ClosedRotation, n.OpenRotation, k);", apply);
         Assert.Contains("n.Node.localEulerAngles = new Vector3(ex, ey, ez);", apply);
         var note = Between(gates, "internal static void NotePoses(Transform part, ArenaDoorPose[] poses)", "internal static bool Park(Transform part)");
         Assert.Contains("bool slerp = DoorPoseModel.UsesSlerp(pose.Source);", note);
@@ -1776,7 +1784,7 @@ public sealed class DoorPoseWiringTests
 
         var apply = Between(gates, "static void ApplyPose(PosedPart posed, float progress)", "// Hold: back to the closed pose");
         int sw = apply.IndexOf("if (n.Switch)", StringComparison.Ordinal);
-        int lerp = apply.IndexOf("DoorPoseModel.Lerp3(n.ClosedPosition, n.OpenPosition, k", StringComparison.Ordinal);
+        int lerp = apply.IndexOf("DoorPoseModel.PathLerp3(n.ClosedPosition, n.OpenPosition, k, overshoot", StringComparison.Ordinal);
         Assert.True(sw > 0 && sw < lerp, "a switch node never reaches the transform code");
         Assert.Contains("DoorPoseModel.SwitchStateAt(k, n.ClosedActive, n.OpenActive)", apply);
         Assert.Contains("n.Node.gameObject.activeSelf != state.Value", apply);          // SetActive only on a change
@@ -1885,5 +1893,206 @@ public sealed class DoorPoseWiringTests
                 Assert.Equal(rows, DoorPoseModel.SelectRowsForPart(rows, node => throw new InvalidOperationException("nothing to tell apart")));
             }
         }
+    }
+}
+
+/// <summary>
+/// Yard (PLAN-YARD item 9, 2026-11-20): the ease outBack (DOTween Ease 27, read from EFT's DOTween.dll), the unclamped path
+/// interpolation that lets a part overshoot its open pose, and the three rows of tools/maps/yard.doors.json (two leaves that
+/// rotate +-90 degrees about local z, a gondola that rises 2.446 m), judged through the same model the client uses.
+/// </summary>
+public sealed class DoorPoseYardTests
+{
+
+    /// <summary>DOTween's Ease.OutBack from EFT's DOTween.dll (EaseManager.Evaluate: <c>(time = time / duration - 1) * time *
+    /// ((overshoot + 1) * time + overshoot) + 1</c>, overshoot = DOTween.defaultEaseOvershootOrAmplitude 1.70158), in double precision.</summary>
+    static double OutBackReference(double k)
+    {
+        const double s = 1.70158;
+        double t = k - 1.0;
+        return t * t * ((s + 1.0) * t + s) + 1.0;
+    }
+
+    [Fact]
+    public void OutBackIsDoTweensFormulaExactAtItsEndsAndPeaksAtOnePointOne()
+    {
+        Assert.Equal(0f, DoorPoseModel.OutBack(0f));
+        Assert.Equal(1f, DoorPoseModel.OutBack(1f));
+        Assert.Equal(0f, DoorPoseModel.OutBack(-1f));
+        Assert.Equal(1f, DoorPoseModel.OutBack(9f));
+        Assert.Equal(0f, DoorPoseModel.OutBack(float.NaN));
+        Assert.Equal(1.70158f, ArenaDoorPose.OutBackOvershoot);                     // DOTween's own default, not a tuned number
+        for (int i = 1; i < 200; i++)
+        {
+            float k = i / 200f;
+            Assert.Equal(OutBackReference(k), DoorPoseModel.OutBack(k), 4);
+            Assert.Equal(DoorPoseModel.OutBack(k), DoorPoseModel.EaseOf(ArenaDoorPose.EaseOutBack, null, k));
+        }
+        // the closed form of the extremes: crosses 1 at 1 / (s + 1), peaks at 1 - 2s / (3 (s + 1)) with a value of 1.1000
+        float cross = 1f / (ArenaDoorPose.OutBackOvershoot + 1f);
+        Assert.Equal(0.37018f, cross, 4);
+        Assert.Equal(1f, DoorPoseModel.OutBack(cross), 4);
+        Assert.Equal(0.58012f, DoorPoseModel.OutBackPeakAt, 4);
+        Assert.Equal(1.1f, DoorPoseModel.OutBack(DoorPoseModel.OutBackPeakAt), 3);
+    }
+
+    [Fact]
+    public void OutBackRisesToItsPeakThenFallsBackToOneAndNeverLeavesTheOvershootBand()
+    {
+        float peakAt = DoorPoseModel.OutBackPeakAt;
+        float previous = 0f;
+        float highest = 0f;
+        for (int i = 1; i <= 1000; i++)
+        {
+            float k = i / 1000f;
+            float e = DoorPoseModel.OutBack(k);
+            if (k <= peakAt) Assert.True(e >= previous - 1e-6f, $"rising up to the peak at k {k}");
+            else Assert.True(e <= previous + 1e-6f, $"settling after the peak at k {k}");
+            Assert.InRange(e, 0f, 1.1001f);
+            highest = Math.Max(highest, e);
+            previous = e;
+        }
+        Assert.Equal(1.1f, highest, 3);
+        Assert.Equal(1f, previous);
+        // above 1 for the whole stretch between the crossing and the end, below 1 before it
+        Assert.True(DoorPoseModel.OutBack(0.36f) < 1f);
+        Assert.True(DoorPoseModel.OutBack(0.38f) > 1f);
+        Assert.True(DoorPoseModel.OutBack(0.999f) > 1f);
+    }
+
+    [Fact]
+    public void OnlyOutBackOvershootsItsEnd()
+    {
+        Assert.True(DoorPoseModel.OvershootsEnd(ArenaDoorPose.EaseOutBack));
+        foreach (var ease in new[] { ArenaDoorPose.EaseSmoothstep, ArenaDoorPose.EaseLinear, ArenaDoorPose.EaseInOutQuint, ArenaDoorPose.EaseCurve, null, "" })
+            Assert.False(DoorPoseModel.OvershootsEnd(ease), ease);
+        Assert.True(DoorPoseModel.EaseIsUsable(ArenaDoorPose.EaseOutBack, null, out string why));      // no curve needed
+        Assert.Null(why);
+    }
+
+    [Theory]
+    [InlineData(0f, 3f, 0f, true, 0f)]
+    [InlineData(0f, 3f, 1f, true, 3f)]          // exactly 1 is the open pose bit for bit, overshoot or not
+    [InlineData(0f, 3f, 1f, false, 3f)]
+    [InlineData(0.15f, 2.596f, 1.1f, true, 2.8406f)]   // 0.15 + 2.446 * 1.1: the cradle's peak, 0.2446 m past its open pose
+    [InlineData(0.15f, 2.596f, 1.1f, false, 2.596f)]   // the clamped lerp every other ease keeps
+    [InlineData(0.15f, 2.596f, 0.5f, true, 1.373f)]
+    [InlineData(0.15f, 2.596f, 0.5f, false, 1.373f)]
+    [InlineData(0.15f, 2.596f, -0.2f, true, 0.15f)]
+    [InlineData(0.15f, 2.596f, float.NaN, true, 0.15f)]
+    public void PathLerpExtrapolatesPastTheOpenPoseOnlyWhenAskedAndKeepsExactEnds(float a, float b, float f, bool overshoot, float expected)
+    {
+        Assert.Equal(expected, DoorPoseModel.PathLerp(a, b, f, overshoot), 3);
+    }
+
+    [Fact]
+    public void WithoutOvershootPathLerpIsLerpForEveryFraction()
+    {
+        foreach (float f in new[] { float.NegativeInfinity, -1f, 0f, 0.001f, 0.3f, 0.999f, 1f, 1.0001f, 1.1f, 7f, float.PositiveInfinity, float.NaN })
+            Assert.Equal(DoorPoseModel.Lerp(-4.5f, 9.25f, f), DoorPoseModel.PathLerp(-4.5f, 9.25f, f, false));
+        DoorPoseModel.PathLerp3(new[] { 1f, 2f, 3f }, new[] { 5f, 6f, 7f }, 1.5f, true, out float x, out float y, out float z);
+        Assert.Equal((7f, 8f, 9f), (x, y, z));
+        Assert.Throws<ArgumentException>(() => DoorPoseModel.PathLerp3(new[] { 1f, 2f }, new[] { 1f, 2f, 3f }, 0.5f, true, out _, out _, out _));
+    }
+
+    private static ArenaDoorPose[] YardRows()
+    {
+        string file = null;
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null && file == null; dir = dir.Parent)
+        {
+            var candidate = Path.Combine(dir.FullName, "tools", "maps", "yard.doors.json");
+            if (File.Exists(candidate)) file = candidate;
+        }
+        Assert.NotNull(file);
+        using var doc = JsonDocument.Parse(File.ReadAllText(file));
+        float[] Floats(JsonElement a) => a.EnumerateArray().Select(v => (float)v.GetDouble()).ToArray();
+        return doc.RootElement.GetProperty("poses").EnumerateArray().Select(s => new ArenaDoorPose(
+            s.GetProperty("barrier").GetString(), s.GetProperty("part").GetString(), s.GetProperty("node").GetString(),
+            s.GetProperty("clip").GetString(), (float)s.GetProperty("seconds").GetDouble(),
+            Floats(s.GetProperty("closed").GetProperty("position")), Floats(s.GetProperty("closed").GetProperty("euler")),
+            Floats(s.GetProperty("open").GetProperty("position")), Floats(s.GetProperty("open").GetProperty("euler")),
+            s.GetProperty("source").GetString(), s.GetProperty("ease").GetString())).ToArray();
+    }
+
+    [Fact]
+    public void YardsThreeRowsAreTwoRotatingLeavesAndARisingGondola()
+    {
+        var rows = YardRows();
+        Assert.Equal(3, rows.Length);
+        var leaves = rows.Where(r => r.Barrier == "DOORS/Metal_gate_1").OrderBy(r => r.Part).ToArray();
+        Assert.Equal(new[] { "gate_door_1", "gate_door_2" }, leaves.Select(r => r.Part));
+        Assert.All(leaves, r =>
+        {
+            Assert.Equal("", r.Node);                                                  // the part itself turns
+            Assert.Equal((ArenaDoorPose.SourceDotAnimator, ArenaDoorPose.EaseLinear, 1.7f), (r.Source, r.Ease, r.Seconds));
+            Assert.Equal(r.ClosedPosition, r.OpenPosition);                           // a pure rotation about the leaf's own origin
+            Assert.Equal(new[] { 0f, 0f, 0f }, r.ClosedEuler);
+            Assert.True(DoorPoseModel.UsesSlerp(r.Source));                           // quaternion slerp, not the component-wise euler lerp
+            Assert.True(DoorPoseModel.RotationMoves(r.ClosedEuler, r.OpenEuler));     // so the rotation IS written (a slide-only node keeps its own)
+            Assert.True(DoorPoseModel.EaseIsUsable(r.Ease, r.Curve, out _));
+        });
+        Assert.Equal(new[] { 0f, 0f, 90f }, leaves[0].OpenEuler);
+        Assert.Equal(new[] { 0f, 0f, -90f }, leaves[1].OpenEuler);
+        Assert.Equal(new[] { 1.89f, 0f, 1f }, leaves[0].ClosedPosition);
+        Assert.Equal(new[] { -1.89f, 0f, 1f }, leaves[1].ClosedPosition);
+        var cradle = rows.Single(r => r.Barrier == "DOORS/Construction_Cradle_02");
+        Assert.Equal(("Construction_Cradle_02_A", "", 8f), (cradle.Part, cradle.Node, cradle.Seconds));
+        Assert.Equal((ArenaDoorPose.SourceDotAnimator, ArenaDoorPose.EaseOutBack), (cradle.Source, cradle.Ease));
+        Assert.Equal(new[] { 0f, 0f, 0.15f }, cradle.ClosedPosition);
+        Assert.Equal(new[] { 0f, 0f, 2.596f }, cradle.OpenPosition);
+        Assert.False(DoorPoseModel.RotationMoves(cradle.ClosedEuler, cradle.OpenEuler));   // the gondola only rises: its scene rotation is kept
+        // a collider under either part is Arena's moved body (part-level rows: node "" = everything below the part)
+        Assert.True(DoorPoseModel.IsMoved("model/leaf_COLLIDER", new[] { "" }));
+        Assert.True(DoorPoseModel.IsMoved("Construction_Cradle_02 Group/skateboard_02/skateboard_COLLIDER", new[] { "" }));
+    }
+
+    [Fact]
+    public void TheCradleRisesPastItsOpenPoseByAQuarterOfAMetreAndSettlesOnItAtTheDriveEnd()
+    {
+        var cradle = YardRows().Single(r => r.Barrier == "DOORS/Construction_Cradle_02");
+        float seconds = DoorPoseModel.ScaledSeconds(cradle.Seconds, DoorPoseModel.DefaultDriveScale);
+        Assert.Equal(4f, seconds, 4);                                              // 8.0 s at the default scale 0.5
+        float travel = cradle.OpenPosition[2] - cradle.ClosedPosition[2];
+        Assert.Equal(2.446f, travel, 4);
+        float previous = cradle.ClosedPosition[2];
+        float peak = previous;
+        float peakTime = 0f;
+        bool risingToPeak = true;
+        int frames = 240;                                                          // 60 frames a second over the 4 s drive
+        for (int i = 0; i <= frames; i++)
+        {
+            float elapsed = i * seconds / frames;
+            float k = DoorPoseModel.EaseOf(cradle.Ease, cradle.Curve, DoorPoseModel.Progress(elapsed, seconds));
+            DoorPoseModel.PathLerp3(cradle.ClosedPosition, cradle.OpenPosition, k, DoorPoseModel.OvershootsEnd(cradle.Ease), out float x, out float y, out float z);
+            Assert.Equal((0f, 0f), (x, y));                                        // the node moves along its local z only
+            Assert.True(z >= cradle.ClosedPosition[2] - 1e-5f, "never below the closed pose");
+            if (z > peak) { peak = z; peakTime = elapsed; }
+            else if (z < previous - 1e-6f) risingToPeak = false;
+            if (!risingToPeak) Assert.True(z <= previous + 1e-5f, "after its peak it only settles");
+            previous = z;
+        }
+        Assert.Equal(cradle.OpenPosition[2], previous);                            // the last frame IS the open pose, bit for bit
+        Assert.Equal(cradle.OpenPosition[2] + 0.1f * travel, peak, 2);             // 2.8406: 0.2446 m past the open pose
+        Assert.Equal(DoorPoseModel.OutBackPeakAt * seconds, peakTime, 1);          // 2.32 s into the 4 s drive
+        // without the unclamped lerp the part would sit at the open pose from k 0.370 on and never overshoot
+        DoorPoseModel.PathLerp3(cradle.ClosedPosition, cradle.OpenPosition, DoorPoseModel.OutBack(DoorPoseModel.OutBackPeakAt), false, out _, out _, out float clamped);
+        Assert.Equal(cradle.OpenPosition[2], clamped);
+    }
+
+    [Fact]
+    public void ModelIllustration_TheOvershotGondolaStaysAboveTheWalkingBandAfterTheCrossing()
+    {
+        // Model illustration only: the constants are the S2 survey's numbers, not read from the package; the real collider check is the host item 17.
+        // S2 survey of Yard (2026-11-20): the closed cradle's lowest movement collider starts at y 7.1 and its closing cube ends at 10.0.
+        // Parked, the part's floor line is that closed minimum (SpawnGates.MeasureClosed); a collider whose bottom is at least a
+        // player's height (1.8 m) above it is no obstacle, and the rise is upward only, so after the first 0.370 of the drive the part is
+        // never lower than its open pose (the overshoot lifts it, it never dips below the end pose).
+        const float floorLine = 7.1f, closedMinY = 7.1f, height = 2.9f, rise = 2.446f;
+        Assert.False(DoorPoseModel.OccupiesWalkingBand(closedMinY + rise, closedMinY + rise + height, floorLine));
+        Assert.False(DoorPoseModel.OccupiesWalkingBand(closedMinY + rise * 1.1f, closedMinY + rise * 1.1f + height, floorLine));
+        Assert.True(DoorPoseModel.OccupiesWalkingBand(closedMinY, closedMinY + height, floorLine));      // closed: it is a wall (the hold carves it)
+        float lowestAfterCrossing = float.MaxValue;
+        for (int i = 371; i <= 1000; i++) lowestAfterCrossing = Math.Min(lowestAfterCrossing, DoorPoseModel.OutBack(i / 1000f));
+        Assert.True(lowestAfterCrossing >= 1f);
     }
 }

@@ -103,6 +103,17 @@ outside it, or a sub point outside a kept hub, fails the run) and drops nothing.
   The containers (`AICorePointHolder`, `BotZone`, ...) sit at the world origin 612 m away and carry the children's world
   positions in their own transforms; a root exactly at the origin is a container and is left out of the distance statistics.
 
+Yard (PLAN-YARD item 8, 2026-11-20). `Arena_Yard_AI` (plan role `ai`, level320, Arena 0.6.2) is the Autoservice case again: the 7 core
+points (x -62.0..-5.1, z 24.0..116.9), the 4-hub PatrolWay (4 hubs + 48 sub points = 52 PatrolPoints, all consumed), the 11 bot born points
+(`SpawnPointMarker`s `p1` .. `p1 (10)`, one BotZone) and the 43 `AIMinePoint`s all lie on the map, so `PLAY_AREA` is a fail-closed guard (Arena's
+NavMeshSurface volume x -66.4..20.8, z -19.05..161.05 rounded outward to 0.1 m) and drops nothing. The scene's leftovers differ from Autoservice's:
+the 2,696 `base_navmesh_point` objects (group `ParentOfBearingPoints`, 2,697 transforms with the parent) do NOT lie hundreds of metres away, they
+lie near the world origin (x -48.7..50.6, z -51.5..48.9, 1,155 of them outside the play-area box) at y 0..2.8, 3.4 to 6.2 m BELOW the 6.15 floor, so the horizontal radius of
+`AI_SCENE_DATA` cannot name them. The Yard row therefore adds `floor_y` (6.15) and `below_floor_margin` (2.0): the census then also counts, per group,
+the transforms under `floor_y - margin` (`below_floor`) and those outside the play-area box (`outside_play_area`), containers left out as before.
+Rows without `floor_y` produce the census they always did (the keys are absent and the released and Autoservice sidecars stay byte-identical).
+Nothing counted is exported; the pins are 11 born points and 43 mine points.
+
 CLI:
     python extract_ai_anchors.py --map equator --output tools/maps/equator.ai.json
     python extract_ai_anchors.py --map bay5 --output tools/maps/bay5.ai.json
@@ -111,6 +122,7 @@ CLI:
     python extract_ai_anchors.py --plan tools/extract/plans/airpit.json
     python extract_ai_anchors.py --plan tools/extract/plans/iceberg.json     (writes tools/maps/iceberg.ai.json)
     python extract_ai_anchors.py --plan tools/extract/plans/autoservice.json (writes tools/maps/autoservice.ai.json)
+    python extract_ai_anchors.py --plan tools/extract/plans/yard.json        (writes tools/maps/yard.ai.json)
 The default without --map stays equator + bay5 (their sidecars are shipped as released); name
 every other map explicitly.
 """
@@ -161,6 +173,9 @@ PLAY_AREA = {
     # Autoservice: Arena's own NavMeshSurface volume of level62/63 (centre (-370.3, 486.8), size 101.8 x 81.7) rounded outward to
     # 0.1 m. Nothing is dropped there (module docstring, "Autoservice"); the row makes a stray point fail the run.
     "autoservice": {"x": (-421.2, -319.4), "z": (445.9, 527.7)},
+    # Yard: Arena's own NavMeshSurface volume of level281/314/320 (centre (-22.8, 71.0), size 87.2 x 180.1, identity placement) rounded outward to
+    # 0.1 m. Nothing is dropped there (module docstring, "Yard"); the row makes a stray point fail the run.
+    "yard": {"x": (-66.4, 20.8), "z": (-19.1, 161.1)},
 }
 
 # Maps whose sidecar also carries the AI scene's born points, mine points and a far-field census (module docstring,
@@ -170,6 +185,10 @@ AI_SCENE_DATA = {
     "autoservice": {"born_class": "SpawnPointMarker", "born_count": 16,
                     "mine_class": "AIMinePoint", "mine_count": 23,
                     "far_field_radius": 400.0},
+    # Yard: 11 born points, 43 mine points; `floor_y` / `below_floor_margin` add the below-the-floor census (module docstring, "Yard").
+    "yard": {"born_class": "SpawnPointMarker", "born_count": 11,
+             "mine_class": "AIMinePoint", "mine_count": 43,
+             "far_field_radius": 400.0, "floor_y": 6.15, "below_floor_margin": 2.0},
 }
 
 
@@ -488,12 +507,14 @@ def scene_points(f, class_name: str) -> list:
     return sorted(points, key=lambda p: _name_sort_key(p["name"]))
 
 
-def scene_census(f, centre, radius: float) -> dict:
+def scene_census(f, centre, radius: float, area: dict | None = None, floor_y: float | None = None,
+                 below_margin: float = 0.0) -> dict:
     """Every Transform of the AI scene grouped by the name of its root object: ``transforms`` (all), ``containers`` (roots exactly at
     the world origin: they carry the children's world positions), ``near`` / ``beyond`` (``radius`` metres horizontally from
     ``centre``, containers left out) and the min / max distance of the counted ones. A group may be mixed
     (``BotCellController``: its root lies at (-258, 0, -342), its one ``Cube`` child on the map); nothing is dropped by this
-    function, it only records."""
+    function, it only records. With ``floor_y`` (and the play-area ``area`` box) every group also counts ``below_floor`` (world y under
+    ``floor_y - below_margin``) and ``outside_play_area`` (x/z outside the box), containers left out (module docstring, "Yard")."""
     transforms = {o.path_id: o for o in f.objects.values() if o.type.name == "Transform"}
     names = {o.path_id: o.read_typetree().get("m_Name", "") for o in f.objects.values() if o.type.name == "GameObject"}
     father, owner = {}, {}
@@ -516,6 +537,9 @@ def scene_census(f, centre, radius: float) -> dict:
         root = root_of(pid)
         group = groups.setdefault(names[owner[root]], {"transforms": 0, "containers": 0, "near": 0, "beyond": 0,
                                                        "distances": []})
+        if floor_y is not None:
+            group.setdefault("below_floor", 0)
+            group.setdefault("outside_play_area", 0)
         group["transforms"] += 1
         position = _world_position(tobj)
         if pid == root and max(abs(v) for v in position) < 1e-3:
@@ -524,18 +548,26 @@ def scene_census(f, centre, radius: float) -> dict:
         distance = horizontal_distance(position, centre)
         group["distances"].append(distance)
         group["near" if distance <= radius else "beyond"] += 1
+        if floor_y is not None:
+            group["below_floor"] += int(position[1] < floor_y - below_margin)
+            group["outside_play_area"] += int(not inside_play_area(position, area))
     out = {}
     for name, group in sorted(groups.items()):
         distances = group.pop("distances")
         group["min_distance"] = round(min(distances), 1) if distances else None
         group["max_distance"] = round(max(distances), 1) if distances else None
         out[name] = group
-    return {"centre_xz": [round(centre[0], 2), round(centre[1], 2)], "far_field_radius": radius,
-            "groups": out,
-            "totals": {"transforms": sum(g["transforms"] for g in out.values()),
-                       "near": sum(g["near"] for g in out.values()),
-                       "beyond": sum(g["beyond"] for g in out.values()),
-                       "containers": sum(g["containers"] for g in out.values())}}
+    totals = {"transforms": sum(g["transforms"] for g in out.values()),
+              "near": sum(g["near"] for g in out.values()),
+              "beyond": sum(g["beyond"] for g in out.values()),
+              "containers": sum(g["containers"] for g in out.values())}
+    record = {"centre_xz": [round(centre[0], 2), round(centre[1], 2)], "far_field_radius": radius, "groups": out, "totals": totals}
+    if floor_y is not None:
+        record["floor_y"] = floor_y
+        record["below_floor_margin"] = below_margin
+        totals["below_floor"] = sum(g["below_floor"] for g in out.values())
+        totals["outside_play_area"] = sum(g["outside_play_area"] for g in out.values())
+    return record
 
 
 def scene_extras(map_key: str, f, spec: dict, area: dict) -> dict:
@@ -550,7 +582,8 @@ def scene_extras(map_key: str, f, spec: dict, area: dict) -> dict:
         if outside:
             raise HardExtractError(f"{map_key}: {key} {outside} lie outside the play area {area}")
         out[key] = points
-    out["scene_census"] = scene_census(f, play_area_centre(area), spec["far_field_radius"])
+    out["scene_census"] = scene_census(f, play_area_centre(area), spec["far_field_radius"], area, spec.get("floor_y"),
+                                       spec.get("below_floor_margin", 0.0))
     return out
 
 
@@ -690,6 +723,10 @@ def extract_map(map_key: str, ai_scene_idx: int, ai_scene_name: str, source: str
         result["_comment"] += (f" {len(result['born_points'])} bot born points, {len(result['mine_points'])} AIMinePoints (AI data, not "
                                "minefields) and a census of the scene's far-field leftovers (beyond "
                                f"{spec['far_field_radius']:g} m of the play area, never exported) are recorded beside them.")
+        if "floor_y" in spec:
+            result["_comment"] += (f" The census also counts the transforms more than {spec['below_floor_margin']:g} m under the floor "
+                                   f"(y {spec['floor_y']:g}) and those outside the play area: Arena's {result['scene_census']['groups']['ParentOfBearingPoints']['below_floor']:,} "
+                                   "bearing points lie 3 to 6 m beneath the floor (near the world origin, not hundreds of metres away) and are never exported (PLAN-YARD item 8).")
     if dropped is not None:  # only a map with a PLAY_AREA row that lost hubs; the released sidecars have no such key
         result["dropped"] = dropped
         result["_comment"] += (f" {dropped['hubs']} hub(s) with {dropped['sub_points']} sub point(s) of Arena's PatrolWay "

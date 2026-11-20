@@ -47,6 +47,12 @@ namespace ArenaMapPort.Client
     /// would vanish from behind). The fog sheet gets the generated soft texture exactly as on AirPit (the capture is not map-gated). Its
     /// fourth name keeps the table row <c>p0/Reflective/Bumped Specular SMap</c>. Like AirPit's, the fog sheet and cloth are expected to
     /// resolve in process (the rows are the safety net); the Baked shader (sharedassets216) is inferred NOT loaded, so its row is the live one.</item>
+    /// <item>Yard (PLAN-YARD item 13, 2026-11-20; Catalog-only until item 15, so nothing here is reached by a released raid): the four names of
+    /// AutoService (the same rows and the same extended cloth handling), plus the two names EFT 0.16.9.5 carries nowhere: the SpeedTree 7 leaf shader
+    /// <c>Nature/SpeedTree</c> (2 renderers, the leaves of two trees in the yard: the two-sided cutout, the cutoff stays the material's 0.5) and the
+    /// Amplify <c>Impostors/Examples/StandardCrossfade</c> trunk shader (2 renderers, plain <c>Diffuse</c>: no cutoff, no keyword, no alpha to misread).
+    /// Both substitutes are inferred, not Arena's look; the switch <c>YardShaderStandins</c> (item 15) turns them off. The octahedron impostor shader
+    /// (<c>sharedassets5</c>, loaded in process like the cloth) and <c>Custom/WireNetting</c> (EFT's shader bundle) need no row.</item>
     /// <item>Every other map, Equator included: an empty list, no fallback table. A name not allowed keeps the
     /// stand-in and is logged as unresolved (Error).</item>
     /// </list>
@@ -78,10 +84,17 @@ namespace ArenaMapPort.Client
         // substitute is the same Cull Off cutout the AirPit backface cloth uses; a stand-in, not Arena's look.
         internal const string TwoSidedReflectiveShader = "p0/Reflective/Bumped Specular_TwoSided";
 
+        // Yard (PLAN-YARD item 13): the two names EFT 0.16.9.5 carries in no file (a UnityPy scan of all 1,120 data files and the global shader bundle,
+        // work/tmp/yard-phase-b/item13/shscan_yard.json: no Shader object of either name).
+        internal const string SpeedTreeShader = "Nature/SpeedTree";
+        internal const string StandardCrossfadeShader = "Impostors/Examples/StandardCrossfade";
+        internal const string DiffuseShader = "Diffuse";
+
         // First-run (code) defaults of the AirPit keys. AirPit never shipped with saved keys, so no migration.
         internal const bool AirPitStandinsDefault = true;
         internal const bool BowlStandinsDefault = true;   // first-run default of BowlShaderStandins (new key, no migration)
         internal const bool AutoServiceStandinsDefault = true;   // first-run default of AutoServiceShaderStandins (new key, no migration)
+        internal const bool YardStandinsDefault = true;          // first-run default of YardShaderStandins (the key is bound by item 15; no saved key can exist before)
         internal const FogSheetMode FogSheetModeDefault = FogSheetMode.StandIn;
         internal const float FogSheetOpacityDefault = 1f;
         internal const float FogSheetOpacityMin = 0f;
@@ -119,12 +132,24 @@ namespace ArenaMapPort.Client
             [ClothBackfaceShader] = TwoSidedClothShader,
         };
 
+        // Yard's own rows (PLAN-YARD item 13): the backface cloth draws from both sides (as on AirPit and AutoService); the SpeedTree 7 leaf cards are a
+        // two-sided cutout (the material is _Mode 1 with _Cutoff 0.5, _Cull 0, _MainTex and _BumpMap, which the Legacy two-sided cutout reads by the same
+        // names); the Amplify bark has no cutout or keyword need, so the plain Diffuse takes _MainTex and _Color. The other three names keep the shipped rows.
+        static readonly Dictionary<string, string> YardTargets = new Dictionary<string, string>
+        {
+            [ClothBackfaceShader] = TwoSidedClothShader,
+            [SpeedTreeShader] = TwoSidedClothShader,
+            [StandardCrossfadeShader] = DiffuseShader,
+        };
+
         internal static IReadOnlyDictionary<string, string> FallbackTable => Table;
+        internal static IReadOnlyDictionary<string, string> YardFallbackTable => YardTargets;
 
         static bool IsBay5(string mapKey) => mapKey == ArenaMapRegistry.Bay5.Key;
         static bool IsAirPit(string mapKey) => mapKey == ArenaMapRegistry.AirPit.Key;
         static bool IsBowl(string mapKey) => mapKey == ArenaMapRegistry.Bowl.Key;
         static bool IsAutoService(string mapKey) => mapKey == ArenaMapRegistry.AutoService.Key;
+        static bool IsYard(string mapKey) => mapKey == ArenaMapRegistry.Yard.Key;
 
         /// <summary>
         /// The Arena shader names this map may rebind to an SPT substitute: its descriptor's
@@ -146,10 +171,12 @@ namespace ArenaMapPort.Client
         /// <summary>
         /// Whether the table is switched on for this map's raid: Bay5 follows the legacy
         /// <c>EnableShaderFallbacks</c> value only, AirPit its own key only (<c>AirPitShaderStandins</c>), Bowl its
-        /// own key only (<c>BowlShaderStandins</c>), AutoService its own key only (<c>AutoServiceShaderStandins</c>), every other map is never on.
+        /// own key only (<c>BowlShaderStandins</c>), AutoService its own key only (<c>AutoServiceShaderStandins</c>), Yard its own key only
+        /// (<c>YardShaderStandins</c>, the sixth parameter, off unless a caller passes it), every other map is never on.
         /// </summary>
-        internal static bool FallbacksActive(string mapKey, bool bay5LegacySwitch, bool airPitSwitch, bool bowlSwitch, bool autoServiceSwitch = false) =>
-            IsBay5(mapKey) ? bay5LegacySwitch : IsAirPit(mapKey) ? airPitSwitch : IsBowl(mapKey) ? bowlSwitch : IsAutoService(mapKey) && autoServiceSwitch;
+        internal static bool FallbacksActive(string mapKey, bool bay5LegacySwitch, bool airPitSwitch, bool bowlSwitch, bool autoServiceSwitch = false, bool yardSwitch = false) =>
+            IsBay5(mapKey) ? bay5LegacySwitch : IsAirPit(mapKey) ? airPitSwitch : IsBowl(mapKey) ? bowlSwitch :
+            IsAutoService(mapKey) ? autoServiceSwitch : IsYard(mapKey) && yardSwitch;
 
         /// <summary>The SPT shader allowed to stand in for <paramref name="originalName"/> on this map, if any.</summary>
         internal static bool TryGetFallback(string mapKey, string originalName, out string fallbackName)
@@ -161,14 +188,16 @@ namespace ArenaMapPort.Client
             bool found = (IsAirPit(mapKey) && AirPitTargets.TryGetValue(originalName, out target)) ||
                          (IsBowl(mapKey) && BowlTargets.TryGetValue(originalName, out target)) ||
                          (IsAutoService(mapKey) && AutoServiceTargets.TryGetValue(originalName, out target)) ||
+                         (IsYard(mapKey) && YardTargets.TryGetValue(originalName, out target)) ||
                          Table.TryGetValue(originalName, out target);
             if (!found) return false;
             fallbackName = target;
             return true;
         }
 
-        /// <summary>Texture and float handling beyond the shader swap is AirPit and AutoService only (the cloth fix); Bay5 and Bowl keep a plain swap.</summary>
-        internal static bool UsesExtendedStandins(string mapKey) => IsAirPit(mapKey) || IsAutoService(mapKey);
+        /// <summary>Texture and float handling beyond the shader swap is AirPit, AutoService and Yard only (the cloth fix); Bay5 and Bowl keep a plain swap.
+        /// Yard's two extra names (SpeedTree leaves, Amplify bark) have no fix: <see cref="FixFor"/> returns <c>None</c> for them.</summary>
+        internal static bool UsesExtendedStandins(string mapKey) => IsAirPit(mapKey) || IsAutoService(mapKey) || IsYard(mapKey);
 
         /// <summary>The fog-sheet quads are disabled (rather than rebound) only on AirPit in Hidden mode.</summary>
         internal static bool HidesFogSheets(string mapKey, FogSheetMode mode) =>
@@ -245,8 +274,8 @@ namespace ArenaMapPort.Client
             new[] { new TextureRemap("_NormalMap1", "_BumpMap") },
             new[] { new FloatOverride("_Cutoff", 0f) });
 
-        /// <summary>The extra material work for a name that was rebound through the table (AirPit and AutoService; AutoService's allow-list holds
-        /// no rock shader, so for it only the two cloth names have a fix).</summary>
+        /// <summary>The extra material work for a name that was rebound through the table (AirPit, AutoService and Yard; the allow-lists of AutoService
+        /// and Yard hold no rock shader, so for them only the two cloth names have a fix).</summary>
         internal static StandinFix FixFor(string mapKey, string originalName)
         {
             if (!UsesExtendedStandins(mapKey)) return StandinFix.None;

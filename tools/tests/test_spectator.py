@@ -253,5 +253,42 @@ class SpectatorValidation(unittest.TestCase):
         S.verify(package, f'arena_{name}')
 
 
+class PendingCrowdMaps(unittest.TestCase):
+    """PLAN-YARD item 14: a Catalog-only map's crowd is extracted and validated but stays out of the staging until item 15 moves its row into MAP_SCENES."""
+
+    def test_the_pending_table_is_yard_and_disjoint_from_the_staged_one(self):
+        self.assertEqual(S.PENDING_MAP_SCENES, {'yard': 'Arena_Yard_TeamFight_DesignStuff'})
+        self.assertFalse(set(S.PENDING_MAP_SCENES) & set(S.MAP_SCENES))
+        self.assertEqual(S.ALL_MAP_SCENES, {**S.MAP_SCENES, **S.PENDING_MAP_SCENES})
+        self.assertEqual(set(S.MAP_SCENES), {'airpit', 'equator', 'bay5', 'bowl', 'autoservice'})   # what stage_spectators and a client build stage
+
+    def test_validate_accepts_a_pending_map_and_the_cli_extracts_it(self):
+        data = fixture()
+        data.update(map='arena_yard', source_scene=S.PENDING_MAP_SCENES['yard'])
+        S.validate(data, 'arena_yard')
+        source = (Path(S.__file__)).read_text(encoding='utf-8')
+        self.assertIn("choices=(*ALL_MAP_SCENES, 'all')", source)
+
+    def test_a_pending_map_is_not_staged_and_not_a_staged_folder(self):
+        import stage_spectators
+        self.assertIs(stage_spectators.MAP_SCENES, S.MAP_SCENES)
+        self.assertNotIn('yard', stage_spectators.MAP_SCENES)
+        with self.assertRaisesRegex(ValueError, 'every crowd-map'):
+            stage_spectators.stage({**{n: Path('x') for n in S.MAP_SCENES}, 'yard': Path('y')}, Path('z'))
+
+    @unittest.skipUnless((S.package_path('yard') / 'spectator.json.gz').exists(), 'owner-extracted Yard crowd unavailable')
+    def test_the_real_yard_package(self):
+        package = S.package_path('yard')
+        data = json.loads(gzip.decompress((package / 'spectator.json.gz').read_bytes()))
+        S.validate(data, 'arena_yard')
+        self.assertEqual(len(data['actors']), 27)
+        self.assertEqual(data['source_count'], 27)
+        self.assertEqual(data['container']['position'], [0.0, 0.0, 0.0])
+        self.assertEqual(len({a['name'].split(' (')[0] for a in data['actors']}), 15)
+        self.assertTrue(all(not a['missing'] for a in data['actors']))
+        self.assertEqual([c['name'] for c in data['clips']], list(S.CLIPS))
+        S.verify(package, 'arena_yard')
+
+
 if __name__ == '__main__':
     unittest.main()

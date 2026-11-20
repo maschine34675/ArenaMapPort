@@ -26,6 +26,16 @@ AUTOSERVICE_NAMES = [
     "Cloth/ClothShader_backface",
     "p0/Reflective/Bumped Specular SMap Baked",
 ]
+# Yard (PLAN-YARD item 13, 2026-11-20): AutoService's four plus the two names EFT 0.16.9.5 carries in no file. Item 15 writes the list into the
+# descriptor and the sidecar; until then yard.json has no key (test_yard_shaders_lighting.py pins both states).
+YARD_NAMES = [
+    "Custom/Billboard_FogSheet_Simple",
+    "Cloth/ClothShader",
+    "Cloth/ClothShader_backface",
+    "p0/Reflective/Bumped Specular SMap Baked",
+    "Nature/SpeedTree",
+    "Impostors/Examples/StandardCrossfade",
+]
 BAY5_NAMES = [
     "Custom/WorldTriplanarFresnelPro",
     "ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)",
@@ -49,9 +59,15 @@ class ShaderFallbackNamesSidecarTests(unittest.TestCase):
         # Autoservice (PLAN-AUTOSERVICE item 11/12, 2026-11-11): the four of its 28 shaders that live only in scene shared assets.
         self.assertEqual(sidecar("autoservice")["shader_fallback_names"], AUTOSERVICE_NAMES)
         for path in sorted((REPO / "tools" / "maps").glob("*.json")):
-            if "." in path.stem or path.stem in ("airpit", "bay5", "bowl", "iceberg", "autoservice"):      # Iceberg: test_iceberg_bake_inputs.py pins that it has no row
+            if "." in path.stem or path.stem in ("airpit", "bay5", "bowl", "iceberg", "autoservice", "yard"):      # Iceberg: test_iceberg_bake_inputs.py pins that it has no row; Yard: below
                 continue
             self.assertNotIn("shader_fallback_names", json.loads(path.read_text(encoding="utf-8")), path.name)
+
+    def test_yard_has_no_list_yet_or_exactly_the_decided_six(self):
+        names = sidecar("yard").get("shader_fallback_names")
+        self.assertTrue(names is None or names == YARD_NAMES, names)
+        if names is not None:
+            self.assertEqual(VD.shader_fallback_errors(sidecar("yard")), [])
 
     def test_the_shipped_sidecars_and_registry_agree(self):
         # The full validator run covers every map; this pins that the new field is part of it.

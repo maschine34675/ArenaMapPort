@@ -141,7 +141,10 @@ namespace ArenaMapPort.Shared
     /// duration to the fraction of the path: smoothstep k*k*(3-2k) (the client's stand-in for Bowl's clips), linear k,
     /// inOutQuint (DOTween: k2 = 2k; k2 &lt; 1 ? 0.5*k2^5 : 0.5*((k2-2)^5 + 2)) or curve (Unity AnimationCurve of
     /// <see cref="Curve"/>: a flat array of time, value, inSlope, outSlope per key on a 0..1 timeline, cubic Hermite between
-    /// neighbouring keys with the left key's out slope and the right key's in slope; null for the other eases).
+    /// neighbouring keys with the left key's out slope and the right key's in slope; null for the other eases) or outBack
+    /// (DOTween Ease.OutBack with its default overshoot constant 1.70158: (k-1)^2 * ((s+1)(k-1) + s) + 1; it passes 1 at
+    /// k = 0.370, peaks at 1.1 at k = 0.580 and settles on exactly 1 at k = 1, so the node overshoots its open pose by a
+    /// tenth of the travel; Yard's construction cradle, DotAnimator ease number 27).
     /// <see cref="At"/> is null, or the WORLD position of the barrier root instance the pose is for (the same hierarchy
     /// path occurs twice: Equator's two unnumbered Door_Sliding_Respawn, Bay5's two Gates_Depot_Frame); it matches an
     /// instance within <see cref="AtTolerance"/>. Mirrors the sidecar's "poses" number for number (DoorPoseSidecarTests,
@@ -165,6 +168,11 @@ namespace ArenaMapPort.Shared
         public const string EaseLinear = "linear";
         public const string EaseInOutQuint = "inOutQuint";
         public const string EaseCurve = "curve";
+        public const string EaseOutBack = "outBack";
+
+        /// <summary>The overshoot constant of <see cref="EaseOutBack"/>: DOTween.defaultEaseOvershootOrAmplitude (1.70158), read
+        /// from EFT's DOTween.dll. The sidecar stores no overshoot field; the ease name IS this constant.</summary>
+        public const float OutBackOvershoot = 1.70158f;
 
         /// <summary>A barrier root closer than this (metres) to <see cref="At"/> is the instance the pose is for.</summary>
         public const float AtTolerance = 0.05f;

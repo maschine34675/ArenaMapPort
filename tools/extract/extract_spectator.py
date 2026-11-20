@@ -29,6 +29,15 @@ MAP_SCENES = {
     'bowl': 'Arena_Bowl_DesignStuff',
     'autoservice': 'Arena_AutoService_TeamFight_DesignStuff',
 }
+# PENDING crowd maps (PLAN-YARD item 14, 2026-11-20): a Catalog-only map whose crowd is extracted and validated but not yet staged. stage_spectators and the
+# client csproj read MAP_SCENES only, so a Release or DllOnly client build neither requires nor stages these. Yard's 27 fans live in its TeamFight design scene
+# (level317, root SCAV_SPECTATORS, DISABLED in the source, like Air Pit's). PLAN-YARD item 15 moves the row into MAP_SCENES and empties this dict in the same
+# commit (test_spectator pins both).
+PENDING_MAP_SCENES = {
+    'yard': 'Arena_Yard_TeamFight_DesignStuff',
+}
+# Every map the extractor, the verifier and validate() know: the staged crowd maps plus the pending ones.
+ALL_MAP_SCENES = {**MAP_SCENES, **PENDING_MAP_SCENES}
 CLIPS = ('ArenaFan_Idle_000_loop', 'ArenaFan_Idle_Cheer_001')
 # One optional target absent from every fan and every Transform in source level40.
 # No renderer bone references it. The three P/R/S curves are retained as provenance below.
@@ -143,7 +152,7 @@ def skin_channels(weights, indices, bindpose_count):
 
 
 def validate(data, expected_map=None):
-    scenes = {f'arena_{name}': scene for name, scene in MAP_SCENES.items()}
+    scenes = {f'arena_{name}': scene for name, scene in ALL_MAP_SCENES.items()}
     if data['schema'] != 3 or data['map'] not in scenes:
         raise ValueError('wrong schema/map')
     if expected_map is not None and data['map'] != expected_map:
@@ -253,7 +262,7 @@ def extract(source, output, map_name):
     from common_ids import content_id
     from extract_equator import resolve_shader_name, _decode_cubemap_faces
 
-    source_scene = MAP_SCENES[map_name]
+    source_scene = ALL_MAP_SCENES[map_name]
     settings_env = UnityPy.load(str(source / 'globalgamemanagers'))
     settings = [o.read_typetree() for o in settings_env.objects if o.type.name == 'BuildSettings']
     if len(settings) != 1:
@@ -526,12 +535,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('extract', 'verify'))
     parser.add_argument('--source', type=Path, default=DEFAULT_SOURCE)
-    parser.add_argument('--map', choices=(*MAP_SCENES, 'all'), default='airpit')
+    parser.add_argument('--map', choices=(*ALL_MAP_SCENES, 'all'), default='airpit')
     parser.add_argument('--package', type=Path, help='Override the output/input directory for one map')
     args = parser.parse_args()
     if args.map == 'all' and args.package:
         parser.error('--package requires a single --map')
-    for name in MAP_SCENES if args.map == 'all' else [args.map]:
+    for name in ALL_MAP_SCENES if args.map == 'all' else [args.map]:
         package = args.package or package_path(name)
         if args.command == 'extract':
             extract(args.source, package, name)

@@ -694,10 +694,10 @@ class DotAnimatorDecoderTests(unittest.TestCase):
 
 class EaseMappingTests(unittest.TestCase):
     def test_dotween_ease_numbers_map_to_the_sidecar_names(self):
-        self.assertEqual([E.dot_ease_name(n) for n in (1, 16, 37)], ["linear", "inOutQuint", "curve"])
+        self.assertEqual([E.dot_ease_name(n) for n in (1, 16, 27, 37)], ["linear", "inOutQuint", "outBack", "curve"])
 
     def test_every_other_ease_number_stops_the_tool(self):
-        for number in (0, 2, 3, 17, 18, 36, 38, -1):
+        for number in (0, 2, 3, 17, 18, 26, 28, 36, 38, -1):
             with self.subTest(number=number), self.assertRaises(E.DoorPoseError):
                 E.dot_ease_name(number)
 
@@ -710,6 +710,9 @@ class EaseMappingTests(unittest.TestCase):
                 self.assertAlmostEqual(f(1.0), 1.0, places=9)
                 self.assertEqual((f(-3.0), f(7.0)), (0.0, 1.0))                      # clamped outside the duration
                 values = [f(i / 200) for i in range(201)]
+                if ease == E.EASE_OUT_BACK:                                          # overshoots on purpose: OutBackEaseTests judge its shape
+                    self.assertGreater(max(values), 1.09)
+                    continue
                 self.assertTrue(all(b >= a - 1e-9 for a, b in zip(values, values[1:])), ease)
 
     def test_in_out_quint_is_dotweens_formula(self):
@@ -2840,7 +2843,8 @@ class AutoserviceSidecarTests(unittest.TestCase):
 
     def test_the_pending_list_holds_only_maps_that_are_not_released(self):
         self.assertFalse(set(VD.PENDING_MIRROR_KEYS) & set(VD.RELEASE_MAP_KEYS))
-        self.assertEqual(VD.PENDING_MIRROR_KEYS, ())
+        # PLAN-YARD item 9 (2026-11-20): Yard's door and monitor sidecars validate in themselves ahead of the lock-step promotion; item 15 empties the tuple again
+        self.assertEqual(VD.PENDING_MIRROR_KEYS, ("arena_yard",))
 
 
 class RealAutoserviceTests(unittest.TestCase):
@@ -2978,6 +2982,237 @@ class RealAutoserviceTests(unittest.TestCase):
         table = json.loads(E.KEY_SOURCES.read_text(encoding="utf-8"))["maps"]["arena_autoservice"]
         files = {f for entry in table for f in entry["files"]}
         self.assertFalse({n for n in files if n.startswith(("sharedassets70", "sharedassets136"))}, files)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Yard (PLAN-YARD item 9, 2026-11-20): DOTween ease 27 = OutBack, the DotAnimator row of Arena_Yard_TeamFight_DesignStuff, the pending seam
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+YARD_SCENE = "Arena_Yard_TeamFight_DesignStuff"
+YARD_GATE = "DOORS/Metal_gate_1"
+YARD_CRADLE = "DOORS/Construction_Cradle_02"
+
+
+def yard_descriptor():
+    return json.loads((REPO / "tools" / "maps" / "yard.json").read_text(encoding="utf-8"))
+
+
+class OutBackEaseTests(unittest.TestCase):
+    """DOTween's Ease.OutBack: the enum number 27 (EFT's DOTween.dll, read with ilspycmd on 2026-11-20: Unset 0, Linear 1, InSine 2 ... InOutQuint 16,
+    ... InBack 26, OutBack 27, InOutBack 28, ..., INTERNAL_Zero 36, INTERNAL_Custom 37, which also confirms the two numbers the tool already used) and its
+    formula (EaseManager.Evaluate: (t = k - 1) * t * ((s + 1) * t + s) + 1 with s = DOTween.defaultEaseOvershootOrAmplitude = 1.70158)."""
+
+    S = 1.70158
+
+    def f(self, k):
+        return E.ease_fraction(E.EASE_OUT_BACK, None, k)
+
+    def test_ease_27_is_out_back_and_the_three_known_numbers_did_not_move(self):
+        self.assertEqual(E.DOTWEEN_EASE, {1: "linear", 16: "inOutQuint", 27: "outBack", 37: "curve"})
+        self.assertEqual(E.dot_ease_name(27), "outBack")
+        for number in (26, 28):                          # InBack and InOutBack stay refused: Arena's gates do not use them
+            with self.subTest(number=number), self.assertRaises(E.DoorPoseError):
+                E.dot_ease_name(number)
+        self.assertEqual(E.OUT_BACK_OVERSHOOT, 1.70158)
+        self.assertIn("outBack", E.EASES)
+        self.assertIn("outBack", VD.DOOR_EASES)
+        self.assertEqual(tuple(E.EASES), tuple(VD.DOOR_EASES))             # the tool and the validator agree on the vocabulary, in the same order
+
+    def test_the_formula_is_dotweens_and_exact_at_the_ends(self):
+        for k in (0.0, 0.1, 0.25, 0.37, 0.5, 0.58, 0.9, 0.999, 1.0):
+            t = k - 1.0
+            self.assertAlmostEqual(self.f(k), t * t * ((self.S + 1.0) * t + self.S) + 1.0, places=12)
+        self.assertEqual((self.f(0.0), self.f(1.0)), (0.0, 1.0))
+        self.assertEqual((self.f(-3.0), self.f(7.0)), (0.0, 1.0))
+
+    def test_it_crosses_one_peaks_at_one_point_one_and_settles(self):
+        cross = 1.0 / (self.S + 1.0)
+        peak_at = 1.0 - 2.0 * self.S / (3.0 * (self.S + 1.0))
+        self.assertAlmostEqual(cross, 0.37018, places=4)
+        self.assertAlmostEqual(peak_at, 0.58012, places=4)
+        self.assertAlmostEqual(self.f(cross), 1.0, places=9)
+        self.assertAlmostEqual(self.f(peak_at), 1.1000, places=4)
+        values = [self.f(i / 1000) for i in range(1001)]
+        self.assertAlmostEqual(max(values), 1.1, places=3)
+        top = values.index(max(values))
+        self.assertTrue(all(b >= a - 1e-12 for a, b in zip(values[:top], values[1:top + 1])))        # monotone up to the peak
+        self.assertTrue(all(b <= a + 1e-12 for a, b in zip(values[top:], values[top + 1:])))         # and monotone down to 1 after it
+        self.assertEqual(values[-1], 1.0)
+        self.assertTrue(all(v > 1.0 for v in values[371:1000]))
+
+    def test_the_renderer_adds_the_out_back_sentence_only_to_a_sidecar_that_uses_it(self):
+        def row(ease, part="P"):
+            return {"barrier": "B", "part": part, "node": "", "clip": "DotAnimator", "source": "dotanimator", "seconds": 1.0, "ease": ease,
+                    "curve": None, "at": None, "closed": {"position": [0, 0, 0], "euler": [0, 0, 0]},
+                    "open": {"position": [0, 0, 1], "euler": [0, 0, 0]}}
+        source = {"scene": "S", "level": 1, "assets": "sharedassets1.assets", "arena_version": "x"}
+        plain = json.loads(E.render_sidecar("k", source, [row("linear")]))["_comment"]
+        with_ease = json.loads(E.render_sidecar("k", source, [row("linear"), row("outBack", "Q")]))["_comment"]
+        self.assertEqual(plain, E.SIDECAR_COMMENT)                           # the six released sidecars keep their text byte for byte
+        self.assertEqual(with_ease, E.SIDECAR_COMMENT + E.SIDECAR_COMMENT_OUT_BACK)
+        self.assertIn("1.70158", with_ease)
+
+
+class YardDoorSidecarTests(unittest.TestCase):
+    """The tracked tools/maps/yard.doors.json (no Arena): three DotAnimator rows, written by the extractor on 2026-11-20 from Arena 0.6.2.0.48473."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = sidecar_doc("yard")
+        cls.rows = cls.doc["poses"]
+
+    def test_the_header_and_the_source(self):
+        self.assertEqual((self.doc["schema_version"], self.doc["key"]), (2, "arena_yard"))
+        self.assertEqual(self.doc["source"], {"scene": YARD_SCENE, "level": 317, "assets": "sharedassets317.assets", "arena_version": "0.6.2.0.48473"})
+        self.assertEqual(E.scene_level_index("arena_yard", YARD_SCENE), 317)
+        self.assertIn(YARD_SCENE, yard_descriptor()["all_scene_names"])
+        self.assertTrue(self.doc["_comment"].startswith(E.SIDECAR_COMMENT))
+        self.assertTrue(self.doc["_comment"].endswith(E.SIDECAR_COMMENT_OUT_BACK))
+        self.assertNotIn(E.SIDECAR_COMMENT_SWITCHES, self.doc["_comment"])                 # no switch row, no repeated name
+
+    def test_two_rotating_leaves_and_a_rising_gondola(self):
+        by = {(p["barrier"], p["part"]): p for p in self.rows}
+        self.assertEqual(sorted(by), [(YARD_CRADLE, "Construction_Cradle_02_A"), (YARD_GATE, "gate_door_1"), (YARD_GATE, "gate_door_2")])
+        for part, angle, x in (("gate_door_1", 90.0, 1.89), ("gate_door_2", -90.0, -1.89)):
+            p = by[(YARD_GATE, part)]
+            self.assertEqual((p["node"], p["source"], p["ease"], p["seconds"], p["curve"], p["at"]), ("", "dotanimator", "linear", 1.7, None, None))
+            self.assertEqual(p["closed"], {"position": [x, 0.0, 1.0], "euler": [0.0, 0.0, 0.0]})
+            self.assertEqual(p["open"], {"position": [x, 0.0, 1.0], "euler": [0.0, 0.0, angle]})      # a pure turn about local z, no slide
+        c = by[(YARD_CRADLE, "Construction_Cradle_02_A")]
+        self.assertEqual((c["node"], c["source"], c["ease"], c["seconds"], c["curve"], c["at"]), ("", "dotanimator", "outBack", 8.0, None, None))
+        self.assertEqual(c["closed"], {"position": [0.0, 0.0, 0.15], "euler": [0.0, 0.0, 0.0]})
+        self.assertEqual(c["open"], {"position": [0.0, 0.0, 2.596], "euler": [0.0, 0.0, 0.0]})
+        self.assertAlmostEqual(c["open"]["position"][2] - c["closed"]["position"][2], 2.446, places=6)
+
+    def test_the_rows_validate_in_themselves_while_yard_is_pending(self):
+        self.assertIn("arena_yard", VD.PENDING_MIRROR_KEYS)
+        descriptor = yard_descriptor()
+        path = REPO / "tools" / "maps" / "yard.doors.json"
+        self.assertEqual(VD.door_pose_errors(descriptor, path, None), [])
+        # the barrier rule is waived only while the descriptor has no opened_barriers (plan item 10 adds the two unit paths) ...
+        self.assertEqual(VD.door_pose_errors(dict(descriptor, opened_barriers=[YARD_GATE, YARD_CRADLE], start_gates=[YARD_GATE, YARD_CRADLE]), path, None), [])
+        errors = VD.door_pose_errors(dict(descriptor, opened_barriers=[YARD_GATE]), path, None)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("is not an opened_barriers entry", errors[0])
+        # ... and the pending seam is Yard's alone: another key gets no waiver, and a registry without Yard's rows is a mirror error then
+        self.assertTrue(VD.door_pose_errors(dict(descriptor, key="arena_equator"), path, None))
+        from unittest.mock import patch
+        with patch.object(VD, "PENDING_MIRROR_KEYS", ()):
+            self.assertTrue(VD.door_pose_errors(descriptor, path, None))
+
+    def test_the_validator_judges_the_ease_vocabulary(self):
+        descriptor = yard_descriptor()
+
+        def run(change):
+            doc = copy.deepcopy(self.doc)
+            change(doc)
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "yard.doors.json"
+                path.write_text(json.dumps(doc), encoding="utf-8")
+                return VD.door_pose_errors(descriptor, path, None)
+
+        self.assertEqual(run(lambda d: None), [])
+        self.assertTrue(run(lambda d: d["poses"][0].update(ease="OutBack")))             # the name is case-exact
+        self.assertTrue(run(lambda d: d["poses"][0].update(ease="inBack")))
+        self.assertTrue(run(lambda d: d["poses"][0].update(ease="smoothstep")))          # smoothstep stays the stand-in for Mecanim clips only
+        self.assertTrue(run(lambda d: d["poses"][0].update(ease="outBack", curve=[[0.0, 0.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]])))   # a curve only with ease curve
+        self.assertEqual(run(lambda d: d["poses"][1].update(ease="outBack")), [])        # outBack on any DotAnimator row is a legal row
+
+    def test_the_scan_row_reads_the_barriers_one_level_below_doors(self):
+        scans = E.DOT_SOURCES["arena_yard"]["scans"]
+        self.assertEqual(scans, [{"root": "DOORS", "depth": 2, "at": False}])
+        self.assertEqual(E.DOT_SOURCES["arena_yard"]["scene"], YARD_SCENE)
+        self.assertNotIn("arena_yard", E.MAP_SOURCES)                                      # DotAnimators only: no Animator, no clip
+
+    def test_the_released_maps_scan_rows_are_untouched(self):
+        # PLAN-YARD item 9: the five DOT_SOURCES rows of the released maps keep their text, and the extractor's table gained exactly Yard's
+        self.assertEqual(sorted(E.DOT_SOURCES), ["arena_airpit", "arena_autoservice", "arena_bay5", "arena_equator", "arena_iceberg", "arena_yard"])
+        self.assertEqual(E.DOT_SOURCES["arena_iceberg"]["scans"], [{"root": "DOORS", "depth": 3, "at": True}])
+        self.assertEqual(E.DOT_SOURCES["arena_bay5"]["scans"], [{"root": "WAREHOUSE_DOORS (1)", "depth": 2, "at": False},
+                                                                  {"root": "OLD_WAREHOUSE_DOORS", "depth": 2, "at": True}])
+
+
+class RealYardTests(unittest.TestCase):
+    """Yard's sidecar against the installed Arena (skipped without it) and the world drives the plan quotes."""
+
+    @classmethod
+    def setUpClass(cls):
+        for name in ("level317", "sharedassets317.assets"):
+            if not (ARENA_DATA / name).is_file():
+                raise unittest.SkipTest("Arena is not installed")
+        try:
+            import UnityPy  # noqa: F401
+        except ImportError:
+            raise unittest.SkipTest("UnityPy is not installed")
+        package = Path(os.environ.get("ARENAMAPPORT_EXTRACT_ROOT", REPO / "work" / "extract")) / "yard-native-v2"
+        cls.package = package if (package / "scenes" / f"{YARD_SCENE}.json").is_file() else None
+        cls.text, cls.source, cls.summary = E.extract("arena_yard", "auto", cls.package)
+
+    def test_the_tracked_sidecar_is_what_the_installed_arena_yields(self):
+        tracked = sidecar_doc("yard")
+        fresh = json.loads(self.text)
+        self.assertEqual(fresh["poses"], tracked["poses"])
+        strip = lambda s: {k: v for k, v in s.items() if k != "arena_version"}
+        self.assertEqual(strip(fresh["source"]), strip(tracked["source"]))
+        self.assertEqual(fresh["_comment"], tracked["_comment"])
+        self.assertEqual(self.text, E.extract("arena_yard", "auto", None)[0])                 # byte-stable with or without the package
+        self.assertNotIn("\r", self.text)
+
+    def test_the_summary_counts_three_animators_and_nothing_else(self):
+        scan = [line for line in self.summary if line.startswith("scan DOORS")][0]
+        self.assertIn("3 DotAnimator(s), 3 element(s), 3 pose(s) (0 switch row(s)), 0 inactive, 0 switch element(s) skipped", scan)
+        self.assertEqual(self.summary[-1], "poses 3: 3 dotanimator")
+        self.assertFalse([line for line in self.summary if line.startswith("WARN ")])
+        if self.package is not None:
+            self.assertTrue(any(line.startswith("package check: 3 pose(s) exist in yard-native-v2") for line in self.summary))
+
+    def test_the_element_words_carry_the_ease_numbers_and_no_overshoot_value(self):
+        # the DotAnimator element has no serialized overshoot: no word of the three elements is 1.70158 (0x3FD9C... as a float), so the default is the only candidate
+        data_dir, _ = E.find_arena("auto")
+        scene = E.ArenaScene(data_dir, 317)
+        seen = {}
+        for root in scene.find_path("DOORS"):
+            for _rel, tpid in [("", root), *scene.descendants(root)]:
+                for obj in scene.monobehaviours(tpid):
+                    if scene.mono_class(obj) != E.DOT_SCRIPT:
+                        continue
+                    raw = obj.get_raw_data()
+                    *_head, off = E.parse_mono_head(raw)
+                    words = struct.unpack("<%df" % ((len(raw) - off) // 4), raw[off:])
+                    self.assertFalse([w for w in words if abs(w - 1.70158) < 1e-5], scene.path(tpid))
+                    for element in E.decode_dot_animator(raw).elements:
+                        seen[scene.path(tpid)] = (element.kind, element.ease, round(element.seconds, 3))
+        self.assertEqual(seen, {f"{YARD_GATE}/gate_door_1": (E.DOT_KIND_ROTATE, 1, 1.7), f"{YARD_GATE}/gate_door_2": (E.DOT_KIND_ROTATE, 1, 1.7),
+                                f"{YARD_CRADLE}/Construction_Cradle_02_A": (E.DOT_KIND_MOVE, 27, 8.0)})
+
+    def test_the_cradle_rises_straight_up_in_the_world_and_the_leaves_turn_about_a_vertical_axis(self):
+        data_dir, _ = E.find_arena("auto")
+        scene = E.ArenaScene(data_dir, 317)
+        for barrier, part, rise in ((YARD_CRADLE, "Construction_Cradle_02_A", 2.446), (YARD_GATE, "gate_door_1", 0.0), (YARD_GATE, "gate_door_2", 0.0)):
+            root = scene.find_path(barrier)
+            self.assertEqual(len(root), 1)
+            node = [t for rel, t in scene.descendants(root[0]) if rel == part][0]
+            chain = []
+            t = node
+            while t:
+                chain.append(scene.local(t))
+                t = scene.tr[t]["m_Father"]["m_PathID"]
+            chain.reverse()
+            row = [p for p in sidecar_doc("yard")["poses"] if p["barrier"] == barrier and p["part"] == part][0]
+            closed, opened = list(chain), list(chain)
+            closed[-1] = (tuple(row["closed"]["position"]), chain[-1][1], chain[-1][2])
+            opened[-1] = (tuple(row["open"]["position"]), chain[-1][1], chain[-1][2])
+            drive = [b - a for a, b in zip(E.world_position_of(closed), E.world_position_of(opened))]
+            self.assertAlmostEqual(drive[0], 0.0, delta=0.002)
+            self.assertAlmostEqual(drive[2], 0.0, delta=0.002)
+            self.assertAlmostEqual(drive[1], rise, delta=0.002, msg=(barrier, drive))             # world y: the gondola rises 2.446 m, a leaf stays where it is
+            # the node's local z axis in the world (the rotation of a leaf, the travel of the gondola) is the vertical
+            rot = (0.0, 0.0, 0.0, 1.0)
+            for _lp, lr, _ls in chain:
+                rot = E.quat_mul(rot, tuple(lr))
+            axis = E.quat_rotate(rot, (0.0, 0.0, 1.0))
+            self.assertAlmostEqual(abs(axis[1]), 1.0, delta=1e-3, msg=(barrier, axis))
+
 
 if __name__ == "__main__":
     unittest.main()

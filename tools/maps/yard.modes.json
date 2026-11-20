@@ -1,0 +1,466 @@
+{
+  "_comment": "Arena TeamFight mode objects (positions only) composed from the extracted scenes by tools/extract/extract_mode_objects.py; schema and method in docs/progress/airpit-release.md. Data for ArenaMode, not read by the map mod itself.",
+  "capture_point": {
+    "lights": [
+      {
+        "path": "CAPTURE_POINT/YARD_CAPTURE_POINT_LIGHT_02",
+        "position": [
+          -62.5245,
+          6.1262,
+          72.1887
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff"
+      },
+      {
+        "path": "CAPTURE_POINT/YARD_CAPTURE_POINT_LIGHT_01",
+        "position": [
+          -29.3245,
+          6.1262,
+          71.6287
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff"
+      }
+    ],
+    "method": "capture_point_light_centroid",
+    "position": [
+      -45.9245,
+      6.1262,
+      71.9087
+    ]
+  },
+  "capture_zones": [
+    {
+      "anchor_position": [
+        -10.461,
+        6.1226,
+        83.9136
+      ],
+      "at_origin": false,
+      "distance_to_capture_point": 37.4403,
+      "path": "Capture_Zone",
+      "position": [
+        -10.461,
+        6.1226,
+        83.9136
+      ],
+      "projection_position": null,
+      "scene": "Arena_Yard_TeamFight"
+    },
+    {
+      "anchor_position": [
+        -10.461,
+        6.1226,
+        83.9136
+      ],
+      "at_origin": false,
+      "distance_to_capture_point": 37.4403,
+      "path": "Capture_Zone",
+      "position": [
+        -10.461,
+        6.1226,
+        83.9136
+      ],
+      "projection_position": null,
+      "scene": "Arena_Yard_TeamFight_DesignStuff"
+    }
+  ],
+  "counts": {
+    "capture_zones": 2,
+    "spawn_bounds": 2,
+    "spawn_markers_north": 10,
+    "spawn_markers_south": 10
+  },
+  "map_key": "arena_yard",
+  "schema_version": 1,
+  "side_rule": {
+    "cut_distance": 129.6377,
+    "method": "pocket_split",
+    "naming": "north = the pocket with the larger mean z, south = the other",
+    "pocket_spread": 16.4019,
+    "pockets": {
+      "north": {
+        "centroid_xz": [
+          -7.1777,
+          148.0637
+        ],
+        "markers": 10
+      },
+      "south": {
+        "centroid_xz": [
+          -16.3181,
+          9.3469
+        ],
+        "markers": 10
+      }
+    }
+  },
+  "source_package": {
+    "extracted_utc": "2026-11-20T19:08:54Z",
+    "extractor_script": "tools/extract/extract_map.py",
+    "name": "yard-native-v2",
+    "scenes": [
+      "Arena_Yard",
+      "Arena_Yard_Grass",
+      "Arena_Yard_DesignStuff",
+      "Arena_Yard_TeamFight",
+      "Arena_Yard_TeamFight_DesignStuff",
+      "Arena_Yard_Light"
+    ]
+  },
+  "spawn_bounds": [
+    {
+      "active": true,
+      "center": [
+        -7.418,
+        8.1217,
+        148.4042
+      ],
+      "name": "SPAWN_BOUND_FIGHTER (1)",
+      "path": "SPAWNS/SPAWN_BOUND_FIGHTER (1)",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scene": "Arena_Yard_TeamFight_DesignStuff",
+      "side": "north",
+      "size": [
+        15.341,
+        5.5884,
+        14.5735
+      ],
+      "yaw": 0.0
+    },
+    {
+      "active": true,
+      "center": [
+        -15.2116,
+        9.1217,
+        8.7239
+      ],
+      "name": "SPAWN_BOUND_FIGHTER",
+      "path": "SPAWNS/SPAWN_BOUND_FIGHTER",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scene": "Arena_Yard_TeamFight_DesignStuff",
+      "side": "south",
+      "size": [
+        20.4285,
+        5.5884,
+        16.0009
+      ],
+      "yaw": 0.0
+    }
+  ],
+  "spawn_markers": {
+    "north": [
+      {
+        "active": true,
+        "index": 5,
+        "name": "Bear house (5)",
+        "path": "SPAWNS/Bear house (5)",
+        "position": [
+          -5.6512,
+          6.1873,
+          144.096
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 255.0
+      },
+      {
+        "active": true,
+        "index": 6,
+        "name": "Bear house (6)",
+        "path": "SPAWNS/Bear house (6)",
+        "position": [
+          -7.2152,
+          6.1923,
+          146.586
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 204.3006
+      },
+      {
+        "active": true,
+        "index": 7,
+        "name": "Bear house (7)",
+        "path": "SPAWNS/Bear house (7)",
+        "position": [
+          -10.8252,
+          6.1773,
+          145.085
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 164.9995
+      },
+      {
+        "active": true,
+        "index": 8,
+        "name": "Bear house (8)",
+        "path": "SPAWNS/Bear house (8)",
+        "position": [
+          -12.6562,
+          6.1773,
+          148.057
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 172.1205
+      },
+      {
+        "active": true,
+        "index": 9,
+        "name": "Bear house (9)",
+        "path": "SPAWNS/Bear house (9)",
+        "position": [
+          -5.2152,
+          6.1773,
+          150.206
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 223.2587
+      },
+      {
+        "active": true,
+        "index": 10,
+        "name": "Bear house (10)",
+        "path": "SPAWNS/Bear house (10)",
+        "position": [
+          -8.2632,
+          6.1773,
+          149.683
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 178.2587
+      },
+      {
+        "active": true,
+        "index": 11,
+        "name": "Bear house (11)",
+        "path": "SPAWNS/Bear house (11)",
+        "position": [
+          -8.3852,
+          6.1773,
+          153.506
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 181.1123
+      },
+      {
+        "active": true,
+        "index": 12,
+        "name": "Bear house (12)",
+        "path": "SPAWNS/Bear house (12)",
+        "position": [
+          -2.0452,
+          6.1773,
+          152.166
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 227.7909
+      },
+      {
+        "active": true,
+        "index": 13,
+        "name": "Bear house (13)",
+        "path": "SPAWNS/Bear house (13)",
+        "position": [
+          -1.7652,
+          6.1773,
+          148.416
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 269.6875
+      },
+      {
+        "active": true,
+        "index": 14,
+        "name": "Bear house (14)",
+        "path": "SPAWNS/Bear house (14)",
+        "position": [
+          -9.7552,
+          6.1773,
+          142.836
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 179.6875
+      }
+    ],
+    "south": [
+      {
+        "active": true,
+        "index": 5,
+        "name": "Usec house (5)",
+        "path": "SPAWNS/Usec house (5)",
+        "position": [
+          -14.2502,
+          7.2673,
+          4.794
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Usec house",
+        "yaw": 345.319
+      },
+      {
+        "active": true,
+        "index": 6,
+        "name": "Usec house (6)",
+        "path": "SPAWNS/Usec house (6)",
+        "position": [
+          -16.3742,
+          7.2653,
+          9.801
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Usec house",
+        "yaw": 28.2439
+      },
+      {
+        "active": true,
+        "index": 7,
+        "name": "Usec house (7)",
+        "path": "SPAWNS/Usec house (7)",
+        "position": [
+          -22.5742,
+          7.5003,
+          9.834
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Usec house",
+        "yaw": 24.8881
+      },
+      {
+        "active": true,
+        "index": 8,
+        "name": "Usec house (8)",
+        "path": "SPAWNS/Usec house (8)",
+        "position": [
+          -19.4762,
+          7.2693,
+          10.224
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Usec house",
+        "yaw": 358.2441
+      },
+      {
+        "active": true,
+        "index": 9,
+        "name": "Usec house (9)",
+        "path": "SPAWNS/Usec house (9)",
+        "position": [
+          -14.8642,
+          7.2673,
+          13.299
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Usec house",
+        "yaw": 283.2444
+      },
+      {
+        "active": true,
+        "index": 10,
+        "name": "Usec house (10)",
+        "path": "SPAWNS/Usec house (10)",
+        "position": [
+          -12.6752,
+          7.2673,
+          9.876
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Usec house",
+        "yaw": 283.2444
+      },
+      {
+        "active": true,
+        "index": 11,
+        "name": "Usec house (11)",
+        "path": "SPAWNS/Usec house (11)",
+        "position": [
+          -8.3742,
+          7.2673,
+          4.824
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Usec house",
+        "yaw": 283.2444
+      },
+      {
+        "active": true,
+        "index": 12,
+        "name": "Usec house (12)",
+        "path": "SPAWNS/Usec house (12)",
+        "position": [
+          -11.7552,
+          7.2673,
+          4.846
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Usec house",
+        "yaw": 341.152
+      },
+      {
+        "active": true,
+        "index": 13,
+        "name": "Usec house (13)",
+        "path": "SPAWNS/Usec house (13)",
+        "position": [
+          -22.8812,
+          6.8833,
+          12.477
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Usec house",
+        "yaw": 14.603
+      },
+      {
+        "active": true,
+        "index": 14,
+        "name": "Usec house (14)",
+        "path": "SPAWNS/Usec house (14)",
+        "position": [
+          -19.9562,
+          6.8833,
+          13.494
+        ],
+        "scene": "Arena_Yard_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Usec house",
+        "yaw": 350.1978
+      }
+    ]
+  }
+}

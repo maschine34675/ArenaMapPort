@@ -693,7 +693,7 @@ class IcebergFitTests(unittest.TestCase):
         self.assertEqual({n: (s["event_s"], s["body"]) for n, s in entries.items()},
                          {"arena_san_gates_blue": (2.55, [1.0, 2.4]), "arena_san_gates_red": (5.15, [0.8, 5.0]),
                           "arena_equator_old_slide_doors": (2.61, [0.4, 2.45])})
-        self.assertEqual(sorted(fit["map_clips"]), sorted([ICEBERG, AUTOSERVICE]))    # Autoservice's four clips are its own (2026-11-11)
+        self.assertEqual(sorted(fit["map_clips"]), sorted([ICEBERG, AUTOSERVICE, "arena_yard"]))   # Yard joined the table on 2026-11-20 (its own tests at the end of this file)    # Autoservice's four clips are its own (2026-11-11)
 
     def test_the_shared_clip_keeps_equators_entry_for_equator(self):
         fit = G.load_fit()
@@ -1053,7 +1053,7 @@ class AutoserviceRowSidecarTests(unittest.TestCase):
             self.assertEqual((spec["mode"], spec["event_s"], spec["body"]), ("body_cut", event, body), name)
             self.assertNotIn("bake_pitch", spec)
             self.assertIsNone(G.clip_fit(fit, "arena_bowl", name))                                      # no other map sees them
-        self.assertEqual(sorted(fit["map_clips"]), sorted([ICEBERG, AUTOSERVICE]))
+        self.assertEqual(sorted(fit["map_clips"]), sorted([ICEBERG, AUTOSERVICE, "arena_yard"]))   # Yard joined the table on 2026-11-20 (its own tests at the end of this file)
 
     def test_the_crowdless_map_with_no_pitch_bake_ships_the_clips_as_arena_decodes_them(self):
         # the bake exists to keep a key-source clip from shipping byte for byte; these clips live in sharedassets112, which is no key source
@@ -1173,6 +1173,257 @@ class AutoservicePackageTests(unittest.TestCase):
                 self.assertEqual(metadata["m_Name"], entry["id"])
                 self.assertEqual(metadata["m_Resource"]["m_Source"], entry["resource"]["file"])
                 self.assertEqual((PACKAGE / AUTOSERVICE / (entry["id"] + ".wav")).read_bytes(), wav)       # unbaked: as the decoder wrote it
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Yard (2026-11-20, PLAN-YARD item 9): three players of the Sound scene (level 163) serve the TeamFight gates: the two leaves of the north
+# gate (the same clip, volumes 1.0 and 0.9) and the cradle (authored pitch 1.5: pitch-baked). Four more players serve ShootOut and are
+# skipped. Catalog-only until item 15, so the released loops above stay as they are.
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+YARD = "arena_yard"
+YARD_GATE = "DOORS/Metal_gate_1"
+YARD_CRADLE = "DOORS/Construction_Cradle_02"
+YARD_METALL = "arena_yard_gates_metall"
+YARD_FULL = "arena_yard_gates_full"
+HAVE_YARD_PACKAGE = (PACKAGE / YARD / G.MANIFEST_NAME).is_file()
+
+
+def sidecar_of(stem):
+    return json.loads((REPO / "tools" / "maps" / f"{stem}.gatesounds.json").read_text(encoding="utf-8"))
+
+
+def part_units_from(doors_doc):
+    """part_units() for a doors document: a part that moves itself has its node-"" row's closed position as its key."""
+    groups = {}
+    for pose in doors_doc["poses"]:
+        if "switch" in pose:
+            continue
+        at = tuple(pose["at"]) if pose["at"] is not None else None
+        group = groups.setdefault((pose["barrier"], pose["part"], at), set())
+        if pose["node"] == "":
+            group.add(tuple(pose["closed"]["position"]))
+    return [(barrier, part, at, closed) for (barrier, part, at), closes in sorted(groups.items(), key=str) for closed in (sorted(closes) or [None])]
+
+
+class YardRowSidecarTests(unittest.TestCase):
+    """tools/maps/yard.gatesounds.json (tracked): what it says, and that every gate part of the port has exactly one sound."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.path = REPO / "tools" / "maps" / "yard.gatesounds.json"
+        cls.doc = json.loads(cls.path.read_text(encoding="utf-8"))
+        cls.rows = cls.doc["rows"]
+        cls.doors = json.loads((REPO / "tools" / "maps" / "yard.doors.json").read_text(encoding="utf-8"))
+
+    def test_three_rows_two_clips_four_skipped_and_the_mixer_block_of_the_other_maps(self):
+        self.assertEqual((self.doc["schema_version"], self.doc["key"]), (1, YARD))
+        self.assertEqual(len(self.rows), 3)
+        self.assertEqual({c["id"] for c in self.doc["clips"]}, {YARD_METALL, YARD_FULL})
+        self.assertEqual(self.doc["mixer"], sidecar("arena_equator")["mixer"])                      # one mixer block on every map
+        self.assertEqual(self.doc["source"]["gate_scene"], {"scene": "Arena_Yard_TeamFight_DesignStuff", "level": 317})
+        self.assertEqual(self.doc["source"]["sound_scene"], {"level": 163})
+        # the four ShootOut players (two west pockets at x -51 to -55) have no gate of the port within 2 m
+        self.assertEqual(len(self.doc["skipped"]), 4)
+        for item in self.doc["skipped"]:
+            self.assertIn("/Shootout/", item["origin"])
+            self.assertIn("another mode", item["reason"])
+        for clip in self.doc["clips"]:
+            self.assertEqual((clip["asset"], clip["resource"]["file"], clip["format"], clip["channels"], clip["sample_rate"]),
+                             ("sharedassets163.assets", "sharedassets163.resource", "Vorbis", 2, 44100), clip["id"])
+        self.assertEqual({c["id"]: c["seconds"] for c in self.doc["clips"]}, {YARD_METALL: 3.7252, YARD_FULL: 10.0})
+
+    def test_the_two_leaves_have_one_sound_each_and_the_cradle_one_on_its_root(self):
+        by_part = {(r["barrier"], r["part"]): r for r in self.rows}
+        self.assertEqual(sorted(by_part, key=str), [(YARD_CRADLE, None), (YARD_GATE, "gate_door_1"), (YARD_GATE, "gate_door_2")])
+        one, two, cradle = by_part[(YARD_GATE, "gate_door_1")], by_part[(YARD_GATE, "gate_door_2")], by_part[(YARD_CRADLE, None)]
+        self.assertEqual((one["clip"], two["clip"], cradle["clip"]), (YARD_METALL, YARD_METALL, YARD_FULL))
+        self.assertEqual((one["emitter"], two["emitter"], cradle["emitter"]), ([-11.329, 7.203, 127.841], [-8.089, 7.203, 127.841], [-21.006, 9.09, 16.7]))
+        self.assertEqual((one["player_volume"], two["player_volume"], cradle["player_volume"]), (1.0, 0.9, 1.0))
+        self.assertEqual((one["max_distance"], two["max_distance"], cradle["max_distance"]), (20.0, 20.0, 30.0))
+        self.assertEqual((one["min_distance"], two["min_distance"], cradle["min_distance"]), (0.4, 0.4, 0.5))
+        for row in self.rows:
+            self.assertEqual((row["mixer"], row["mixer_db"], row["source_mixer"], row["source_volume"], row["pitch"]), ("ArenaGates", -15.0, None, 1.0, 1.0))
+            self.assertEqual((row["at"], row["closed_position"]), (None, None))
+        # each leaf stands about 0.4 m from its emitter, the two leaves 3.2 m apart: the nearest-place rule gives each its own, no tie with the root
+        self.assertEqual((one["match_distance"], two["match_distance"], cradle["match_distance"]), (0.43, 0.418, 0.0))
+        self.assertAlmostEqual(gain_db(one), -15.0, places=1)
+        self.assertAlmostEqual(gain_db(two), -15.0 + 20 * math.log10(0.9), places=1)
+
+    def test_the_cradle_clip_is_played_at_1_5_and_baked_the_gate_clip_at_1(self):
+        by_clip = {r["clip"]: r for r in self.rows}
+        self.assertEqual((by_clip[YARD_FULL]["authored_pitch"], by_clip[YARD_FULL]["pitch"]), (1.5, 1.0))
+        self.assertEqual((by_clip[YARD_METALL]["authored_pitch"], by_clip[YARD_METALL]["pitch"]), (1.0, 1.0))
+        fit = G.load_fit()
+        self.assertEqual(G.clip_fit(fit, YARD, YARD_FULL)["bake_pitch"], 1.5)
+        self.assertNotIn("bake_pitch", G.clip_fit(fit, YARD, YARD_METALL))
+
+    def test_every_row_resolves_and_every_moving_part_has_exactly_one_sound(self):
+        units = part_units_from(self.doors)
+        self.assertEqual(len(units), 3)
+        self.assertEqual({(u[0], u[1]) for u in units}, {(YARD_CRADLE, "Construction_Cradle_02_A"), (YARD_GATE, "gate_door_1"), (YARD_GATE, "gate_door_2")})
+        for unit in units:
+            found = [r for r in self.rows if G.row_applies(r, unit[0], unit[1], unit[2], unit[3])]
+            self.assertEqual(len(found), 1, f"{unit} has {len(found)} sounds")
+        for row in self.rows:
+            self.assertTrue(G.row_resolves(row, self.doors["poses"]), row["origin"])
+
+    def test_the_validator_accepts_the_sidecar_against_the_descriptor_and_the_door_rows(self):
+        descriptor = json.loads((REPO / "tools" / "maps" / "yard.json").read_text(encoding="utf-8"))
+        self.assertEqual(VD.gate_sound_errors(descriptor, self.path, REPO / "tools" / "maps" / "yard.doors.json"), [])
+        with patch.object(sys, "argv", ["validate_map_descriptors.py"]), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(VD.main(), 0)
+
+    def test_the_text_is_what_the_cli_writes_and_holds_no_hash(self):
+        text = self.path.read_bytes().decode("utf-8").replace("\r\n", "\n")
+        self.assertEqual(text, G.render_rows_sidecar(self.doc))
+        self.assertNotRegex(text, r"[0-9a-f]{40,}")
+
+    def test_the_maps_row_needs_no_option_and_the_fit_entries_are_this_maps_own(self):
+        self.assertEqual(G.MAPS[YARD], {"stem": "yard", "scenes": ("sound",)})                           # default margin and nearest-place rule
+        fit = G.load_fit()
+        self.assertEqual(sorted(fit["map_clips"][YARD]), sorted([YARD_METALL, YARD_FULL]))
+        self.assertFalse({YARD_METALL, YARD_FULL} & set(fit["clips"]))                                   # the shared table is the four older maps'
+        self.assertEqual(fit["map_clips"][YARD][YARD_METALL], {"mode": "body_cut", "event_s": 1.55, "body": [0.95, 1.4]})
+        self.assertEqual(fit["map_clips"][YARD][YARD_FULL], {"mode": "body_cut", "bake_pitch": 1.5, "event_s": 5.07, "body": [0.5, 4.85]})
+        for name in (YARD_METALL, YARD_FULL):
+            self.assertIsNone(G.clip_fit(fit, "arena_bowl", name))                                       # no other map sees them
+        self.assertEqual(sorted(fit["map_clips"]), sorted([ICEBERG, AUTOSERVICE, YARD]))
+
+    def test_the_released_maps_sidecars_know_nothing_of_yard(self):
+        for key in MAPS + (ICEBERG, AUTOSERVICE):
+            text = (REPO / "tools" / "maps" / f"{STEM[key]}.gatesounds.json").read_text(encoding="utf-8")
+            self.assertNotIn("arena_yard", text, key)
+        self.assertEqual((len(sidecar(ICEBERG)["rows"]), len(sidecar(AUTOSERVICE)["rows"])), (6, 4))
+
+    def test_the_clips_live_in_no_key_source_file_of_any_map(self):
+        files = G.key_source_files()                                         # the base names of every map's sampled streams, Yard's own included
+        self.assertNotIn("sharedassets163.resource", files)
+        self.assertNotIn("sharedassets163.assets", files)
+        for clip in self.doc["clips"]:
+            self.assertNotIn(Path(clip["resource"]["file"]).name, files)
+        table = json.loads(G.KEY_SOURCES.read_text(encoding="utf-8"))["maps"][YARD]
+        self.assertEqual(sorted({Path(f).name for entry in table for f in entry["files"]}),
+                         ["sharedassets310.assets.resS", "sharedassets72.assets.resS", "sharedassets74.assets.resS"])
+
+
+@unittest.skipUnless(HAVE_ARENA, "Arena is not installed")
+class RealYardRowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if not (ARENA / "level163").is_file() or not (ARENA / "level317").is_file():
+            raise unittest.SkipTest("Arena has no Yard levels")
+        cls.version = G.doors.arena_version(ARENA)
+        cls.mixers = G.MixerBook(ARENA)
+
+    def test_the_tracked_sidecar_is_what_the_installed_arena_gives(self):
+        doc = G.extract_rows(YARD, ARENA, self.version, self.mixers)
+        tracked = (REPO / "tools" / "maps" / "yard.gatesounds.json").read_bytes().decode("utf-8").replace("\r\n", "\n")
+        self.assertEqual(as_read_from(G.render_rows_sidecar(doc), self.version, tracked), tracked)
+
+    def test_the_sound_scene_holds_seven_players_and_the_numbers_are_the_survey_ones(self):
+        scene = G.doors.ArenaScene(ARENA, 163)
+        emitters = G.read_emitters(scene, 163)
+        self.assertEqual(len(emitters), 7)
+        by_path = {e.path.removeprefix("ARENA_GATES_SOUND/"): e.player for e in emitters}
+        self.assertEqual((by_path["gate_door_1"]["pitch"], by_path["gate_door_1"]["volume"]), (1.0, 1.0))
+        self.assertAlmostEqual(by_path["gate_door_2"]["volume"], 0.9, places=5)
+        self.assertEqual(by_path["Construction_Cradle_02_A"]["pitch"], 1.5)
+        shootout = [p for p in by_path if p.startswith("Shootout/")]
+        self.assertEqual(len(shootout), 4)
+        for path in shootout:
+            self.assertAlmostEqual(by_path[path]["pitch"], 1.2, places=5)
+        for emitter in emitters:
+            self.assertEqual(self.mixers.group(emitter.player["mixer"][1])["name"] if emitter.player["mixer"][1] else None, "ArenaGates")
+
+    def test_the_default_join_rules_are_enough(self):
+        doc = G.extract_rows(YARD, ARENA, self.version, self.mixers)
+        self.assertEqual(sorted(r["match_distance"] for r in doc["rows"]), [0.0, 0.418, 0.43])
+
+
+@unittest.skipUnless(HAVE_YARD_PACKAGE, "work/extract/gate-sounds/arena_yard is not extracted (tools/extract/extract_gate_sounds.py clips --map arena_yard)")
+class YardPackageTests(unittest.TestCase):
+    """Yard's ignored package as the extractor left it: manifest, WAVs, seam tables, the key-source rule over EVERY map (skips without it)."""
+
+    FRAMES = {YARD_METALL: 164280, YARD_FULL: 294000}
+    PICKS_AT_HALF = {YARD_METALL: (0.098, 1.452), YARD_FULL: (2.502, 2.568)}    # removal and where the end event lands at SpawnGateDriveScale 0.5
+    SEAMS_OK = {YARD_METALL: (1, 2), YARD_FULL: (32, 41)}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manifest = json.loads((PACKAGE / YARD / G.MANIFEST_NAME).read_text(encoding="utf-8"))
+
+    def test_manifest_rows_are_the_tracked_rows_and_every_wav_is_intact(self):
+        manifest = self.manifest
+        self.assertEqual((manifest["schema_version"], manifest["map_key"]), (1, YARD))
+        self.assertEqual(manifest["rows"], sidecar_of("yard")["rows"])
+        self.assertEqual(manifest["mixer"], sidecar_of("yard")["mixer"])
+        self.assertEqual(sorted(p.name for p in (PACKAGE / YARD).iterdir()), sorted([G.MANIFEST_NAME] + [c["file"] for c in manifest["clips"]]))
+        self.assertEqual({c["id"] for c in manifest["clips"]}, {YARD_METALL, YARD_FULL})
+        for clip in manifest["clips"]:
+            with self.subTest(clip=clip["id"]):
+                blob = (PACKAGE / YARD / clip["file"]).read_bytes()
+                self.assertEqual((clip["bytes"], clip["sha256"]), (len(blob), hashlib.sha256(blob).hexdigest()))
+                self.assertEqual((clip["channels"], clip["sampleRate"], clip["frames"]), (2, 44100, self.FRAMES[clip["id"]]))
+                self.assertEqual(len(blob), 44 + 4 * clip["frames"])
+                baked = clip["id"] == YARD_FULL
+                self.assertEqual((clip["pitch_baked"], clip["baked_pitch"]), (baked, 1.5 if baked else 1.0))
+                self.assertEqual(set(clip["source"]), {"asset", "path_id", "format", "resource"})
+        # the baked clip is the authored 10.0 s over the pitch: int(441000 / 1.5) frames
+        self.assertEqual(self.FRAMES[YARD_FULL], int(441000 / 1.5))
+
+    def test_seam_tables_are_consistent_and_the_runtime_picks_are_the_reviewed_ones(self):
+        for clip in self.manifest["clips"]:
+            fit = clip["fit"]
+            with self.subTest(clip=clip["id"]):
+                self.assertEqual(fit["mode"], "body_cut")
+                self.assertEqual((fit["xfade_s"], fit["xfade_f"]), (0.06, 2646))
+                self.assertEqual((sum(1 for s in fit["seams"] if s["ok"]), len(fit["seams"])), self.SEAMS_OK[clip["id"]])
+                lo, hi = fit["body_f"]
+                for seam in fit["seams"]:
+                    self.assertAlmostEqual((seam["c1f"] - seam["c0f"]) / 44100, seam["remove_s"], delta=0.001)
+                    self.assertGreaterEqual(seam["c0f"] - fit["xfade_f"], lo)
+                    self.assertLessEqual(seam["c1f"], hi + int(0.005 * 44100))
+                half = [s for s in fit["seams"] if s["ok"] and s["remove_s"] <= 0.5 * fit["event_s"] + 1e-9]
+                pick = max(half, key=lambda s: s["remove_s"])
+                removal, lands = self.PICKS_AT_HALF[clip["id"]]
+                self.assertEqual(pick["remove_s"], removal)
+                self.assertAlmostEqual(fit["event_s"] - pick["remove_s"], lands, places=3)
+        # the cradle's end event lands 0.03 s after the ideal 0.5 x event; the gate clip's 0.68 s late (only one 0.1 s seam is ok between its two bumps)
+        late = {c["id"]: round(self.PICKS_AT_HALF[c["id"]][1] - 0.5 * c["fit"]["event_s"], 3) for c in self.manifest["clips"]}
+        self.assertEqual(late, {YARD_METALL: 0.677, YARD_FULL: 0.033})
+
+    def test_no_shipped_sample_run_occurs_in_a_key_source_file_of_any_map(self):
+        if not (ARENA / "level163").is_file():
+            self.skipTest("Arena is not installed")
+        table = json.loads(G.KEY_SOURCES.read_text(encoding="utf-8"))["maps"]
+        files = sorted({ARENA / Path(f).name for entries in table.values() for entry in entries for f in entry["files"]})
+        present = [f for f in files if f.is_file()]
+        self.assertEqual(len(present), len(files), [f.name for f in files if not f.is_file()])    # every sampled stream of the seven maps is there
+        for clip in self.manifest["clips"]:
+            self.assertNotIn(Path(clip["source"]["resource"]["file"]).name, {f.name for f in files})
+            pcm = wav_pcm(PACKAGE / YARD / clip["file"])
+            for path in present:
+                with self.subTest(clip=clip["id"], file=path.name):
+                    self.assertFalse(contains_pcm(path, pcm), f"{clip['id']} occurs in {path.name}")
+
+    @unittest.skipUnless(HAVE_ARENA, "Arena is not installed")
+    def test_every_shipped_clip_is_the_decode_of_arenas_clip_or_its_pitch_bake(self):
+        decode = G.arena_decoder(ARENA)
+        fit = G.load_fit()
+        for entry in sidecar_of("yard")["clips"]:
+            with self.subTest(clip=entry["id"]):
+                wav, metadata = decode(entry)
+                shipped = (PACKAGE / YARD / (entry["id"] + ".wav")).read_bytes()
+                self.assertEqual(metadata["m_Name"], entry["id"])
+                self.assertEqual(metadata["m_Resource"]["m_Source"], entry["resource"]["file"])
+                bake = G.clip_fit(fit, YARD, entry["id"]).get("bake_pitch", 1.0)
+                if bake == 1.0:
+                    self.assertEqual(shipped, wav)
+                else:
+                    samples, rate = G.read_wav(wav)
+                    self.assertNotEqual(shipped, wav)
+                    self.assertEqual(shipped, G.write_wav(G.resample_speed(samples, bake), rate))
 
 
 if __name__ == "__main__":

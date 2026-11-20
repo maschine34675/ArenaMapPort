@@ -358,7 +358,7 @@ class OffMapHubRuleTests(unittest.TestCase):
     CORES = [core(1, (0.0, 0.0, -10.0)), core(2, (5.0, 0.0, -2.0))]
 
     def test_only_iceberg_has_a_play_area_row_so_the_released_sidecars_are_untouched(self):
-        self.assertEqual(set(A.PLAY_AREA), {"iceberg", "autoservice"})      # autoservice since PLAN-AUTOSERVICE item 6
+        self.assertEqual(set(A.PLAY_AREA), {"iceberg", "autoservice", "yard"})      # autoservice since PLAN-AUTOSERVICE item 6, yard since PLAN-YARD item 8
         self.assertEqual(ICEBERG_AREA, {"x": (-61.0, 121.0), "z": (-130.0, -33.0)})
         self.assertTrue({"equator", "bay5", "airpit", "bowl"}.isdisjoint(A.PLAY_AREA))
 
@@ -512,9 +512,9 @@ class AutoserviceTableTests(unittest.TestCase):
         self.assertLessEqual(AUTOSERVICE_AREA["z"][0], 486.8 - 81.7 / 2)
         self.assertGreaterEqual(AUTOSERVICE_AREA["z"][1], 486.8 + 81.7 / 2)
 
-    def test_only_iceberg_and_autoservice_have_play_area_and_scene_data_rows(self):
-        self.assertEqual(set(A.PLAY_AREA), {"iceberg", "autoservice"})
-        self.assertEqual(set(A.AI_SCENE_DATA), {"autoservice"})
+    def test_only_the_new_maps_have_play_area_and_scene_data_rows(self):
+        self.assertEqual(set(A.PLAY_AREA), {"iceberg", "autoservice", "yard"})
+        self.assertEqual(set(A.AI_SCENE_DATA), {"autoservice", "yard"})
         self.assertTrue({"equator", "bay5", "airpit", "bowl"}.isdisjoint(A.PLAY_AREA))
         self.assertEqual(A.AI_SCENE_DATA["autoservice"],
                          {"born_class": "SpawnPointMarker", "born_count": 16, "mine_class": "AIMinePoint", "mine_count": 23,
@@ -703,6 +703,189 @@ class AutoserviceRealSourceTests(unittest.TestCase):
         groups = self.live["scene_census"]["groups"]
         for name, count in AUTOSERVICE_STALE_ROOTS.items():
             self.assertEqual((groups[name]["beyond"], groups[name]["near"]), (count, 0), name)
+
+
+# --------------------------------------------------------------------------------------------------------------
+# PLAN-YARD item 8 (2026-11-20): Yard's AI scene, born and mine pins, the below-the-floor census
+# --------------------------------------------------------------------------------------------------------------
+
+YARD_AREA = A.PLAY_AREA["yard"]
+YARD_AI_SCENE = (320, "Arena_Yard_AI")
+# Roots of the AI scene whose transforms lie wholly below floor_y - margin (measured 2026-11-20, Arena 0.6.2.0.48473): root -> (transforms, below_floor)
+YARD_BELOW_FLOOR_ROOTS = {"ParentOfBearingPoints": (2697, 2696), "BotCellController": (2, 2), "Shuttle1": (1, 1)}
+
+
+class YardTableTests(unittest.TestCase):
+    """The static rows: nothing here reads Arena."""
+
+    def test_the_play_area_is_arenas_navmesh_surface_volume_rounded_outward(self):
+        # NavMeshSurface centre (-22.8, 71.0), size (87.2, 180.1) in x / z: x -66.4..20.8, z -19.05..161.05
+        self.assertEqual(YARD_AREA, {"x": (-66.4, 20.8), "z": (-19.1, 161.1)})
+        self.assertLessEqual(YARD_AREA["x"][0], -22.8 - 87.2 / 2 + 1e-9)
+        self.assertGreaterEqual(YARD_AREA["x"][1], -22.8 + 87.2 / 2 - 1e-9)
+        self.assertLessEqual(YARD_AREA["z"][0], 71.0 - 180.1 / 2)
+        self.assertGreaterEqual(YARD_AREA["z"][1], 71.0 + 180.1 / 2)
+
+    def test_the_scene_data_row_pins_eleven_born_and_forty_three_mine_points_and_adds_the_floor_census(self):
+        self.assertEqual(A.AI_SCENE_DATA["yard"],
+                         {"born_class": "SpawnPointMarker", "born_count": 11, "mine_class": "AIMinePoint", "mine_count": 43,
+                          "far_field_radius": 400.0, "floor_y": 6.15, "below_floor_margin": 2.0})
+        # the floor census is Yard's alone: Autoservice's row has no floor_y, so its census keeps the keys it always had
+        self.assertNotIn("floor_y", A.AI_SCENE_DATA["autoservice"])
+
+    def test_the_plans_ai_role_is_level320(self):
+        from source_plan import load_plan
+        plan = load_plan(Path(__file__).resolve().parents[1] / "extract" / "plans" / "yard.json")
+        self.assertEqual(A.ai_scene_for_plan(plan), YARD_AI_SCENE)
+        self.assertEqual(A.map_key_for_plan(plan), "yard")
+
+
+class TrackedYardAiSidecarTests(unittest.TestCase):
+    """tools/maps/yard.ai.json: 7 core points, a 4-hub PatrolWay, 11 born points, 43 mine points, a census with the below-the-floor counts."""
+
+    @staticmethod
+    def data():
+        path = MAPS_DIR / "yard.ai.json"
+        if not path.is_file():
+            raise unittest.SkipTest("yard.ai.json not generated yet")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_the_core_points_and_the_patrol_way_are_arenas_and_nothing_was_dropped(self):
+        data = self.data()
+        self.assertEqual(data["map_key"], "yard")
+        self.assertEqual([c["id"] for c in data["core_points"]], list(range(1, 8)))
+        hubs = data["patrol_ways"][0]["hubs"]
+        self.assertEqual(len(data["patrol_ways"]), 1)
+        self.assertEqual(len(hubs), 4)
+        self.assertEqual(sum(len(h["sub_points"]) for h in hubs), 48)      # 4 hubs + 48 sub points = 52 PatrolPoints
+        self.assertNotIn("dropped", data)
+
+    def test_every_anchor_lies_inside_the_play_area_and_the_far_field_radius(self):
+        data = self.data()
+        positions = [c["position"] for c in data["core_points"]] + [b["position"] for b in data["born_points"]] \
+            + [m["position"] for m in data["mine_points"]]
+        for h in data["patrol_ways"][0]["hubs"]:
+            positions.append(h["position"])
+            positions.extend(h["sub_points"])
+        self.assertEqual(len(positions), 7 + 11 + 43 + 4 + 48)
+        centre = A.play_area_centre(YARD_AREA)
+        for p in positions:
+            self.assertTrue(A.inside_play_area(p, YARD_AREA), p)
+            self.assertLess(A.horizontal_distance(p, centre), 400.0, p)
+            self.assertGreater(p[1], 5.9, p)          # every exported anchor stands on or above the 6.15 floor (the bearing points do not)
+
+    def test_the_born_points_are_the_eleven_p1_markers(self):
+        born = self.data()["born_points"]
+        self.assertEqual([b["name"] for b in born], ["p1"] + [f"p1 ({n})" for n in range(1, 11)])
+        for b in born:
+            self.assertTrue(6.0 < b["position"][1] < 7.5, b)
+
+    def test_the_mine_points_are_ai_data_forty_three_amineplaces(self):
+        mines = self.data()["mine_points"]
+        self.assertEqual(len(mines), 43)
+        self.assertTrue(all(m["name"].startswith("AMinePlace_") for m in mines))
+
+    def test_the_census_records_the_bearing_points_beneath_the_floor_and_exports_none_of_it(self):
+        census = self.data()["scene_census"]
+        self.assertEqual((census["floor_y"], census["below_floor_margin"]), (6.15, 2.0))
+        groups = census["groups"]
+        for name, (transforms, below) in YARD_BELOW_FLOOR_ROOTS.items():
+            self.assertEqual((groups[name]["transforms"], groups[name]["below_floor"]), (transforms, below), name)
+        # the bearing points are NOT far away: they lie 22 to 142 m from the play-area centre, which is why the radius rule cannot name them
+        self.assertEqual((groups["ParentOfBearingPoints"]["near"], groups["ParentOfBearingPoints"]["beyond"]), (2696, 0))
+        self.assertEqual(groups["BotCellController"]["beyond"], 2)
+        for name in ("AICorePointHolder", "AIMinesPositionsHolder"):      # the exported classes' containers are wholly on the map
+            self.assertEqual(groups[name]["beyond"], 0, name)
+        totals = census["totals"]
+        self.assertEqual(totals["transforms"], 3065)
+        self.assertEqual(totals["transforms"], totals["near"] + totals["beyond"] + totals["containers"])
+        self.assertEqual((totals["containers"], totals["below_floor"], totals["outside_play_area"]), (19, 2826, 1222))
+        self.assertEqual(sum(g["below_floor"] for g in groups.values()), totals["below_floor"])
+        self.assertEqual(sum(g["transforms"] for g in groups.values()), 3065)
+
+    def test_the_comment_says_what_was_not_exported(self):
+        comment = self.data()["_comment"]
+        self.assertIn("2,696 bearing points", comment)
+        self.assertIn("never exported", comment)
+
+
+class FloorCensusModelTests(unittest.TestCase):
+    """scene_census with floor_y on the stand-in scene of SceneCensusModelTests: the new counts, and the old keys when floor_y is off."""
+
+    @staticmethod
+    def world(f):
+        def world(tobj):
+            tree = tobj.read_typetree()
+            x, y, z = (tree["m_LocalPosition"][k] for k in "xyz")
+            father = tree["m_Father"]["m_PathID"]
+            if father:
+                fx, fy, fz = (f.objects[father].tree["m_LocalPosition"][k] for k in "xyz")
+                x, y, z = x + fx, y + fy, z + fz
+            return (x, y, z)
+        return world
+
+    def test_below_floor_and_outside_play_area_are_counted_per_group_and_containers_are_left_out(self):
+        from unittest import mock
+        f = SceneCensusModelTests().scene([("Holder", None, (0.0, 0.0, 0.0)), ("under", 0, (3.0, 1.0, 4.0)), ("above", 0, (3.0, 6.5, 4.0)),
+                                           ("outside", 0, (500.0, 6.5, 0.0))])
+        area = {"x": (-10.0, 10.0), "z": (-10.0, 10.0)}
+        with mock.patch.object(A, "_world_position", self.world(f)):
+            out = A.scene_census(f, (0.0, 0.0), 400.0, area, 6.15, 2.0)
+            plain = A.scene_census(f, (0.0, 0.0), 400.0)
+        holder = out["groups"]["Holder"]
+        self.assertEqual((holder["transforms"], holder["containers"], holder["below_floor"], holder["outside_play_area"]), (4, 1, 1, 1))
+        self.assertEqual((out["floor_y"], out["below_floor_margin"]), (6.15, 2.0))
+        self.assertEqual(out["totals"]["below_floor"], 1)
+        self.assertEqual(out["totals"]["outside_play_area"], 1)
+        self.assertNotIn("floor_y", plain)
+        self.assertNotIn("below_floor", plain["groups"]["Holder"])
+        self.assertNotIn("below_floor", plain["totals"])
+        self.assertEqual({k: v for k, v in out["groups"]["Holder"].items() if k not in ("below_floor", "outside_play_area")},
+                         plain["groups"]["Holder"])
+
+
+@unittest.skipUnless(os.path.isdir(ARENA_SOURCE), "Arena source not reachable from this machine")
+class YardRealSourceTests(unittest.TestCase):
+    PLAN = Path(__file__).resolve().parents[1] / "extract" / "plans" / "yard.json"
+
+    @classmethod
+    def setUpClass(cls):
+        from source_plan import load_plan
+        plan = load_plan(cls.PLAN)
+        idx, name = A.ai_scene_for_plan(plan)
+        cls.live = A.extract_map(A.map_key_for_plan(plan), idx, name, A.DEFAULT_SOURCE)
+
+    def test_the_tracked_sidecar_is_what_the_extractor_writes_today(self):
+        path = MAPS_DIR / "yard.ai.json"
+        if not path.is_file():
+            self.skipTest("yard.ai.json not generated yet")
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")), json.loads(json.dumps(self.live)))
+
+    def test_the_live_scene_is_seven_core_points_four_hubs_eleven_born_and_forty_three_mine_points(self):
+        self.assertEqual(len(self.live["core_points"]), 7)
+        hubs = self.live["patrol_ways"][0]["hubs"]
+        self.assertEqual((len(hubs), sum(len(h["sub_points"]) for h in hubs)), (4, 48))
+        self.assertEqual((len(self.live["born_points"]), len(self.live["mine_points"])), (11, 43))
+        self.assertNotIn("dropped", self.live)
+
+    def test_a_pinned_count_that_differs_fails_the_run(self):
+        from unittest import mock
+        for key, count, text in (("born_count", 10, "11 SpawnPointMarker object"), ("mine_count", 42, "43 AIMinePoint object")):
+            row = dict(A.AI_SCENE_DATA["yard"], **{key: count})
+            with mock.patch.dict(A.AI_SCENE_DATA, {"yard": row}):
+                with self.assertRaisesRegex(HardExtractError, text):
+                    A.extract_map("yard", YARD_AI_SCENE[0], YARD_AI_SCENE[1], A.DEFAULT_SOURCE)
+
+    def test_a_play_area_that_misses_a_core_point_fails_the_run(self):
+        from unittest import mock
+        with mock.patch.dict(A.PLAY_AREA, {"yard": {"x": (-30.0, 20.8), "z": (-19.1, 161.1)}}):
+            with self.assertRaisesRegex(HardExtractError, "core point"):
+                A.extract_map("yard", YARD_AI_SCENE[0], YARD_AI_SCENE[1], A.DEFAULT_SOURCE)
+
+    def test_the_bearing_points_lie_beneath_the_floor_in_the_live_scene(self):
+        groups = self.live["scene_census"]["groups"]
+        for name, (transforms, below) in YARD_BELOW_FLOOR_ROOTS.items():
+            self.assertEqual((groups[name]["transforms"], groups[name]["below_floor"]), (transforms, below), name)
 
 
 if __name__ == "__main__":

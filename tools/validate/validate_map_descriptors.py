@@ -580,7 +580,7 @@ DOOR_POSE_KEYS = ("barrier", "part", "node", "clip", "source", "seconds", "ease"
 DOOR_SWITCH_KEY = "switch"   # optional (AirPit's passport lamps): {"closed": bool, "open": bool}, a SetActive row
 DOOR_SIDECAR_SCHEMA = 2
 DOOR_SOURCES = ("clip", "dotanimator", "borrowed")
-DOOR_EASES = ("smoothstep", "linear", "inOutQuint", "curve")
+DOOR_EASES = ("smoothstep", "linear", "inOutQuint", "curve", "outBack")   # outBack: DOTween OutBack, constant 1.70158 (Yard's cradle, 2026-11-20)
 DOOR_AT_TOLERANCE = 0.05   # m: the client matches a barrier root instance to `at` within this (ArenaDoorPose.AtTolerance)
 DOOR_CLOSED_TOLERANCE = 0.05   # m: rows that repeat a part name are told apart by the closed position within this
 # Catalog-only maps whose door / monitor sidecars are staged AHEAD of the lock-step promotion (Autoservice, plan item 7 -> item 12; the tuple is empty since the promotion).
@@ -588,7 +588,7 @@ DOOR_CLOSED_TOLERANCE = 0.05   # m: rows that repeat a part name are told apart 
 # ScoreMonitors (the C# literals arrive at the promotion), and the door barrier rule waits for the descriptor's opened_barriers (plan item 8)
 # while it has none. Both waivers apply only while the registry list is EMPTY; the promotion removes the map from this tuple, and main()
 # refuses a map here that is already a released one.
-PENDING_MIRROR_KEYS: tuple[str, ...] = ()   # Autoservice left it at its promotion (PLAN-AUTOSERVICE item 12, 2026-11-11)
+PENDING_MIRROR_KEYS: tuple[str, ...] = ("arena_yard",)   # Yard's door and monitor sidecars (PLAN-YARD items 9 and 10), out again at item 15; Autoservice left at its promotion (item 12, 2026-11-11)
                                # (ArenaDoorPose.ClosedPositionTolerance, DoorPoseModel.SelectRowsForNode)
 # Pose barriers that are NOT opened_barriers entries. Equator's booth doors are opened by BoothDoorRepairs.OpenDoors by the NAME of
 # their leaves, not as barriers; their poses name the assembly root (SPAWN_DOORS/Door_Sliding_Respawn[ (n)], and the fifth door

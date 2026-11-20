@@ -1,0 +1,39 @@
+{
+  "_comment": "PLAN-YARD item 8 (docs/progress/yard-release.md, 2026-11-20): optional sidecar read by tools/server/make_base_json.py next to tools/maps/yard.json; emits base.json 'exits'. The client authors the ExfiltrationPoint objects at runtime from the descriptor's Exits (ArenaMapPort.Shared/ArenaMapDescriptor.cs, added with the lock-step promotion): names, positions and box sizes there must equal this file. OFFLINE DRAFT, not walked on the host; Arena authors no extraction on this map. Rule R3 from the first layout (docs/progress/spawn-rows-and-pocket-exits.md): one exit per team pocket, the 4 x 3 x 4 m box (rotation 0, 8 s, chance 100, Individual) stands INSIDE its pocket with its centre inside the pocket's initial spawn bound of tools/maps/yard.modes.json, so the green flare marks the team's start area; every Player row keeps at least 2.5 m to the box EDGE; the NavMesh has floor under the centre and no solid stands in the box between floor + 0.3 and floor + 2.5 m (port colliders of yard-native-v2, 0.25 m lattice scan). EntryPoints is always the map's infiltration name; names double as locale keys. Block South Gate (-20.75, 7.48, 11.25): the raised platform of the south pocket (the sealed room x -23.5..-7.7, z 2.7..17.9), the box x -22.75..-18.75, z 9.25..13.25 lies wholly inside the initial spawn bound (x -25.43..-5.0, z 0.72..16.72: 2.68 m to its west edge), 2.95 m from the cradle plate's footprint, 77 of the 81 points of a 0.5 m lattice under the box are on Arena's mesh (95.1 %, the platform is narrow; the built mesh decides, plan item 20), two pocket markers stand inside the box (Usec house (7) and (8)) and two more within 0.25 m of its edge ((13), (14)): information, no Player row uses one; 3.89 m from the box edge to the nearest Player row. The only other solid-free candidates lie at yard level beside the pocket (floor 6.15, outside the sealed room) and were not taken. Block North Gate (-3.25, 6.15, 150.5): the east end of the north pocket, the box x -5.25..-1.25, z 148.5..152.5 wholly inside the initial spawn bound (x -15.09..0.25, z 141.12..155.69; 1.50 m to its east edge), 81 of 81 lattice points on the mesh, two pocket markers inside the box (Bear house (9) and (12)) and one within 0.1 m of its edge ((13)): no Player row uses one; 2.74 m from the box edge to the nearest Player row (Bear house (6)). R4 (accepted): in a plain raid both gates are parked open and a player spawns a few metres from an 8 s exit; bots never trigger exits. The names say 'Block' after the map's player-facing name 'Arena: Block' (plan decision 1); a rename is a locale/descriptor change. The y values are Arena's NavMesh surface at the centre; ExfilRepairs samples the floor within 1 m of the authored point at runtime.",
+  "exits": [
+    {
+      "name": "Block South Gate",
+      "position": [
+        -20.75,
+        7.48,
+        11.25
+      ],
+      "box_size": [
+        4.0,
+        3.0,
+        4.0
+      ],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    },
+    {
+      "name": "Block North Gate",
+      "position": [
+        -3.25,
+        6.15,
+        150.5
+      ],
+      "box_size": [
+        4.0,
+        3.0,
+        4.0
+      ],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    }
+  ]
+}

@@ -98,6 +98,31 @@ namespace ArenaMapPort.Client
             return 0.5f * (t * t * t * t * t + 2f);
         }
 
+        /// <summary>DOTween's Ease.OutBack (EaseManager.Evaluate, EFT's DOTween.dll) with the default overshoot constant
+        /// <see cref="ArenaDoorPose.OutBackOvershoot"/>: <c>(t = k - 1) * t * ((s + 1) * t + s) + 1</c>. Exactly 0 at 0 and exactly 1 at 1;
+        /// in between it is NOT monotone: it passes 1 at k = 1 / (s + 1) = 0.370, peaks at 1.1000 at
+        /// k = 1 - 2s / (3 (s + 1)) = 0.580 and comes back down to 1, so a node that follows it overshoots its open pose by a tenth
+        /// of its travel and returns. Yard's construction cradle (a rise of 2.446 m: 0.245 m past the open pose, upward and away from
+        /// the walking band) uses it.</summary>
+        internal static float OutBack(float k)
+        {
+            if (!(k > 0f)) return 0f;
+            if (k >= 1f) return 1f;
+            float t = k - 1f;
+            float s = ArenaDoorPose.OutBackOvershoot;
+            return t * t * ((s + 1f) * t + s) + 1f;
+        }
+
+        /// <summary>Does the path fraction of this ease leave 0..1 on its way (<see cref="OutBack"/>)? Such a node has to be
+        /// interpolated without the clamp that <see cref="Lerp"/> puts on a fraction at or above 1, or the overshoot is cut off
+        /// at the open pose; every other ease keeps the clamped interpolation (a curve that happens to run above 1 stays clipped,
+        /// as the released maps have always played it).</summary>
+        internal static bool OvershootsEnd(string ease) => ease == ArenaDoorPose.EaseOutBack;
+
+        /// <summary>The path fraction at which <see cref="OutBack"/> is highest (0.5801; its value there is 1.1000).</summary>
+        internal static float OutBackPeakAt =>
+            1f - 2f * ArenaDoorPose.OutBackOvershoot / (3f * (ArenaDoorPose.OutBackOvershoot + 1f));
+
         /// <summary>Unity's AnimationCurve.Evaluate on a flat key array (time, value, inSlope, outSlope per key, times
         /// ascending, 0..1 here): the first value before the first key, the last value from the last key on, and between two
         /// keys the cubic Hermite spline with the left key's OUT slope and the right key's IN slope. Bay5's depot gates use
@@ -120,7 +145,7 @@ namespace ArenaMapPort.Client
                    (-2f * s3 + 3f * s2) * vb + (s3 - s2) * dt * inSlope;
         }
 
-        /// <summary>Can a pose's ease be evaluated? One of the four names of <see cref="ArenaDoorPose"/>, and for "curve" a flat
+        /// <summary>Can a pose's ease be evaluated? One of the five names of <see cref="ArenaDoorPose"/>, and for "curve" a flat
         /// key array of at least two keys with finite numbers and strictly ascending times. <paramref name="why"/> says what is
         /// wrong.</summary>
         internal static bool EaseIsUsable(string ease, float[] curve, out string why)
@@ -131,6 +156,7 @@ namespace ArenaMapPort.Client
                 case ArenaDoorPose.EaseSmoothstep:
                 case ArenaDoorPose.EaseLinear:
                 case ArenaDoorPose.EaseInOutQuint:
+                case ArenaDoorPose.EaseOutBack:
                     return true;
                 case ArenaDoorPose.EaseCurve:
                     if (curve == null || curve.Length < 8 || curve.Length % 4 != 0) { why = "a curve ease needs at least two keys of four floats"; return false; }
@@ -161,6 +187,7 @@ namespace ArenaMapPort.Client
                 case ArenaDoorPose.EaseSmoothstep: return Ease(k);
                 case ArenaDoorPose.EaseLinear: return k;
                 case ArenaDoorPose.EaseInOutQuint: return InOutQuint(k);
+                case ArenaDoorPose.EaseOutBack: return OutBack(k);
                 case ArenaDoorPose.EaseCurve: return Hermite(curve, k);
                 default: throw new ArgumentException($"unknown ease '{ease}'");
             }
@@ -191,6 +218,28 @@ namespace ArenaMapPort.Client
             if (!(k > 0f)) return a;
             if (k >= 1f) return b;
             return a + (b - a) * k;
+        }
+
+        /// <summary>Like <see cref="Lerp"/> for a path fraction that may leave 0..1 (<see cref="OvershootsEnd"/>): with
+        /// <paramref name="overshoot"/> a fraction above 1 extrapolates past <paramref name="b"/> (a + (b - a) * f); exactly 1 is still
+        /// <paramref name="b"/> bit for bit, a fraction at or below 0 is <paramref name="a"/>, and without <paramref name="overshoot"/>
+        /// the result is exactly <see cref="Lerp"/>'s.</summary>
+        internal static float PathLerp(float a, float b, float f, bool overshoot)
+        {
+            if (!(f > 0f)) return a;
+            if (f == 1f) return b;
+            if (f > 1f && !overshoot) return b;
+            return a + (b - a) * f;
+        }
+
+        /// <summary>Component-wise <see cref="PathLerp"/> of two 3-element arrays (a position).</summary>
+        internal static void PathLerp3(float[] closed, float[] open, float f, bool overshoot, out float x, out float y, out float z)
+        {
+            if (closed == null || open == null || closed.Length != 3 || open.Length != 3)
+                throw new ArgumentException("a pose is three floats");
+            x = PathLerp(closed[0], open[0], f, overshoot);
+            y = PathLerp(closed[1], open[1], f, overshoot);
+            z = PathLerp(closed[2], open[2], f, overshoot);
         }
 
         /// <summary>Component-wise <see cref="Lerp"/> of two 3-element arrays (positions or euler angles).</summary>

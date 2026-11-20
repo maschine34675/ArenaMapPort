@@ -156,7 +156,7 @@ public sealed class DoorPoseSidecarTests
             }
 
             Assert.Contains(pose.Source, new[] { ArenaDoorPose.SourceClip, ArenaDoorPose.SourceDotAnimator, ArenaDoorPose.SourceBorrowed });
-            Assert.Contains(pose.Ease, new[] { ArenaDoorPose.EaseSmoothstep, ArenaDoorPose.EaseLinear, ArenaDoorPose.EaseInOutQuint, ArenaDoorPose.EaseCurve });
+            Assert.Contains(pose.Ease, new[] { ArenaDoorPose.EaseSmoothstep, ArenaDoorPose.EaseLinear, ArenaDoorPose.EaseInOutQuint, ArenaDoorPose.EaseCurve, ArenaDoorPose.EaseOutBack });
             // smoothstep is the client's stand-in for Mecanim clips and only for them
             Assert.Equal(pose.Source == ArenaDoorPose.SourceClip, pose.Ease == ArenaDoorPose.EaseSmoothstep);
             if (pose.Source == ArenaDoorPose.SourceDotAnimator) Assert.Equal("DotAnimator", pose.Clip);

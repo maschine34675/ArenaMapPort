@@ -19,7 +19,8 @@ namespace ArenaMapPort.Client
     /// Equator's later changes live in the DefaultsRevision migrations of WeatherRig. A map that was never
     /// released with saved keys, like AirPit (grep of both test installs, 2026-10-12: no "arena_airpit"
     /// section), Bowl (PLAN-BOWL item 9, 2026-10-18: no "arena_bowl" section exists) and Iceberg (PLAN-ICEBERG item 12, 2026-10-30:
-    /// none either) and Autoservice (PLAN-AUTOSERVICE item 12, 2026-11-11: none either), needs no migration for its first set of defaults.
+    /// none either) and Autoservice (PLAN-AUTOSERVICE item 12, 2026-11-11: none either) and Yard (PLAN-YARD item 13, 2026-11-20: a Catalog-only map, so
+    /// no section can exist), needs no migration for its first set of defaults.
     ///
     /// Host evidence: Equator (docs/progress/donor-settings-camera-weather.md section 20), Bay5 (sections
     /// 12-19), AirPit rows are first-guess values until the AirPit host raid (docs/progress/airpit-release.md,
@@ -51,7 +52,7 @@ namespace ArenaMapPort.Client
         }
 
         /// <summary>
-        /// Defaults for <c>Lighting (&lt;mapKey&gt;)</c>. Rig-active maps (Equator, Bay5, AirPit, Bowl, Iceberg) get the
+        /// Defaults for <c>Lighting (&lt;mapKey&gt;)</c>. Rig-active maps (Equator, Bay5, AirPit, Bowl, Iceberg, AutoService and, pending its promotion, Yard) get the
         /// Reserve donor set; every other key gets Donor "Off" with neutral values, a complete no-op.
         /// The tuned values below the donor set are map-specific on purpose: Equator's were accepted on the
         /// host (ambient 0.5, reflection 0.85, indoor reflection 0.95, specular cap 0.3, cover 30 percent for
@@ -66,7 +67,8 @@ namespace ArenaMapPort.Client
             bool bowl = mapKey == ArenaMapRegistry.Bowl.Key; // PLAN-BOWL item 9, 2026-10-18
             bool iceberg = mapKey == ArenaMapRegistry.Iceberg.Key; // PLAN-ICEBERG item 12, 2026-10-30
             bool autoService = mapKey == ArenaMapRegistry.AutoService.Key; // PLAN-AUTOSERVICE item 12, 2026-11-11
-            bool rig = bay5 || equator || airPit || bowl || iceberg || autoService;
+            bool yard = mapKey == ArenaMapRegistry.Yard.Key; // PLAN-YARD item 13, 2026-11-20 (Catalog-only until item 15: no raid reaches this row before the promotion)
+            bool rig = bay5 || equator || airPit || bowl || iceberg || autoService || yard;
             return new RigValues
             {
                 Donor = rig ? ReserveDonor : OffDonor,
@@ -77,9 +79,15 @@ namespace ArenaMapPort.Client
                 // minus 4.4 gives -3.7 (PLAN-ICEBERG item 12; -6.2 from the lowest walkable ground, -1.2 from the modal floor are the
                 // alternatives the first host raid can compare through ZeroLevelOverride). Autoservice's 20 spawn markers stand at y -3.84..-3.72
                 // (modal -3.80, both pockets): the lowest marker floor minus 4.4 is -8.24, rounded -8.2, the same floor and value as Bay5's
-                // (PLAN-AUTOSERVICE item 11/12, a start value for the first host raid). A rule of thumb, to be
+                // (PLAN-AUTOSERVICE item 11/12, a start value for the first host raid). Yard stands HIGH, not low: Arena's TeamFight mesh floor is y 6.15 for
+                // 92.5 percent of its cells (decks to 10.7) and its 20 spawn markers stand at y 6.18..7.50 (north pocket 6.18, south platform 6.9..7.5), so the
+                // lowest floor 6.15 minus 4.4 gives 1.75, started at 1.7 (PLAN-YARD item 13; INFERRED from the same rule, not measured: the first host raid
+                // compares ZeroLevelOverride values). Rig choice: the Reserve donor like every released map, because the imported Yard scenes carry no sun,
+                // no skybox, no lightmaps, no light probes and no reflection probe (S3 survey; the one sun lives in the excluded summer Scripts scene) and its
+                // materials are the same p0 deferred family that needs the donor ambient; the server clock drives the day, the 27 warm fake-GI fills stay as
+                // authored. A rule of thumb, to be
                 // measured on the host (the dome must sit well above the ground, see ZeroLevelOverride).
-                ZeroLevel = bay5 || autoService ? -8.2f : iceberg ? -3.7f : (equator || airPit || bowl) ? -4.4f : 0f,
+                ZeroLevel = yard ? 1.7f : bay5 || autoService ? -8.2f : iceberg ? -3.7f : (equator || airPit || bowl) ? -4.4f : 0f,
                 HeightFalloff = rig ? 0.025f : 0.029f,
                 ReserveTextureBudget = rig,
                 UseDonorCameraPrefab = rig,

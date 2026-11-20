@@ -111,6 +111,9 @@ MAPS = {
     # PLAN-AUTOSERVICE item 7 (2026-11-11), Catalog-only until the promotion: the map's scenes of key-sources.json are 62, 65 (DesignStuff, the
     # holders), 66 and 136 (TeamFight_DesignStuff, none); the accepted package is v2 (v1 + ambient audio)
     "arena_autoservice": {"stem": "autoservice", "package": "autoservice-native-v2"},
+    # PLAN-YARD item 9 (2026-11-20), Catalog-only until the promotion: only the TeamFight design scene (317) carries holders (8: 5 timer, 3 alive);
+    # the accepted package is v2
+    "arena_yard": {"stem": "yard", "package": "yard-native-v2"},
 }
 
 

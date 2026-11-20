@@ -35,7 +35,7 @@ the largest `ok` entry whose removal does not exceed (1 - scale) * event_s and c
 CLI:
     python tools/extract/extract_gate_sounds.py rows  [--map arena_bowl] [--arena auto] [--check]
     python tools/extract/extract_gate_sounds.py clips [--map arena_bowl] [--arena auto] [--output work/extract/gate-sounds]
-Without --map every map of MAPS (the four released maps, Iceberg, which joined the released set on 2026-10-30, and Autoservice, which is Catalog-only until its promotion). A clip's fit entry
+Without --map every map of MAPS (the four released maps, Iceberg, which joined the released set on 2026-10-30, Autoservice, which joined on 2026-11-11, and Yard, which is Catalog-only until its promotion). A clip's fit entry
 is fit["clips"][name], or fit["map_clips"][map_key][name] where one map plays a clip another map shares at a different authored pitch (Iceberg
 plays Equator's slide clip at 1.15). `rows --check` compares with the tracked sidecars and writes nothing. The output is byte-stable.
 """
@@ -97,6 +97,10 @@ MAPS = {
     # their gate roots. The default rules (2.0 m, 4.0 m margin) join them: the gates are 27 m or more apart, and every part of a gate
     # (six colliders and meshes, or the big gate's one `gate` node) belongs to the root's one sound (part null). Nothing optional is needed.
     "arena_autoservice": {"stem": "autoservice", "scenes": ("sound",)},
+    # Yard (2026-11-20, PLAN-YARD item 9): the Sound scene (level163) holds seven EntitySoundPlayers; three stand on the TeamFight gates
+    # (gate_door_1 and gate_door_2 of DOORS/Metal_gate_1, the cradle of DOORS/Construction_Cradle_02), four serve ShootOut (west pockets) and
+    # have no gate of the port near: they are listed as skipped. The default join rules (2.0 m, 4.0 m margin) are tried first.
+    "arena_yard": {"stem": "yard", "scenes": ("sound",)},
 }
 
 # fit search (the 2026-10-25 prototype, numbers unchanged)
