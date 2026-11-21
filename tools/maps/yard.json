@@ -12,8 +12,8 @@
     "Arena_Yard_Light"
   ],
   "infiltration_name": "ArenaYard",
-  "locale_name": "Arena: Yard (spike)",
-  "locale_description": "Internal test build — TeamFight geometry/collision/NavMesh port.",
+  "locale_name": "Arena: Block",
+  "locale_description": "The Block from EFT Arena: the yard between the apartment houses of a city block, with a fortified playground tower, parked vans and wrecked cars, turned into a death-fighting arena. A small sealed team pocket sits at each end, one behind a swing gate and one behind a rising facade gondola, with the open yard between them.",
   "icon_x": 691,
   "icon_y": 799,
   "template_key": "factory4_day",
@@ -22,5 +22,45 @@
     0.20999999344348907,
     0.20343641936779022,
     0.20075999200344086
+  ],
+  "uses_server_time": true,
+  "opened_barriers": [
+    "DOORS/Metal_gate_1",
+    "DOORS/Construction_Cradle_02"
+  ],
+  "start_gates": [
+    "DOORS/Metal_gate_1",
+    "DOORS/Construction_Cradle_02"
+  ],
+  "held_gates": [],
+  "navmesh_bake_exclusions": [],
+  "bake_bounds": [
+    -67,
+    21,
+    4,
+    14,
+    -1,
+    162
+  ],
+  "navmesh_bake_layers": [
+    0,
+    9,
+    11,
+    13,
+    18,
+    29,
+    30
+  ],
+  "keep_level_borders": true,
+  "puddle_water_material_names": [
+    "0877f2335044042e"
+  ],
+  "shader_fallback_names": [
+    "Custom/Billboard_FogSheet_Simple",
+    "Cloth/ClothShader",
+    "Cloth/ClothShader_backface",
+    "p0/Reflective/Bumped Specular SMap Baked",
+    "Nature/SpeedTree",
+    "Impostors/Examples/StandardCrossfade"
   ]
 }

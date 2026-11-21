@@ -529,12 +529,15 @@ class SidecarTests(unittest.TestCase):
             name = {"equator": "Equator", "bay5": "Bay5", "airpit": "AirPit", "bowl": "Bowl", "iceberg": "Iceberg", "autoservice": "AutoService"}[stem]
             self.assertEqual(VD.score_monitor_errors(map_json(stem), sidecar_path(stem), entries[name].get("ScoreMonitors")), [], stem)
         for name, entry in entries.items():
-            if name not in ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService"):
+            if name not in ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService", "Yard"):
                 self.assertIsNone(entry.get("ScoreMonitors"), name)
-        # exactly the released maps and the staged one have a sidecar (the scaffolding that lets a sidecar exist ahead of its promotion,
-        # VD.PENDING_MIRROR_KEYS, was empty after Autoservice's item 12 and holds Yard since PLAN-YARD item 9, 2026-11-20; item 15 empties it)
-        staged = [key.removeprefix("arena_") for key in VD.PENDING_MIRROR_KEYS]
-        self.assertEqual(staged, ["yard"])
+        # Yard (Catalog only until item 15) carries its eight rows since PLAN-YARD item 10 part 2, 2026-11-21, mirrored by the validator like the released maps'
+        self.assertEqual(VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), entries["Yard"].get("ScoreMonitors")), [])
+        self.assertEqual(len(entries["Yard"]["ScoreMonitors"]), 8)
+        # exactly the released maps and Yard have a sidecar (the scaffolding that lets a sidecar exist ahead of its promotion,
+        # VD.PENDING_MIRROR_KEYS, was empty after Autoservice's item 12, held Yard from PLAN-YARD item 9 (2026-11-20) and is empty again since item 10 part 2)
+        self.assertEqual(VD.PENDING_MIRROR_KEYS, ())
+        staged = ["yard"]
         self.assertEqual(sorted(p.name.removesuffix(".monitors.json") for p in (REPO / "tools" / "maps").glob("*.monitors.json")), sorted(STEMS + tuple(staged)))
         self.assertEqual(len(entries["AutoService"]["ScoreMonitors"]), 4)
         self.assertEqual(sorted(KEYS.values()), sorted(VD.RELEASE_MAP_KEYS))
@@ -1081,7 +1084,7 @@ class RealAutoserviceMonitorTests(unittest.TestCase):
 
 # ---------------------------------------------------------------------------------------------------------------
 # Yard (2026-11-20, PLAN-YARD item 9): eight holders in the TeamFight design scene (level 317), five timers and three alive boards, all active.
-# Catalog-only until item 15: the descriptor has no ScoreMonitors rows yet, so the validator waives the registry mirror (PENDING_MIRROR_KEYS).
+# Catalog-only until item 15; the descriptor row carries the ScoreMonitors literals since PLAN-YARD item 10 part 2 (2026-11-21), so the registry mirror is judged.
 # ---------------------------------------------------------------------------------------------------------------
 
 YARD = "arena_yard"
@@ -1152,22 +1155,29 @@ class YardMonitorSidecarTests(unittest.TestCase):
         self.assertEqual(E.map_scenes(YARD), [("Arena_Yard", 72), ("Arena_Yard_Grass", 162), ("Arena_Yard_DesignStuff", 73), ("Arena_Yard_TeamFight", 310),
                                               ("Arena_Yard_TeamFight_DesignStuff", 317), ("Arena_Yard_Light", 74)])
 
-    def test_the_registry_literals_parse_back_and_the_validator_waives_the_mirror_until_item_15(self):
+    def test_the_registry_literals_parse_back_and_the_validator_mirrors_the_sidecar_since_item_10(self):
         literals = E.render_csharp(self.rows).split("\n")
         self.assertEqual(len(literals), 8)
         registry_rows = [VD.parse_cs_value(line.strip().rstrip(",")) for line in literals]
         self.assertEqual(registry_rows, [{k: r[k] for k in VD.SCORE_MONITOR_MIRRORED} for r in self.rows])
-        self.assertIn(YARD, VD.PENDING_MIRROR_KEYS)
+        self.assertNotIn(YARD, VD.PENDING_MIRROR_KEYS)
         self.assertNotIn(YARD, VD.RELEASE_MAP_KEYS)
-        # the sidecar validates in itself while the registry has no rows; the rows the descriptor will carry (item 15) mirror it
-        self.assertEqual(VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), None), [])
+        # the descriptor row carries the rows since item 10 part 2 (2026-11-21): the registry's own literals equal the sidecar's, and no registry rows is a mirror error
+        registered = registry()["Yard"]["ScoreMonitors"]
+        self.assertEqual(VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), registered), [])
+        self.assertEqual(registered, registry_rows)
+        self.assertTrue(any("registry's ScoreMonitors" in e for e in VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), None)))
         self.assertEqual(VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), registry_rows), [])
         changed = copy.deepcopy(registry_rows)
         changed[1]["arena_type"] = 0
         self.assertTrue(any("differs from the registry in arena_type" in e for e in VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), changed)))
         self.assertTrue(any("registry's ScoreMonitors" in e for e in VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), registry_rows[:7])))
-        with patch.object(VD, "PENDING_MIRROR_KEYS", ()):
-            self.assertTrue(any("registry's ScoreMonitors" in e for e in VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), None)))
+        with patch.object(VD, "PENDING_MIRROR_KEYS", (YARD,)):                       # the scaffolding still works for the next map
+            self.assertEqual(VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), None), [])
+
+    def test_the_registry_carries_exactly_the_generated_csharp(self):
+        text = DESCRIPTOR.read_text(encoding="utf-8")                                       # text mode: CRLF reads as LF
+        self.assertIn(E.render_csharp(self.rows), text)
 
     def test_the_client_draws_a_face_on_all_eight(self):
         # ScoreMonitorLayout.FaceOf (ArenaMapPort.Client) knows 0, 1, 6 and 2 and gives every other word none

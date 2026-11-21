@@ -45,6 +45,7 @@ public sealed class ArenaMapBannersTests : IDisposable
     [InlineData("arena_bowl", "arena_bowl_banner", "arena_bowl")] // PLAN-BOWL item 8, 2026-10-18
     [InlineData("arena_iceberg", "arena_iceberg_banner", "arena_iceberg")] // PLAN-ICEBERG item 10, 2026-10-30 (row precedes the promotion)
     [InlineData("arena_autoservice", "arena_autoservice_banner", "arena_autoservice")] // PLAN-AUTOSERVICE item 9, 2026-11-11 (row precedes the promotion)
+    [InlineData("arena_yard", "arena_yard_banner", "arena_yard")] // PLAN-YARD item 11, 2026-11-20 (row precedes the promotion, item 15)
     public void For_ReturnsTheExpectedDescriptor_ForEachBanneredMap(string mapKey, string expectedId, string expectedFileStem)
     {
         var map = FindMap(mapKey);
@@ -69,7 +70,8 @@ public sealed class ArenaMapBannersTests : IDisposable
         {
             if (map.Key != ArenaMapRegistry.Equator.Key && map.Key != ArenaMapRegistry.Bay5.Key
                 && map.Key != ArenaMapRegistry.AirPit.Key && map.Key != ArenaMapRegistry.Bowl.Key
-                && map.Key != ArenaMapRegistry.Iceberg.Key && map.Key != ArenaMapRegistry.AutoService.Key)
+                && map.Key != ArenaMapRegistry.Iceberg.Key && map.Key != ArenaMapRegistry.AutoService.Key
+                && map.Key != ArenaMapRegistry.Yard.Key)
             {
                 yield return new object[] { map };
             }
@@ -87,6 +89,16 @@ public sealed class ArenaMapBannersTests : IDisposable
         // Prison (a parked map; Bowl was this fixture until PLAN-BOWL item 8 released it) has no banner descriptor at all -- Resolve must not warn about a
         // "missing file" for a map that was never supposed to have one.
         Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void Yard_has_a_banner_row_but_is_still_outside_the_registered_set()
+    {
+        // PLAN-YARD item 11: the row precedes the promotion. The server only resolves banners for the maps of ArenaMapRegistry.All, so until item 15
+        // adds Yard there the row serves nothing; this pin fails on the promotion on purpose (invert it there).
+        Assert.NotNull(ArenaMapBanners.For(ArenaMapRegistry.Yard));
+        Assert.DoesNotContain(ArenaMapRegistry.Yard, ArenaMapRegistry.All);
+        Assert.Contains(ArenaMapRegistry.Yard, ArenaMapRegistry.Catalog);
     }
 
     [Fact]

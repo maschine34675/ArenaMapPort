@@ -18,10 +18,12 @@ def synthetic_pack():
         "descriptions": {
             "en": {"arena_equator": "Synthetic mall text.", "arena_bay5": "Synthetic harbor text.",
                    "arena_airpit": "Synthetic terminal text.", "arena_bowl": "Synthetic stadium text.",
-                   "arena_autoservice": "Synthetic workshop text."},
+                   "arena_autoservice": "Synthetic workshop text.",
+                   "arena_yard": "Synthetic courtyard text."},
             "ge": {"arena_equator": "Synthetic ä text.", "arena_bay5": "Synthetic ß text.",
                    "arena_airpit": "Synthetic ö text.", "arena_bowl": "Synthetic ü text.",
-                   "arena_autoservice": "Synthetic é text."},
+                   "arena_autoservice": "Synthetic é text.",
+                   "arena_yard": "Synthetic è text."},
         },
     }
 
@@ -40,7 +42,7 @@ def synthetic_source():
 
 class DescriptionContractTests(unittest.TestCase):
     def test_keys_are_exactly_the_maps_that_have_an_official_text(self):
-        self.assertEqual(set(descriptions.DESCRIPTION_KEYS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_autoservice"})
+        self.assertEqual(set(descriptions.DESCRIPTION_KEYS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_autoservice", "arena_yard"})
 
     def test_iceberg_has_no_official_text_and_a_pack_carrying_it_is_rejected(self):
         # PLAN-ICEBERG item 10: Arena's en/ge/ru locales have no Name/Description row for Iceberg (only
@@ -102,6 +104,22 @@ class DescriptionContractTests(unittest.TestCase):
         pack = synthetic_pack()
         for maps in pack["descriptions"].values():
             del maps["arena_autoservice"]
+        with self.assertRaises(ValueError):
+            descriptions.validate_pack(pack)
+
+    def test_yard_uses_arenas_location_id_not_the_sidecar_id_field(self):
+        # PLAN-YARD item 11: Arena's own location id (its "Name" row reads Block, as the key Arena_Yard does); the ported
+        # location's id_field (187d5cbc...) has no row in any locale (survey S1).
+        self.assertEqual(descriptions.DESCRIPTION_KEYS["arena_yard"], "64b7d7f23d81c8a9ee03ac27 Description")
+        sidecar = json.loads((Path(__file__).resolve().parents[1] / "maps" / "yard.json").read_text(encoding="utf-8"))
+        self.assertEqual(sidecar["id_field"], "187d5cbc21744c97e8348e76")
+        self.assertNotIn(sidecar["id_field"], descriptions.DESCRIPTION_KEYS["arena_yard"])
+
+    def test_a_pack_without_yard_is_rejected(self):
+        # Same rule as Autoservice: the server accepts a pack without the pending entry, validate_pack demands what the extractor writes.
+        pack = synthetic_pack()
+        for maps in pack["descriptions"].values():
+            del maps["arena_yard"]
         with self.assertRaises(ValueError):
             descriptions.validate_pack(pack)
 

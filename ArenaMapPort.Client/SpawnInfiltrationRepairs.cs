@@ -86,6 +86,15 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogError($"[RaidFix] opening the spawn gates failed; the gates stay as they are: {e}");
             }
             AuthoredBorderRepairs.Apply(); // AirPit: invisible walls along Arena's TeamFight outline (after the openings)
+            try
+            {
+                LevelBorderBoxRepairs.Apply(); // Yard (descriptor LevelBorderBoxes, none on the released maps): Arena's Scripts-scene border cubes as invisible LevelBorder-layer walls
+            }
+            catch (System.Exception e)
+            {
+                // Never into EFT's load chain (AGENTS.md, traps): a failed pass leaves those edges open and the raid goes on.
+                Plugin.Log.LogWarning($"[RaidFix] raising the level border walls failed; those edges stay open: {e}");
+            }
             BallisticTwinRepairs.Apply();       // stage 1: HighPolyCollider twins for LowPolyCollider-only props
             BarbedWireRepairs.Apply();          // PLAN-TWO-MAPS item 2: EFT's BarbedWire on Arena's concertina wire
             PhysicsPropRepairs.Apply();         // PLAN-TWO-MAPS item 5: activate Arena's PHYSIC prop containers

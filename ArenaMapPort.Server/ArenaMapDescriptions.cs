@@ -10,7 +10,7 @@ namespace ArenaMapPort.Server;
 /// Iceberg has no Name or Description row at all, PLAN-ICEBERG item 10). The pack
 /// (<c>locales/map-descriptions.json</c>, written by <c>tools/extract/extract_map_descriptions.py</c>) must cover exactly
 /// the released maps that HAVE an official text (<see cref="OfficialTextMapKeys"/>), plus, optionally, the entries of official-text
-/// maps that are not released yet (Autoservice before its promotion); a map without one is not in the pack
+/// maps that are not released yet (Autoservice before its promotion, Yard until PLAN-YARD item 15); a map without one is not in the pack
 /// and answers with its descriptor's <see cref="ArenaMapDescriptor.LocaleDescription"/> (the port's own words, one
 /// English string for every language). A damaged, stale or over-complete pack is still discarded as a whole, so the
 /// official texts are never half-applied.
@@ -32,6 +32,9 @@ public sealed class ArenaMapDescriptions
         ArenaMapRegistry.AirPit.Key,
         ArenaMapRegistry.Bowl.Key,
         ArenaMapRegistry.AutoService.Key,
+        // PLAN-YARD item 11 (2026-11-20): Arena's location id 64b7d7f2... has Name ("Block") and Description rows; the map is pending
+        // (Catalog-only) until item 15, so Load accepts but does not require its entry.
+        ArenaMapRegistry.Yard.Key,
     };
 
     private readonly Dictionary<string, Dictionary<string, string>> _descriptions = new();

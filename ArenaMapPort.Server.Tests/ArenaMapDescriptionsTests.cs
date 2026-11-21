@@ -16,9 +16,9 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
 
     private Dictionary<string, Dictionary<string, string>> Fixture() => new()
     {
-        ["en"] = new() { ["arena_equator"] = "English mall fixture", ["arena_bay5"] = "English harbor fixture", ["arena_airpit"] = "English terminal fixture", ["arena_bowl"] = "English stadium fixture", ["arena_autoservice"] = "English workshop fixture" },
-        ["ge"] = new() { ["arena_equator"] = "German mall fixture", ["arena_bay5"] = "German harbor fixture", ["arena_airpit"] = "German terminal fixture", ["arena_bowl"] = "German stadium fixture", ["arena_autoservice"] = "German workshop fixture" },
-        ["ru"] = new() { ["arena_equator"] = "Russian mall fixture", ["arena_bay5"] = "Russian harbor fixture", ["arena_airpit"] = "Russian terminal fixture", ["arena_bowl"] = "Russian stadium fixture", ["arena_autoservice"] = "Russian workshop fixture" },
+        ["en"] = new() { ["arena_equator"] = "English mall fixture", ["arena_bay5"] = "English harbor fixture", ["arena_airpit"] = "English terminal fixture", ["arena_bowl"] = "English stadium fixture", ["arena_autoservice"] = "English workshop fixture", ["arena_yard"] = "English courtyard fixture" },
+        ["ge"] = new() { ["arena_equator"] = "German mall fixture", ["arena_bay5"] = "German harbor fixture", ["arena_airpit"] = "German terminal fixture", ["arena_bowl"] = "German stadium fixture", ["arena_autoservice"] = "German workshop fixture", ["arena_yard"] = "German courtyard fixture" },
+        ["ru"] = new() { ["arena_equator"] = "Russian mall fixture", ["arena_bay5"] = "Russian harbor fixture", ["arena_airpit"] = "Russian terminal fixture", ["arena_bowl"] = "Russian stadium fixture", ["arena_autoservice"] = "Russian workshop fixture", ["arena_yard"] = "Russian courtyard fixture" },
     };
 
     private static string Kind(ArenaMapDescriptor map) => map.Key switch
@@ -28,6 +28,7 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
         "arena_airpit" => " terminal fixture",
         "arena_bowl" => " stadium fixture", // PLAN-BOWL item 8, 2026-10-18
         "arena_autoservice" => " workshop fixture", // PLAN-AUTOSERVICE item 9, 2026-11-11; released set since item 12
+        "arena_yard" => " courtyard fixture", // PLAN-YARD item 11, 2026-11-20; pending (Catalog-only) until item 15
         _ => throw new InvalidOperationException("no official text for " + map.Key),
     };
 
@@ -238,6 +239,44 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
         foreach (var map in ReleasedWithoutAutoService.Where(ArenaMapDescriptions.HasOfficialText))
             Assert.EndsWith(Kind(map), pack.Resolve("en", map));
         Assert.EndsWith(" workshop fixture", pack.Resolve("en", ArenaMapRegistry.AutoService));
+    }
+
+    [Fact]
+    public void Yard_is_a_pending_official_text_map_its_entry_is_accepted_and_never_required()
+    {
+        // PLAN-YARD item 11: Arena's location id 64b7d7f2... has Name and Description rows, so the map is in OfficialTextMapKeys, but it is Catalog-only
+        // until item 15: the generic pending rule of Load accepts its entry (the extractor writes a six-entry pack) and does not require it.
+        Assert.True(ArenaMapDescriptions.HasOfficialText(ArenaMapRegistry.Yard));
+        Assert.Contains(ArenaMapRegistry.Yard, ArenaMapRegistry.Catalog);
+        Assert.DoesNotContain(ArenaMapRegistry.Yard, ArenaMapRegistry.All);
+        Assert.DoesNotContain(ArenaMapRegistry.Yard, OfficialTextMaps);
+        foreach (var withYard in new[] { true, false })
+        {
+            var data = Fixture();
+            if (!withYard) foreach (var language in data.Values) language.Remove("arena_yard");
+            WritePack(data);
+            var warnings = new List<string>();
+            var pack = ArenaMapDescriptions.Load(PackPath, warnings.Add);
+            Assert.Empty(warnings);
+            foreach (var map in OfficialTextMaps)
+                Assert.EndsWith(Kind(map), pack.Resolve("en", map));
+            // the Yard answer is the pack text when the entry is there; nothing in the registration reads it while the map is unregistered
+            if (withYard) Assert.EndsWith(" courtyard fixture", pack.Resolve("ge", ArenaMapRegistry.Yard));
+        }
+    }
+
+    [Fact]
+    public void A_yard_only_fault_in_a_six_entry_pack_is_still_discarded_whole()
+    {
+        // The pending entry is validated like the others: an empty Yard text discards the pack, so the official texts are never half-applied.
+        var data = Fixture();
+        data["ru"]["arena_yard"] = " ";
+        WritePack(data);
+        var warnings = new List<string>();
+        var pack = ArenaMapDescriptions.Load(PackPath, warnings.Add);
+        Assert.Single(warnings);
+        foreach (var map in ArenaMapRegistry.All)
+            Assert.Equal(map.LocaleDescription, pack.Resolve("ge", map));
     }
 
     [Theory]

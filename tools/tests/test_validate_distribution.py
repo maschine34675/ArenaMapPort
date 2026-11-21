@@ -205,7 +205,8 @@ class DistributionSidecarTests(unittest.TestCase):
                 'schema_version': 1, 'descriptions': {'en': {
                     'arena_equator': 'Mall fixture', 'arena_bay5': 'Harbor fixture',
                     'arena_airpit': 'Terminal fixture', 'arena_bowl': 'Stadium fixture',
-                    'arena_autoservice': 'Workshop fixture'}}}), encoding='utf-8')
+                    'arena_autoservice': 'Workshop fixture',
+                    'arena_yard': 'Courtyard fixture'}}}), encoding='utf-8')
         self.put_art()
         self.put_ai()
         self.put_acoustics()
@@ -1841,6 +1842,17 @@ class DistributionSidecarTests(unittest.TestCase):
         extra = {**extract_loadscreens.LOADSCREENS, "arena_prison": extract_loadscreens.LOADSCREENS["arena_airpit"]}
         with patch.object(extract_loadscreens, "LOADSCREENS", extra):
             with self.assertRaisesRegex(ValueError, "Loadscreen table does not match"):
+                self.validate()
+
+    def test_pending_art_rows_are_tolerated_only_for_the_listed_pending_maps(self):
+        # PLAN-YARD item 15 empties PENDING_ART_KEYS and inverts this pin
+        self.assertEqual(distribution.PENDING_ART_KEYS, frozenset({"arena_yard"}))
+        pending = {**extract_banners.BANNERS, "arena_yard": extract_banners.BANNERS["arena_airpit"]}
+        with patch.object(extract_banners, "BANNERS", pending):
+            self.validate()                                   # the pending Yard row is not a released map and is allowed
+        other = {**extract_banners.BANNERS, "arena_prison": extract_banners.BANNERS["arena_airpit"]}
+        with patch.object(extract_banners, "BANNERS", other):
+            with self.assertRaisesRegex(ValueError, "Banner table does not match"):
                 self.validate()
 
     def test_distribution_rejects_missing_stale_or_unexpected_overview(self):

@@ -118,7 +118,10 @@ public class MapDescriptorConsistencyTests
             "DOORS/roller_shutters_techlight_01",
             "DOORS/roller_shutters_techlight_01 (1)",
         }, ArenaMapRegistry.AutoService.OpenedBarriers);
-        var walked = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg, ArenaMapRegistry.AutoService };
+        // Yard (PLAN-YARD item 10, 2026-11-21; Catalog only until item 15): the two gate units of its DOORS, the paths the rows of tools/maps/yard.doors.json name:
+        // the north pocket's swing gate (two leaves) and the south pocket's rising gondola.
+        Assert.Equal(new[] { "DOORS/Metal_gate_1", "DOORS/Construction_Cradle_02" }, ArenaMapRegistry.Yard.OpenedBarriers);
+        var walked = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg, ArenaMapRegistry.AutoService, ArenaMapRegistry.Yard };
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             Assert.NotNull(map.OpenedBarriers);
@@ -170,6 +173,26 @@ public class MapDescriptorConsistencyTests
         {
             Assert.Empty(map.AuthoredBorders);
         }
+    }
+
+    // 2026-11-21 (PLAN-YARD item 10 part 2): the oriented border walls of LevelBorderBoxRepairs are Yard's alone (Arena's Scripts-scene cubes, which no package
+    // imports); every other map keeps the default (none), so the repair never runs for the six released maps. YardMapTests pins the rows against the sidecar.
+    [Fact]
+    public void LevelBorderBoxes_ExistForYardOnly()
+    {
+        Assert.Equal(104, ArenaMapRegistry.Yard.LevelBorderBoxes.Length);
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ReferenceEquals(m, ArenaMapRegistry.Yard)))
+        {
+            Assert.NotNull(map.LevelBorderBoxes);
+            Assert.Empty(map.LevelBorderBoxes);
+        }
+        // the released set: none of its maps has rows (Yard joins it at item 15 and is the one exception then, so the repair still never runs for the six released maps)
+        foreach (var map in ArenaMapRegistry.All.Where(m => !ReferenceEquals(m, ArenaMapRegistry.Yard)))
+        {
+            Assert.Empty(map.LevelBorderBoxes);
+        }
+        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice" },
+            ArenaMapRegistry.All.Where(m => !ReferenceEquals(m, ArenaMapRegistry.Yard)).Select(m => m.Key).ToArray());
     }
 
     // 2026-10-13: the passport-hall lamp fill (LampFillRepairs) is AirPit's alone; every other map keeps the default (none),
@@ -248,13 +271,27 @@ public class MapDescriptorConsistencyTests
             Assert.True(autoService.BakeBounds[2 * axis] < autoService.BakeBounds[2 * axis + 1]);
         Assert.DoesNotContain(autoService.NavMeshBakeExclusions, p => autoService.OpenedBarriers.Any(b => p == b || p.StartsWith(b + "/")));
 
-        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ReferenceEquals(m, airPit) && !ReferenceEquals(m, bowl) && !ReferenceEquals(m, iceberg) && !ReferenceEquals(m, autoService)))
+        // Yard (PLAN-YARD item 10 part 1, 2026-11-21): Arena's own surface volume rounded outward (x -67..21), z -1 (the south band behind the Respawn building's long wall is a
+        // walled-off island) to 162, y 4..14 (the decks reach 10.65, nothing walkable above 14 joins the yard); Arena's mask 9/11/13/18/30 plus 29 for the 11 kept TeamFight cubes
+        // plus 0 for the excavator; no exclusion (YardMapTests and test_yard_bake_inputs pin the numbers and the oracle runs behind them).
+        var yard = ArenaMapRegistry.Yard;
+        Assert.Empty(yard.NavMeshBakeExclusions);
+        Assert.Equal(new[] { -67.0f, 21.0f, 4.0f, 14.0f, -1.0f, 162.0f }, yard.BakeBounds);
+        Assert.Equal(new[] { 0, 9, 11, 13, 18, 29, 30 }, yard.NavMeshBakeLayers);
+        Assert.True(yard.KeepLevelBorders);
+        Assert.Equal(2, yard.OpenedBarriers.Length);
+        Assert.All(yard.OpenedBarriers, path => Assert.True(IsHierarchyPath(path), path));
+        for (var axis = 0; axis < 3; axis++)
+            Assert.True(yard.BakeBounds[2 * axis] < yard.BakeBounds[2 * axis + 1]);
+        Assert.DoesNotContain(yard.NavMeshBakeExclusions, p => yard.OpenedBarriers.Any(b => p == b || p.StartsWith(b + "/")));
+
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ReferenceEquals(m, airPit) && !ReferenceEquals(m, bowl) && !ReferenceEquals(m, iceberg) && !ReferenceEquals(m, autoService) && !ReferenceEquals(m, yard)))
         {
             Assert.Empty(map.NavMeshBakeExclusions);
             Assert.Empty(map.BakeBounds);
             Assert.Empty(map.NavMeshBakeLayers);
         }
-        foreach (var map in new[] { airPit, bowl, iceberg, autoService })
+        foreach (var map in new[] { airPit, bowl, iceberg, autoService, yard })
         {
             Assert.All(map.NavMeshBakeLayers, layer => Assert.InRange(layer, 0, 31));
             Assert.DoesNotContain(4, map.NavMeshBakeLayers); // Water is never collected
@@ -309,7 +346,7 @@ public class MapDescriptorConsistencyTests
             using var document = JsonDocument.Parse(File.ReadAllText(path!));
             bool sidecar = document.RootElement.TryGetProperty("keep_level_borders", out var keep) && keep.GetBoolean();
             Assert.Equal(sidecar, map.KeepLevelBorders);
-            Assert.Equal(map == ArenaMapRegistry.Bowl || map == ArenaMapRegistry.Iceberg || map == ArenaMapRegistry.AutoService, map.KeepLevelBorders);
+            Assert.Equal(map == ArenaMapRegistry.Bowl || map == ArenaMapRegistry.Iceberg || map == ArenaMapRegistry.AutoService || map == ArenaMapRegistry.Yard, map.KeepLevelBorders);
             if (map.KeepLevelBorders)
                 Assert.True(map.NavMeshBakeLayers.Length == 0 || map.NavMeshBakeLayers.Contains(29));
         }
@@ -347,12 +384,17 @@ public class MapDescriptorConsistencyTests
         Assert.Equal(autoService.OpenedBarriers, autoService.StartGates);
         Assert.Empty(autoService.HeldGates);
         Assert.All(autoService.OpenedBarriers, p => Assert.Equal(ArenaGateRole.Start, autoService.GateRoleOf(p)));
+        // Yard (PLAN-YARD item 10): the two gate units are start gates; nothing stays closed after the release.
+        var yard = ArenaMapRegistry.Yard;
+        Assert.Equal(yard.OpenedBarriers, yard.StartGates);
+        Assert.Empty(yard.HeldGates);
+        Assert.All(yard.OpenedBarriers, p => Assert.Equal(ArenaGateRole.Start, yard.GateRoleOf(p)));
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             Assert.All(map.StartGates, p => Assert.Contains(p, map.OpenedBarriers));
             Assert.All(map.HeldGates, p => Assert.Contains(p, map.OpenedBarriers));
             Assert.Empty(map.StartGates.Intersect(map.HeldGates));
-            if (ReferenceEquals(map, airPit) || ReferenceEquals(map, bowl) || ReferenceEquals(map, iceberg) || ReferenceEquals(map, autoService)) continue;
+            if (ReferenceEquals(map, airPit) || ReferenceEquals(map, bowl) || ReferenceEquals(map, iceberg) || ReferenceEquals(map, autoService) || ReferenceEquals(map, yard)) continue;
             Assert.Empty(map.StartGates);
             Assert.Empty(map.HeldGates);
             Assert.All(map.OpenedBarriers, p => Assert.Equal(ArenaGateRole.Start, map.GateRoleOf(p)));

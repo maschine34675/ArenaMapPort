@@ -215,6 +215,19 @@ def parse_score_monitor_literal(v: str) -> dict:
     return {"scene": values[0], "path": values[1], "at": values[2], "arena_type": values[3], "active_in_scene": flag.group(1) == "true"}
 
 
+def parse_border_box_literal(v: str) -> dict:
+    """Level border boxes: `new ArenaBorderBox(cx, cy, cz, sx, sy, sz, qx, qy, qz, qw)`; spelled as the three vectors of the border sidecar's
+    "rows" (center, size, rotation) that the registry mirrors."""
+    inner = v[len("new ArenaBorderBox("):].rstrip()
+    if not inner.endswith(")"):
+        fail(f"could not parse border box literal: {v[:80]!r}")
+    values = [parse_cs_value(x) for x in split_top_level_args(inner[:-1])]
+    if len(values) != 10 or any(isinstance(x, bool) or not isinstance(x, (int, float)) for x in values):
+        fail("border box literal requires exactly ten numbers (centre, size, rotation x y z w): " + repr(v[:80]))
+    values = [float(x) for x in values]
+    return {"center": values[0:3], "size": values[3:6], "rotation": values[6:10]}
+
+
 def parse_cs_value(raw: str):
     """Parses one named-argument value into a Python str / int / list[str] / ("ref", "A.B")."""
     v = raw.strip()
@@ -264,6 +277,8 @@ def parse_cs_value(raw: str):
         return parse_door_pose_literal(v)
     if v.startswith("new ArenaScoreMonitor("):
         return parse_score_monitor_literal(v)
+    if v.startswith("new ArenaBorderBox("):
+        return parse_border_box_literal(v)
     if re.fullmatch(r"[A-Za-z_]\w*\.[A-Za-z_]\w*", v):
         return ("ref", v)
     if re.fullmatch(r"[A-Za-z_]\w*", v):
@@ -583,12 +598,13 @@ DOOR_SOURCES = ("clip", "dotanimator", "borrowed")
 DOOR_EASES = ("smoothstep", "linear", "inOutQuint", "curve", "outBack")   # outBack: DOTween OutBack, constant 1.70158 (Yard's cradle, 2026-11-20)
 DOOR_AT_TOLERANCE = 0.05   # m: the client matches a barrier root instance to `at` within this (ArenaDoorPose.AtTolerance)
 DOOR_CLOSED_TOLERANCE = 0.05   # m: rows that repeat a part name are told apart by the closed position within this
-# Catalog-only maps whose door / monitor sidecars are staged AHEAD of the lock-step promotion (Autoservice, plan item 7 -> item 12; the tuple is empty since the promotion).
+# Catalog-only maps whose door / monitor sidecars are staged AHEAD of the lock-step promotion (Autoservice, plan item 7 -> item 12; Yard, plan item 9 -> item 10 part 2).
 # Such a sidecar is validated in itself (schema, rows, sources, the gate-sound join) but is not yet mirrored by the registry's DoorPoses /
-# ScoreMonitors (the C# literals arrive at the promotion), and the door barrier rule waits for the descriptor's opened_barriers (plan item 8)
-# while it has none. Both waivers apply only while the registry list is EMPTY; the promotion removes the map from this tuple, and main()
-# refuses a map here that is already a released one.
-PENDING_MIRROR_KEYS: tuple[str, ...] = ("arena_yard",)   # Yard's door and monitor sidecars (PLAN-YARD items 9 and 10), out again at item 15; Autoservice left at its promotion (item 12, 2026-11-11)
+# ScoreMonitors, and the door barrier rule waits for the descriptor's opened_barriers while it has none. Both waivers apply only while the registry list is
+# EMPTY; main() refuses a map here that is already a released one. The tuple is empty again since 2026-11-21: PLAN-YARD item 10 puts the sidecars and the
+# Yard descriptor row in ONE commit (the DoorPoses and ScoreMonitors literals are in the row), so every sidecar is mirrored and none is pending. The seam
+# stays for the next map whose sidecars land ahead of its descriptor.
+PENDING_MIRROR_KEYS: tuple[str, ...] = ()
                                # (ArenaDoorPose.ClosedPositionTolerance, DoorPoseModel.SelectRowsForNode)
 # Pose barriers that are NOT opened_barriers entries. Equator's booth doors are opened by BoothDoorRepairs.OpenDoors by the NAME of
 # their leaves, not as barriers; their poses name the assembly root (SPAWN_DOORS/Door_Sliding_Respawn[ (n)], and the fifth door
@@ -1031,6 +1047,111 @@ def score_monitor_errors(map_json: dict, monitors_path: Path, registry_rows) -> 
     return errors
 
 
+LEVEL_BORDER_SCHEMA = 1
+LEVEL_BORDER_ROW_KEYS = ("path", "layer", "active", "enabled", "is_trigger", "center", "size", "rotation", "aabb")
+LEVEL_BORDER_LAYER = 29          # EFT's LevelBorder layer: LevelBorderBoxRepairs raises the walls on it (always the number 29, the kept cubes' own layer)
+LEVEL_BORDER_AABB_TOLERANCE = 0.002   # m: the sidecar rounds every number to 4 digits, the AABB is recomputed from the rounded box
+LEVEL_BORDER_UNIT_TOLERANCE = 5e-5    # the rotation quaternion is rounded to 6 digits
+
+
+def border_box_aabb(center: list, size: list, rotation: list) -> tuple[list, list]:
+    """World AABB of an oriented box (centre, full size, unit quaternion x y z w): the half extent along axis i is sum_j |R[i][j]| * size[j] / 2.
+    The same arithmetic as LevelBorderBoxModel.WorldBounds in the client."""
+    x, y, z, w = rotation
+    r = ((1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)),
+         (2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)),
+         (2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)))
+    half = [sum(abs(r[i][j]) * size[j] for j in range(3)) / 2 for i in range(3)]
+    return [center[i] - half[i] for i in range(3)], [center[i] + half[i] for i in range(3)]
+
+
+def level_border_errors(map_json: dict, borders_path: Path, registry_rows) -> list[str]:
+    """tools/maps/<stem>.borders.json (written by tools/extract/extract_level_borders.py) against the map descriptor and the registry's
+    LevelBorderBoxes: schema 1, the key, a scene of the map as source, the exact key set of every row, unique hierarchy paths, rows the client can raise as
+    solid layer-29 walls (active, enabled, no trigger), finite positive sizes, unit rotations, an AABB and bounds that follow from the box, and the same
+    rows in the same order with the same centre, size and rotation on both sides. A map without the sidecar must have no LevelBorderBoxes."""
+    name = borders_path.name
+    registry_rows = registry_rows or []
+    if not borders_path.exists():
+        return [f"registry LevelBorderBoxes has {len(registry_rows)} entr{'y' if len(registry_rows) == 1 else 'ies'} but {name} does not exist"] \
+            if registry_rows else []
+    try:
+        doc = json.loads(borders_path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        return [f"{name} is not valid JSON: {exc}"]
+    if not isinstance(doc, dict):
+        return [f"{name} must be an object"]
+    errors: list[str] = []
+    if doc.get("schema") != LEVEL_BORDER_SCHEMA:
+        errors.append(f"{name}: schema must be {LEVEL_BORDER_SCHEMA}")
+    if doc.get("key") != map_json.get("key"):
+        errors.append(f"{name}: key {doc.get('key')!r} is not the map's {map_json.get('key')!r}")
+    if doc.get("source_scene") not in map_json.get("all_scene_names", []):
+        errors.append(f"{name}: source_scene {doc.get('source_scene')!r} is not a scene of the map")
+    rows = doc.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return errors + [f"{name}: rows must be a non-empty array"]
+    if doc.get("count") != len(rows):
+        errors.append(f"{name}: count {doc.get('count')!r} is not the number of rows {len(rows)}")
+    paths: set = set()
+    low, high = [math.inf] * 3, [-math.inf] * 3
+    usable = True
+    for i, row in enumerate(rows):
+        label = f"{name} rows[{i}]"
+        if not isinstance(row, dict) or set(row) != set(LEVEL_BORDER_ROW_KEYS):
+            errors.append(f"{label}: needs exactly the keys {', '.join(LEVEL_BORDER_ROW_KEYS)}")
+            usable = False
+            continue
+        problems = []
+        if not is_hierarchy_path(row["path"]):
+            problems.append("path must be a hierarchy path (no empty segment)")
+        elif row["path"] in paths:
+            problems.append(f"duplicate path {row['path']!r}")
+        else:
+            paths.add(row["path"])
+        if row["layer"] != LEVEL_BORDER_LAYER or type(row["layer"]) is not int:
+            problems.append(f"layer must be {LEVEL_BORDER_LAYER}")
+        if row["active"] is not True or row["enabled"] is not True or row["is_trigger"] is not False:
+            problems.append("a row the client raises must be active, enabled and not a trigger")
+        center, size, rotation, aabb = row["center"], row["size"], row["rotation"], row["aabb"]
+        if not is_finite_vec3(center):
+            problems.append("center must be three finite numbers")
+        if not is_finite_vec3(size) or min(size) <= 0:
+            problems.append("size must be three finite positive numbers")
+        if not isinstance(rotation, list) or len(rotation) != 4 or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in rotation) \
+                or abs(math.sqrt(sum(v * v for v in rotation)) - 1) > LEVEL_BORDER_UNIT_TOLERANCE:
+            problems.append("rotation must be a unit quaternion x y z w")
+        if not isinstance(aabb, list) or len(aabb) != 2 or not is_finite_vec3(aabb[0]) or not is_finite_vec3(aabb[1]) \
+                or any(a > b for a, b in zip(aabb[0], aabb[1])):
+            problems.append("aabb must be [min, max], two finite 3-vectors")
+        errors.extend(f"{label}: {p}" for p in problems)
+        if problems:
+            usable = False
+            continue
+        want = border_box_aabb(center, size, rotation)
+        if any(abs(a - b) > LEVEL_BORDER_AABB_TOLERANCE for a, b in zip(aabb[0] + aabb[1], want[0] + want[1])):
+            errors.append(f"{label}: aabb {aabb} does not follow from the box (expected about {[[round(v, 4) for v in side] for side in want]})")
+            usable = False
+        for k in range(3):
+            low[k], high[k] = min(low[k], aabb[0][k]), max(high[k], aabb[1][k])
+    if usable and doc.get("bounds") != [low, high]:
+        errors.append(f"{name}: bounds {doc.get('bounds')} are not the union of the row AABBs {[low, high]}")
+    if errors:
+        return errors
+    if len(rows) != len(registry_rows):
+        errors.append(f"{name} has {len(rows)} rows, the registry's LevelBorderBoxes {len(registry_rows)}")
+    for i, (side, reg) in enumerate(zip(rows, registry_rows)):
+        if not isinstance(reg, dict):
+            errors.append(f"registry LevelBorderBoxes[{i}] is not an ArenaBorderBox literal")
+            continue
+        mirrored = {k: side[k] for k in ("center", "size", "rotation")}
+        if mirrored != reg:
+            diff = [k for k in mirrored if mirrored[k] != reg.get(k)]
+            errors.append(f"{name} rows[{i}] ({side['path']}) differs from the registry in {', '.join(diff)}: "
+                          f"sidecar { {k: mirrored[k] for k in diff} }, registry { {k: reg.get(k) for k in diff} }")
+    return errors
+
+
 def check_map_against_registry_entry(
     map_json: dict, registry_args: dict, ref_scope: dict, map_path: Path, cs_var_name: str, errors: list
 ) -> None:
@@ -1055,6 +1176,8 @@ def check_map_against_registry_entry(
         map_json, map_path.with_name(f"{map_path.stem}.gatesounds.json"), map_path.with_name(f"{map_path.stem}.doors.json")))
     errors.extend(f"{where}: {error}" for error in score_monitor_errors(
         map_json, map_path.with_name(f"{map_path.stem}.monitors.json"), registry_args.get("ScoreMonitors")))
+    errors.extend(f"{where}: {error}" for error in level_border_errors(
+        map_json, map_path.with_name(f"{map_path.stem}.borders.json"), registry_args.get("LevelBorderBoxes")))
     check_field(errors, where, "shader_fallback_names", map_json.get("shader_fallback_names", []),
                 resolve(registry_args.get("ShaderFallbackNames", []), ref_scope))
     for json_field, cs_field in (("opened_barriers", "OpenedBarriers"), ("navmesh_bake_exclusions", "NavMeshBakeExclusions"),
@@ -1275,6 +1398,10 @@ def main() -> int:
         stem = key.removeprefix("arena_")
         if (maps_dir / f"{stem}.json").exists() and not (maps_dir / f"{stem}.monitors.json").exists():
             errors.append(f"{stem}.monitors.json is missing: every released map has score monitors (tools/extract/extract_score_monitors.py)")
+
+    for borders in sorted(maps_dir.glob("*.borders.json")):
+        if not (maps_dir / f"{borders.name.removesuffix('.borders.json')}.json").exists():
+            errors.append(f"{borders.name}: no tools/maps descriptor {borders.name.removesuffix('.borders.json')}.json beside it")
 
     equator_json_path = maps_dir / "equator.json"
     if not equator_json_path.exists():

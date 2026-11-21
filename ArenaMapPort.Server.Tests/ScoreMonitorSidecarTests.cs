@@ -34,12 +34,13 @@ public sealed class ScoreMonitorSidecarTests
         "bowl" => ArenaMapRegistry.Bowl,
         "iceberg" => ArenaMapRegistry.Iceberg,
         "autoservice" => ArenaMapRegistry.AutoService,
+        "yard" => ArenaMapRegistry.Yard, // Catalog only until PLAN-YARD item 15; its rows are in the descriptor since item 10 part 2 (2026-11-21)
         _ => throw new ArgumentOutOfRangeException(nameof(stem)),
     };
 
     public static IEnumerable<object[]> Maps => new[]
     {
-        new object[] { "equator" }, new object[] { "bay5" }, new object[] { "airpit" }, new object[] { "bowl" }, new object[] { "iceberg" }, new object[] { "autoservice" },
+        new object[] { "equator" }, new object[] { "bay5" }, new object[] { "airpit" }, new object[] { "bowl" }, new object[] { "iceberg" }, new object[] { "autoservice" }, new object[] { "yard" },
     };
 
     private static JsonDocument Load(string stem) => JsonDocument.Parse(File.ReadAllText(Sidecar(stem + ".monitors.json")));
@@ -197,8 +198,9 @@ public sealed class ScoreMonitorSidecarTests
     {
         foreach (var map in ArenaMapRegistry.Catalog)
         {
-            var released = ArenaMapRegistry.All.Contains(map);
-            Assert.Equal(released, map.ScoreMonitors.Length > 0);
+            // Yard (Catalog only until PLAN-YARD item 15) carries its eight rows since item 10 part 2, 2026-11-21: the descriptor row and the sidecar change in one commit
+            var expected = ArenaMapRegistry.All.Contains(map) || ReferenceEquals(map, ArenaMapRegistry.Yard);
+            Assert.Equal(expected, map.ScoreMonitors.Length > 0);
         }
         Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice" }, ArenaMapRegistry.All.Select(m => m.Key).ToArray());
     }

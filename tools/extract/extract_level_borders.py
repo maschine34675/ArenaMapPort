@@ -18,6 +18,7 @@ and the run fails unless ``--allow-shear`` is given (Yard has none).
 from __future__ import annotations
 
 import argparse
+from decimal import Decimal
 import json
 import math
 from pathlib import Path
@@ -80,6 +81,33 @@ def world_box(linear, position, center, size):
 
 def _round(values, digits=4):
     return [round(v + 0.0, digits) for v in values]
+
+
+class BorderError(ValueError):
+    pass
+
+
+def csharp_float(value: float) -> str:
+    """A plain (never exponent) C# float literal with the shortest digits that read back as the same double."""
+    text = format(Decimal(repr(float(value) + 0.0)), "f")
+    if "." not in text:
+        text += ".0"
+    return text + "f"
+
+
+def render_csharp(rows: list[dict], indent: str = " " * 16) -> str:
+    """The `new ArenaBorderBox(cx, cy, cz, sx, sy, sz, qx, qy, qz, qw)` literals of ArenaMapRegistry.<Map>.LevelBorderBoxes for a sidecar's
+    rows, one line per row in row order, ready to paste between `LevelBorderBoxes: new[] {` and `}`. A row the client could not raise as a
+    solid wall (inactive, disabled, a trigger, another layer than 29, a non-positive size) is refused: the literal would lie about the map."""
+    lines = []
+    for i, r in enumerate(rows):
+        if r.get("layer") != 29 or not r.get("active") or not r.get("enabled") or r.get("is_trigger"):
+            raise BorderError(f"row {i} ({r.get('path')}) is not an active, enabled, solid layer-29 box")
+        if len(r["center"]) != 3 or len(r["size"]) != 3 or len(r["rotation"]) != 4 or min(r["size"]) <= 0:
+            raise BorderError(f"row {i} ({r.get('path')}) needs a 3-vector centre, a positive 3-vector size and a 4-vector rotation")
+        values = [*r["center"], *r["size"], *r["rotation"]]
+        lines.append(f"{indent}new ArenaBorderBox({', '.join(csharp_float(v) for v in values)}),")
+    return "\n".join(lines)
 
 
 def read_borders(plan_path: Path, source: Path, root_path: str, allow_shear: bool = False) -> dict:
@@ -147,12 +175,22 @@ def read_borders(plan_path: Path, source: Path, root_path: str, allow_shear: boo
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--plan", required=True, type=Path)
+    parser.add_argument("--plan", type=Path)
     parser.add_argument("--source", default=DEFAULT_SOURCE, type=Path)
-    parser.add_argument("--root", required=True, help="hierarchy path of the borders root in the scripts scene")
-    parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--root", help="hierarchy path of the borders root in the scripts scene")
+    parser.add_argument("--out", type=Path)
     parser.add_argument("--allow-shear", action="store_true")
+    parser.add_argument("--csharp", action="store_true", help="print the ArenaBorderBox literals for ArenaMapRegistry.<Map>.LevelBorderBoxes")
+    parser.add_argument("--from-sidecar", type=Path, help="with --csharp: read a written sidecar instead of Arena (no Arena needed)")
     args = parser.parse_args(argv)
+    if args.from_sidecar is not None:
+        if not args.csharp:
+            parser.error("--from-sidecar only makes sense with --csharp")
+        doc = json.loads(args.from_sidecar.read_text(encoding="utf-8"))
+        print(f"// {doc['key']}: {len(doc['rows'])} rows\n" + render_csharp(doc["rows"]))
+        return 0
+    if args.plan is None or args.root is None or args.out is None:
+        parser.error("--plan, --root and --out are required unless --from-sidecar is given")
     result = read_borders(args.plan, args.source.resolve(), args.root, args.allow_shear)
     head = {k: v for k, v in result.items() if k != "rows"}
     lines = [json.dumps(head, ensure_ascii=False)[:-1] + ', "rows": [']
@@ -161,6 +199,8 @@ def main(argv=None) -> int:
     lines.append("]}")
     args.out.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     print(f"BORDERS_OK {result['key']} {result['count']} boxes layers={result['layers']} bounds={result['bounds']}")
+    if args.csharp:
+        print(f"// {result['key']}: {len(result['rows'])} rows\n" + render_csharp(result["rows"]))
     return 0
 
 

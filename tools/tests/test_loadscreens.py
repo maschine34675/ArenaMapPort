@@ -21,10 +21,10 @@ class LoadscreenTableTests(unittest.TestCase):
     """The LOADSCREENS table itself: exactly the maps of the art set, five entries each (Bowl four), at
     the path_ids/names the 2026-09-27 research pass (Equator, Bay5), the 2026-10-11 probe (AirPit, Arena 0.6.0),
     the 2026-10-18 probe (Bowl) and the 2026-10-30 probe (Iceberg, Arena 0.6.1) and the 2026-11-11 probe
-    (Autoservice, Arena 0.6.2) verified against a live UnityPy read."""
+    (Autoservice, Arena 0.6.2) and the 2026-11-20 probe (Yard, Arena 0.6.2, PLAN-YARD item 11) verified against a live UnityPy read."""
 
-    def test_exactly_the_six_art_maps(self):
-        self.assertEqual(set(EL.LOADSCREENS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice"})
+    def test_exactly_the_seven_art_maps(self):
+        self.assertEqual(set(EL.LOADSCREENS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice", "arena_yard"})
 
     def test_every_map_has_the_five_image_rotation_except_bowl_which_has_four(self):
         # Arena ships no AllScreens_Loadingscreen for Bowl (PLAN-BOWL item 8): its rotation is the four main-menu
@@ -88,6 +88,21 @@ class LoadscreenTableTests(unittest.TestCase):
         for e in entries[1:]:
             self.assertEqual((e["file"], e["size"]), ("sharedassets1.assets", (2048, 1024)))
         self.assertFalse(any("Popup" in e["asset_name"] for e in entries))
+
+    def test_yard_entries(self):
+        # PLAN-YARD item 11: Arena's "Yard" loading screen and the four "Block" menu backgrounds (survey S1 looked at all seven
+        # images: a residential courtyard). The "_NY" reskin (path 524) and the 1920x500 "Popup_background_yard" strip are not
+        # rotation images.
+        entries = EL.LOADSCREENS["arena_yard"]
+        self.assertEqual(entries[0], {"asset_name": "AllScreens_Loadingscreen-Yard", "path_id": 2945,
+                                      "file": "resources.assets", "size": (1920, 1080)})
+        self.assertEqual([(e["asset_name"], e["path_id"]) for e in entries[1:]],
+                         [("Arena_MainMenu_Paralax_Block-1", 666), ("Arena_MainMenu_Paralax_Block-2", 1267),
+                          ("Arena_MainMenu_Paralax_Block-3", 330), ("Arena_MainMenu_Paralax_Block-4", 1287)])
+        for e in entries[1:]:
+            self.assertEqual((e["file"], e["size"]), ("sharedassets1.assets", (2048, 1024)))
+        self.assertFalse(any("Popup" in e["asset_name"] for e in entries))
+        self.assertEqual([EL.output_filename("arena_yard", n) for n in range(1, 6)], [f"arena_yard_{n}.jpg" for n in range(1, 6)])
 
     def test_bowl_entries(self):
         entries = EL.LOADSCREENS["arena_bowl"]
@@ -182,7 +197,7 @@ class CheckModeTests(unittest.TestCase):
     caller's own output directory already has on disk (five images per map since 2026-09-27, Iceberg included since
     2026-10-30, four for Bowl since PLAN-BOWL item 8, 2026-10-18)."""
 
-    ALL = ({(k, i) for k in ("arena_equator", "arena_bay5", "arena_airpit", "arena_iceberg", "arena_autoservice") for i in range(1, 6)}
+    ALL = ({(k, i) for k in ("arena_equator", "arena_bay5", "arena_airpit", "arena_iceberg", "arena_autoservice", "arena_yard") for i in range(1, 6)}
            | {("arena_bowl", i) for i in range(1, 5)})
 
     @staticmethod

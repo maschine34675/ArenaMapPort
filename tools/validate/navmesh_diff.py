@@ -7,7 +7,7 @@ the base scene. Instead of guessing barrier names for `opened_barriers`, this to
 
 What it does (offline, read-only; no Unity, no host):
   1. Reads Arena's NavMeshData (default: AirPit, sharedassets33.assets path 2; `--map bowl` selects Bowl's
-     sharedassets128.assets path 2, `--map iceberg` Iceberg's sharedassets377.assets path 2, see ARENA_SOURCES) in WORLD
+     sharedassets128.assets path 2, `--map iceberg` Iceberg's sharedassets377.assets path 2, `--map yard` Yard's sharedassets281.assets path 2, see ARENA_SOURCES) in WORLD
      coordinates (the NavMeshData's m_Position / m_Rotation are applied by navmesh_oracle; Bowl's is a 90 degree yaw, AirPit's
      and Iceberg's the identity) and samples
      its polygons on a lattice (default 0.2 m), keeping the main component (or all low components).
@@ -32,6 +32,11 @@ What it does (offline, read-only; no Unity, no host):
 Not a bake: see walk_model.py for the model and its limits. The port-model connectivity is a lower
 bound restricted to Arena's footprint (detours through places Arena considers unwalkable are not
 counted). Calibration against the real spike bake is in docs/progress/airpit-release.md.
+
+`--split-edge 1.0` (Config.split_edge, default off) bisects the bake-source triangles before they are rasterised: walk_model clamps a
+cell's y interval to the TRIANGLE's own y range, so a huge near-vertical sliver (Yard's Respawn_Outdoor_COLLIDER, 75 m x 20 m x 0.14 m)
+fills columns the real triangle does not touch and closes a doorway that Unity's voxelizer leaves open. Yard's rows use it; every other
+map's recorded numbers are the unsplit ones.
 """
 from __future__ import annotations
 
@@ -96,6 +101,13 @@ ARENA_SOURCES = {
     # the 372 LevelBorder cubes are in the port bake only through navmesh_bake_layers.
     "autoservice": ArenaSource("arena_autoservice", "sharedassets63.assets", 2, AIRPIT_ARENA_LAYER_MASK,
                                63, "Arena_AutoService_AI", "work/extract/autoservice-native-v2"),
+    # Yard (measured 2026-11-20, Arena 0.6.2.0.48473; docs/PLAN-YARD.md item 10): the AI scene is level320 Arena_Yard_AI, whose NavMeshData
+    # lives in sharedassets281.assets (path 2, 287,024 B; level 320's own sharedassets holds none, scenes 281 and 314 share it, so the
+    # assets file index is NOT the AI scene index here), NavMeshSurface layers 9 / 11 / 13 / 18 / 30 (= AirPit's mask), a 87.2 x 122.0 x 180.1 m
+    # volume at (-22.8, 12, 71), placement = identity, agent radius 0.3 / height 1.7, 1,911 polygons, 59 of 66 tiles, 11 components.
+    # The mask excludes layer 29: the 118 border cubes are in the port bake only through navmesh_bake_layers.
+    "yard": ArenaSource("arena_yard", "sharedassets281.assets", 2, AIRPIT_ARENA_LAYER_MASK,
+                        320, "Arena_Yard_AI", "work/extract/yard-native-v2"),
 }
 
 
@@ -121,6 +133,11 @@ class Config:
     hole_ring_points: int = 16           # points on the circle around the prop's bounding box
     hole_ring_margin: float = 0.6        # circle radius = half the bounding-box diagonal + this margin
     hole_ring_min: int = 12              # walkable ring points needed (of hole_ring_points)
+    # Longest-edge bisection of the bake sources down to this edge length (metres) before they are rasterised; 0 = off (the default, every
+    # other map's numbers are the unsplit ones). The column model clamps a cell's y interval to the TRIANGLE's own y range, so one huge
+    # near-vertical sliver (Yard's `Respawn_Outdoor_COLLIDER`: 75 m x 20 m x 0.14 m, 60 triangles) fills whole columns that the real
+    # triangle does not touch and closes a doorway that Unity's voxelizer leaves open (docs/progress/yard-release.md, item 10).
+    split_edge: float = 0.0
 
 
 # ---------------------------------------------------------------------------------------------
@@ -347,6 +364,38 @@ def nearest_sample(pts, graph: SampleGraph, step, origin, point, radius, max_dy=
 def _source_arrays(cset, mask):
     tri_mask = mask[cset.tri_owner]
     return cset.tris[tri_mask], cset.tri_owner[tri_mask]
+
+
+def split_long_triangles(tris, owner, max_edge: float, max_rounds: int = 40):
+    """Longest-edge bisection (winding kept: (a, b, c) -> (a, m, c), (m, b, c)) until no edge is longer than `max_edge`."""
+    tris = np.asarray(tris, dtype=np.float64)
+    owner = np.asarray(owner)
+    for _ in range(max_rounds):
+        edges = np.stack([np.linalg.norm(tris[:, 1] - tris[:, 0], axis=1), np.linalg.norm(tris[:, 2] - tris[:, 1], axis=1),
+                          np.linalg.norm(tris[:, 0] - tris[:, 2], axis=1)], axis=1)
+        big = edges.max(axis=1) > max_edge
+        if not big.any():
+            break
+        longest = edges.argmax(axis=1)[big]
+        t, o = tris[big], owner[big]
+        rolled = np.take_along_axis(t, ((np.arange(3)[None, :] + longest[:, None]) % 3)[:, :, None], axis=1)
+        a, b, c = rolled[:, 0], rolled[:, 1], rolled[:, 2]
+        m = 0.5 * (a + b)
+        tris = np.concatenate([tris[~big], np.stack([a, m, c], axis=1), np.stack([m, b, c], axis=1)])
+        owner = np.concatenate([owner[~big], o, o])
+    return tris, owner
+
+
+def _sources(cset, mask, cfg: Config, grid=None):
+    """`_source_arrays`, split to `cfg.split_edge` when that is set (only the triangles that touch the grid, so the split stays small)."""
+    tris, owner = _source_arrays(cset, mask)
+    if cfg.split_edge and cfg.split_edge > 0 and len(tris):
+        if grid is not None:
+            keep = ((tris[:, :, 0].max(axis=1) >= grid.x0) & (tris[:, :, 0].min(axis=1) <= grid.x0 + grid.nx * grid.cs) &
+                    (tris[:, :, 2].max(axis=1) >= grid.z0) & (tris[:, :, 2].min(axis=1) <= grid.z0 + grid.nz * grid.cs))
+            tris, owner = tris[keep], owner[keep]
+        tris, owner = split_long_triangles(tris, owner, cfg.split_edge)
+    return tris, owner
 
 
 def _relevance(tris, ylo_all, yhi_all, agent):
@@ -735,7 +784,7 @@ def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), a
     grid = wm.make_grid(pts[:, 0].min() - m, pts[:, 0].max() + m, pts[:, 2].min() - m, pts[:, 2].max() + m,
                         pts[:, 1].min() - 1.5, pts[:, 1].max() + agent_p.height + 1.0, cfg.cell, cfg.y_step)
     ylo, yhi = float(pts[:, 1].min()), float(pts[:, 1].max())
-    tris, owner = _source_arrays(cset, mask_all)
+    tris, owner = _sources(cset, mask_all, cfg, grid)
     solid_ok, floor_ok = _relevance(tris, ylo, yhi, agent_p)
     solid, floor, nfrag = wm.build_occupancy(tris, owner, grid, agent_p, solid_ok, floor_ok)
     log(f"[diff] grid {grid.nx}x{grid.nz} cells, {grid.nbits} y bits, {nfrag} fragments")
@@ -747,7 +796,7 @@ def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), a
     if mask_arena is mask_all or np.array_equal(mask_arena, mask_all):
         v_mask = v_arena
     else:
-        tris_m, owner_m = _source_arrays(cset, mask_arena)
+        tris_m, owner_m = _sources(cset, mask_arena, cfg, grid)
         s_ok, f_ok = _relevance(tris_m, ylo, yhi, agent_p)
         solid_m, floor_m, _n = wm.build_occupancy(tris_m, owner_m, grid, agent_p, s_ok, f_ok)
         v_mask = wm.evaluate_samples(pts, solid_m, floor_m, grid, agent_a, shrink=cfg.arena_slack, **kw)
@@ -1004,6 +1053,9 @@ def main(argv=None):
     ap.add_argument("--arena-layer-mask", type=lambda v: int(v, 0), default=None,
                     help="Arena's NavMeshSurface layer mask (default: the --map's row)")
     ap.add_argument("--components", choices=("main", "low"), default="main")
+    ap.add_argument("--split-edge", type=float, default=0.0,
+                    help="bisect the bake-source triangles to this longest edge (metres) before rasterising; 0 = off. Use ~1.0 where a map "
+                         "has huge near-vertical sliver colliders (Yard's Respawn_Outdoor_COLLIDER), see Config.split_edge")
     ap.add_argument("--cell", type=float, default=0.1)
     ap.add_argument("--sample-step", type=float, default=0.2)
     ap.add_argument("--slack", type=float, default=0.1, help="radius allowance for both agent tests")
@@ -1027,7 +1079,7 @@ def main(argv=None):
     assets = args.assets or source.assets
     path_id = args.path_id if args.path_id is not None else source.path_id
     arena_layer_mask = args.arena_layer_mask if args.arena_layer_mask is not None else source.layer_mask
-    cfg = Config(cell=args.cell, sample_step=args.sample_step, arena_slack=args.slack, port_slack=args.slack,
+    cfg = Config(cell=args.cell, split_edge=args.split_edge, sample_step=args.sample_step, arena_slack=args.slack, port_slack=args.slack,
                  components=args.components, arena_layer_mask=arena_layer_mask)
     barriers = list(args.opened_barrier)
     exclusions = list(args.bake_exclusion)

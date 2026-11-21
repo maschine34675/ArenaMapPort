@@ -441,8 +441,10 @@ class SidecarTests(unittest.TestCase):
         self.assertEqual(VD.door_pose_errors(iceberg, REPO / "tools" / "maps" / "iceberg.doors.json", entries["Iceberg"].get("DoorPoses")), [])
         autoservice = json.loads((REPO / "tools" / "maps" / "autoservice.json").read_text(encoding="utf-8"))
         self.assertEqual(VD.door_pose_errors(autoservice, REPO / "tools" / "maps" / "autoservice.doors.json", entries["AutoService"].get("DoorPoses")), [])
+        yard = json.loads((REPO / "tools" / "maps" / "yard.json").read_text(encoding="utf-8"))
+        self.assertEqual(VD.door_pose_errors(yard, REPO / "tools" / "maps" / "yard.doors.json", entries["Yard"].get("DoorPoses")), [])   # Yard, since item 10 part 2 (Catalog only)
         for name, entry in entries.items():
-            if name not in ("Bowl", "Equator", "Bay5", "AirPit", "Iceberg", "AutoService"):     # the six released maps; the spike maps carry none
+            if name not in ("Bowl", "Equator", "Bay5", "AirPit", "Iceberg", "AutoService", "Yard"):     # the six released maps and Yard; the spike maps carry none
                 self.assertIsNone(entry.get("DoorPoses"), name)
 
     def test_the_registry_carries_exactly_the_generated_csharp(self):
@@ -2843,8 +2845,9 @@ class AutoserviceSidecarTests(unittest.TestCase):
 
     def test_the_pending_list_holds_only_maps_that_are_not_released(self):
         self.assertFalse(set(VD.PENDING_MIRROR_KEYS) & set(VD.RELEASE_MAP_KEYS))
-        # PLAN-YARD item 9 (2026-11-20): Yard's door and monitor sidecars validate in themselves ahead of the lock-step promotion; item 15 empties the tuple again
-        self.assertEqual(VD.PENDING_MIRROR_KEYS, ("arena_yard",))
+        # PLAN-YARD item 9 (2026-11-20) staged Yard's door and monitor sidecars ahead of the promotion; item 10 part 2 (2026-11-21) wrote the DoorPoses and
+        # ScoreMonitors literals into the descriptor row in the same commit as the bake inputs, so the tuple is empty again (the seam stays for the next map)
+        self.assertEqual(VD.PENDING_MIRROR_KEYS, ())
 
 
 class RealAutoserviceTests(unittest.TestCase):
@@ -3084,21 +3087,33 @@ class YardDoorSidecarTests(unittest.TestCase):
         self.assertEqual(c["open"], {"position": [0.0, 0.0, 2.596], "euler": [0.0, 0.0, 0.0]})
         self.assertAlmostEqual(c["open"]["position"][2] - c["closed"]["position"][2], 2.446, places=6)
 
-    def test_the_rows_validate_in_themselves_while_yard_is_pending(self):
-        self.assertIn("arena_yard", VD.PENDING_MIRROR_KEYS)
+    def test_the_rows_validate_against_the_registry_now_that_yard_is_not_pending(self):
+        self.assertNotIn("arena_yard", VD.PENDING_MIRROR_KEYS)
         descriptor = yard_descriptor()
         path = REPO / "tools" / "maps" / "yard.doors.json"
-        self.assertEqual(VD.door_pose_errors(descriptor, path, None), [])
-        # the barrier rule is waived only while the descriptor has no opened_barriers (plan item 10 adds the two unit paths) ...
-        self.assertEqual(VD.door_pose_errors(dict(descriptor, opened_barriers=[YARD_GATE, YARD_CRADLE], start_gates=[YARD_GATE, YARD_CRADLE]), path, None), [])
-        errors = VD.door_pose_errors(dict(descriptor, opened_barriers=[YARD_GATE]), path, None)
+        registry = VD.registry_entries((REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs").read_text(encoding="utf-8"))["Yard"]["DoorPoses"]
+        self.assertEqual(len(registry), 3)
+        self.assertEqual(VD.door_pose_errors(descriptor, path, registry), [])
+        # the barrier rule is judged: the descriptor carries the two unit paths since item 10, and a row whose barrier is missing is one error
+        self.assertEqual(descriptor["opened_barriers"], [YARD_GATE, YARD_CRADLE])
+        errors = VD.door_pose_errors(dict(descriptor, opened_barriers=[YARD_GATE]), path, registry)
         self.assertEqual(len(errors), 1, errors)
         self.assertIn("is not an opened_barriers entry", errors[0])
-        # ... and the pending seam is Yard's alone: another key gets no waiver, and a registry without Yard's rows is a mirror error then
+        # the mirror is compared like any other map's: rows missing altogether, a wrong count and a changed number are reported
+        self.assertTrue(any("registry's DoorPoses" in e for e in VD.door_pose_errors(descriptor, path, None)))
+        self.assertTrue(any("registry's DoorPoses" in e for e in VD.door_pose_errors(descriptor, path, registry[:2])))
+        changed = copy.deepcopy(registry)
+        changed[0]["seconds"] = 7.0
+        self.assertTrue(VD.door_pose_errors(descriptor, path, changed))
+        # the waivers exist only for a pending key, and no key is pending now
         self.assertTrue(VD.door_pose_errors(dict(descriptor, key="arena_equator"), path, None))
         from unittest.mock import patch
-        with patch.object(VD, "PENDING_MIRROR_KEYS", ()):
-            self.assertTrue(VD.door_pose_errors(descriptor, path, None))
+        with patch.object(VD, "PENDING_MIRROR_KEYS", ("arena_yard",)):
+            self.assertEqual(VD.door_pose_errors(descriptor, path, None), [])      # the scaffolding still works for the next map
+
+    def test_the_registry_carries_exactly_the_generated_csharp(self):
+        text = (REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs").read_text(encoding="utf-8")   # text mode: CRLF reads as LF
+        self.assertIn(E.render_csharp(self.rows), text)
 
     def test_the_validator_judges_the_ease_vocabulary(self):
         descriptor = yard_descriptor()
@@ -3109,7 +3124,9 @@ class YardDoorSidecarTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / "yard.doors.json"
                 path.write_text(json.dumps(doc), encoding="utf-8")
-                return VD.door_pose_errors(descriptor, path, None)
+                from unittest.mock import patch
+                with patch.object(VD, "PENDING_MIRROR_KEYS", ("arena_yard",)):      # the vocabulary is judged in itself: the registry mirror is waived here
+                    return VD.door_pose_errors(descriptor, path, None)
 
         self.assertEqual(run(lambda d: None), [])
         self.assertTrue(run(lambda d: d["poses"][0].update(ease="OutBack")))             # the name is case-exact

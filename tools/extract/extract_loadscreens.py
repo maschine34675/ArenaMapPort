@@ -149,6 +149,19 @@ LOADSCREENS = {
         {"asset_name": "Arena_MainMenu_Paralax_ChopShop-3", "path_id": 987, "file": "sharedassets1.assets", "size": (2048, 1024)},
         {"asset_name": "Arena_MainMenu_Paralax_ChopShop-4", "path_id": 135, "file": "sharedassets1.assets", "size": (2048, 1024)},
     ],
+    # Yard (PLAN-YARD item 11, 2026-11-20; Arena 0.6.2.0.48473 path ids, hints only): Arena's player-facing name is "Block", the
+    # art keeps the scene word for the loading screen and "Block" for the menu backgrounds. Entry 1 is
+    # AllScreens_Loadingscreen-Yard (1920x1080), entries 2-5 the four Arena_MainMenu_Paralax_Block-1..4 backgrounds
+    # (2048x1024; the names are unique in sharedassets1.assets). The "_NY" reskin of the loading screen (path 524) and the
+    # 1920x500 "Popup_background_yard" strip (path 1604) stay out. Survey S1 looked at all seven images (a residential courtyard);
+    # docs/progress/yard-release.md records the item 11 check of the extracted files.
+    "arena_yard": [
+        {"asset_name": "AllScreens_Loadingscreen-Yard", "path_id": 2945, "file": "resources.assets", "size": (1920, 1080)},
+        {"asset_name": "Arena_MainMenu_Paralax_Block-1", "path_id": 666, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_Block-2", "path_id": 1267, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_Block-3", "path_id": 330, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_Block-4", "path_id": 1287, "file": "sharedassets1.assets", "size": (2048, 1024)},
+    ],
 }
 
 

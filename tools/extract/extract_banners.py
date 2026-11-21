@@ -89,6 +89,11 @@ BANNERS = {
     # maps; the object name is lower-case with a hyphen), the only object of that name in resources.assets of Arena
     # 0.6.2.0.48473 (path_id 1738 is that build's hint); 769x460 RGB24 like the rest.
     "arena_autoservice": {"asset_name": "Matchmaker_Banner_chop-shop", "path_id": 1738},
+    # PLAN-YARD item 11 (2026-11-20): Arena's "Matchmaker_Banner_Yard" (singular; Arena's player-facing name for the map is
+    # "Block", the art keeps the scene word), the only object of that name in resources.assets of Arena 0.6.2.0.48473
+    # (path_id 979 is that build's hint); 769x460 RGB24. A "_NY" reskin (path 513) exists and stays out. The row precedes the
+    # map's promotion (item 15): the server only consults it for the maps of ArenaMapRegistry.All.
+    "arena_yard": {"asset_name": "Matchmaker_Banner_Yard", "path_id": 979},
 }
 
 

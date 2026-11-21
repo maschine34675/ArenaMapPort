@@ -247,6 +247,11 @@ def _check_art_files(root, expected, label):
             raise ValueError(f'{label} file is empty or not a JPEG: {name}')
 
 
+# Maps whose banner and loading-screen rows exist in the extractor tables before their promotion (Yard until PLAN-YARD
+# item 15, which empties this set with its pin test). The tables must equal the released set plus these.
+PENDING_ART_KEYS = frozenset({'arena_yard'})
+
+
 def validate_art(plugin, server, keys):
     """Banners (server mod) and loading screens (client plugin) are written by their extractors straight into
     dist/ and staged by no csproj target, so only this check keeps a map from shipping without its art or with
@@ -254,9 +259,9 @@ def validate_art(plugin, server, keys):
     sys.path.insert(0, str(REPO/'tools/extract'))
     import extract_banners
     import extract_loadscreens
-    if set(extract_banners.BANNERS) != set(keys):
+    if set(extract_banners.BANNERS) - PENDING_ART_KEYS != set(keys):
         raise ValueError('Banner table does not match the released maps')
-    if set(extract_loadscreens.LOADSCREENS) != set(keys):
+    if set(extract_loadscreens.LOADSCREENS) - PENDING_ART_KEYS != set(keys):
         raise ValueError('Loadscreen table does not match the released maps')
     _check_art_files(server/'banners', {extract_banners.output_filename(key) for key in keys}, 'Banner')
     _check_art_files(plugin/'loadscreens',

@@ -37,12 +37,13 @@ public sealed class DoorPoseSidecarTests
         "airpit" => ArenaMapRegistry.AirPit,
         "iceberg" => ArenaMapRegistry.Iceberg,
         "autoservice" => ArenaMapRegistry.AutoService,
+        "yard" => ArenaMapRegistry.Yard, // Catalog only until PLAN-YARD item 15; its rows are in the descriptor since item 10 part 2 (2026-11-21)
         _ => throw new ArgumentOutOfRangeException(nameof(stem)),
     };
 
     public static IEnumerable<object[]> Maps => new[]
     {
-        new object[] { "bowl" }, new object[] { "equator" }, new object[] { "bay5" }, new object[] { "airpit" }, new object[] { "iceberg" }, new object[] { "autoservice" },
+        new object[] { "bowl" }, new object[] { "equator" }, new object[] { "bay5" }, new object[] { "airpit" }, new object[] { "iceberg" }, new object[] { "autoservice" }, new object[] { "yard" },
     };
 
     private static double Distance(float[] a, float[] b) =>
@@ -420,8 +421,9 @@ public sealed class DoorPoseSidecarTests
     [Fact]
     public void OnlyTheSixReleasedMapsCarryDoorPoses()
     {
+        // Yard (Catalog only until PLAN-YARD item 15) carries its three rows since item 10 part 2, 2026-11-21: the descriptor row and the sidecar change in one commit
         foreach (var map in ArenaMapRegistry.Catalog)
-            Assert.Equal(ArenaMapRegistry.All.Contains(map), map.DoorPoses.Length > 0);
+            Assert.Equal(ArenaMapRegistry.All.Contains(map) || ReferenceEquals(map, ArenaMapRegistry.Yard), map.DoorPoses.Length > 0);
         Assert.All(ArenaMapRegistry.Bowl.DoorPoses.Concat(ArenaMapRegistry.Bay5.DoorPoses).Concat(ArenaMapRegistry.Iceberg.DoorPoses),
             p => Assert.False(p.IsSwitch));                                         // switches: AirPit's lamps and Equator's exit lamps only
         Assert.All(ArenaMapRegistry.Equator.DoorPoses.Where(p => p.IsSwitch), p => Assert.Equal("EXIT_LIGHT_EMISSIVE", p.Barrier));

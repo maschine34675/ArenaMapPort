@@ -93,11 +93,15 @@ public sealed class Bay5MapTests
     [Fact]
     public void ParkedMapsListNoPuddleDataAndTheSurfacesAreMembersOfTheNativeEnum()
     {
-        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ArenaMapRegistry.All.Contains(m)))
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ArenaMapRegistry.All.Contains(m) && !ReferenceEquals(m, ArenaMapRegistry.Yard)))
         {
             Assert.Empty(map.PuddleWaterMaterialNames);
             Assert.Empty(map.PuddleExtraSurfaces);
         }
+        // Yard (PLAN-YARD item 10, 2026-11-21; Catalog only until item 15): the rain-driven puddle decal of the other maps and no extra surface. Mirrors tools/maps/yard.json
+        // (YardMapTests); the loop over Catalog below covers it too.
+        Assert.Equal(new[] { "0877f2335044042e" }, ArenaMapRegistry.Yard.PuddleWaterMaterialNames);
+        Assert.Empty(ArenaMapRegistry.Yard.PuddleExtraSurfaces);
         // Autoservice (PLAN-AUTOSERVICE item 8, 2026-11-11; in the released set since item 12, so the loop over All below covers it too): the rain-driven
         // "puddle" decal (42 quads, Concrete 74 percent under them); the wet mold atlas sits on four inactive renderers and is not listed. Mirrors
         // tools/maps/autoservice.json.

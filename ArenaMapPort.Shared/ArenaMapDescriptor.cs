@@ -90,6 +90,46 @@ namespace ArenaMapPort.Shared
     }
 
     /// <summary>
+    /// One oriented, invisible solid wall the client raises at raid start from the map's tracked border sidecar
+    /// (LevelBorderBoxRepairs, <see cref="ArenaMapDescriptor.LevelBorderBoxes"/>): a BoxCollider of the world size
+    /// (<see cref="SizeX"/>, <see cref="SizeY"/>, <see cref="SizeZ"/>) centred at the world position (<see cref="CenterX"/>,
+    /// <see cref="CenterY"/>, <see cref="CenterZ"/>) and turned by the unit quaternion (<see cref="RotationX"/>,
+    /// <see cref="RotationY"/>, <see cref="RotationZ"/>, <see cref="RotationW"/>). Yard's 104 rows are Arena's own layer-29 border cubes of its
+    /// Scripts scene, which no package imports (tools/extract/extract_level_borders.py writes them to tools/maps/yard.borders.json and
+    /// prints this literal with --csharp). Unlike <see cref="ArenaBorderDescriptor"/> (thin movement-layer walls along a polygon) a box
+    /// keeps the cube's own shape and sits on the LevelBorder layer, which is what a kept cube is. Mirrors the sidecar's "rows" number for
+    /// number, in row order (validate_map_descriptors.py, YardMapTests).
+    /// </summary>
+    public sealed class ArenaBorderBox
+    {
+        public float CenterX { get; }
+        public float CenterY { get; }
+        public float CenterZ { get; }
+        public float SizeX { get; }
+        public float SizeY { get; }
+        public float SizeZ { get; }
+        public float RotationX { get; }
+        public float RotationY { get; }
+        public float RotationZ { get; }
+        public float RotationW { get; }
+
+        public ArenaBorderBox(float CenterX, float CenterY, float CenterZ, float SizeX, float SizeY, float SizeZ,
+            float RotationX, float RotationY, float RotationZ, float RotationW)
+        {
+            this.CenterX = CenterX;
+            this.CenterY = CenterY;
+            this.CenterZ = CenterZ;
+            this.SizeX = SizeX;
+            this.SizeY = SizeY;
+            this.SizeZ = SizeZ;
+            this.RotationX = RotationX;
+            this.RotationY = RotationY;
+            this.RotationZ = RotationZ;
+            this.RotationW = RotationW;
+        }
+    }
+
+    /// <summary>
     /// The empty cells of a ceiling lamp lattice that LampFillRepairs fills at raid start with copies of one authored
     /// template lamp: <see cref="TemplatePath"/> is the hierarchy path of the template (root scene object first, as
     /// <c>BoothDoorRepairs.FindByPath</c> reads it), <see cref="Y"/> the world height of every copy and
@@ -357,6 +397,10 @@ namespace ArenaMapPort.Shared
         public string[] NavMeshBakeExclusions { get; } // hierarchy paths whose subtree is dropped from the NavMesh bake sources
         public ArenaBorderDescriptor[] AuthoredBorders { get; } // invisible walls raised at raid start (empty = none)
                                                        // but stays active at runtime (colliders Arena's own bake walks through)
+        // Oriented solid walls from the map's border sidecar (PLAN-YARD item 10 part 2, LevelBorderBoxRepairs): Arena's own layer-29 cubes of a Scripts scene the
+        // package does not import, raised at raid start as invisible LevelBorder-layer BoxColliders. Empty = none (every released map). Mirrors
+        // tools/maps/<stem>.borders.json "rows"; the Editor never reads it (the bake takes the kept package cubes only).
+        public ArenaBorderBox[] LevelBorderBoxes { get; }
         public float[] BakeBounds { get; }             // [min_x, max_x, min_y, max_y, min_z, max_z] of the bake volume; empty = renderer union
         public int[] NavMeshBakeLayers { get; }        // layers the bake may collect from; empty = every layer but Water
         public string[] RestoredShadowCasterRoots { get; } // exact active LOD roots with source-disabled shadow proxies to restore
@@ -443,7 +487,8 @@ namespace ArenaMapPort.Shared
             ArenaScoreMonitor[]? ScoreMonitors = null,
             float EmissionCap = 0f,
             bool HasNativeWater = false,
-            float EmissionFloor = 0f)
+            float EmissionFloor = 0f,
+            ArenaBorderBox[]? LevelBorderBoxes = null)
 #nullable restore
         {
             this.Key = Key;
@@ -471,6 +516,7 @@ namespace ArenaMapPort.Shared
             this.EmissionFloor = EmissionFloor;
             this.NavMeshBakeExclusions = NavMeshBakeExclusions ?? new string[0];
             this.AuthoredBorders = AuthoredBorders ?? new ArenaBorderDescriptor[0];
+            this.LevelBorderBoxes = LevelBorderBoxes ?? new ArenaBorderBox[0];
             this.BakeBounds = BakeBounds ?? new float[0];
             this.NavMeshBakeLayers = NavMeshBakeLayers ?? new int[0];
             this.BackgroundSceneNames = BackgroundSceneNames ?? new string[0];
@@ -1571,6 +1617,8 @@ namespace ArenaMapPort.Shared
             DbBaseJsonPath: "arena_railwaystation/base.json");
 
         // Source scene selection: tools/extract/plans/yard.json. Identity is permanent.
+        // PLAN-YARD item 10 part 2 (2026-11-21): the sidecars are tools/maps/yard.json, yard.exits.json, yard.doors.json, yard.monitors.json and yard.borders.json,
+        // mirrored number for number (YardMapTests, validate_map_descriptors.py). Catalog only: Yard is NOT in All until item 15, so no raid reaches any of it.
         public static readonly ArenaMapDescriptor Yard = new(
             Key: "arena_yard",
             IdField: "187d5cbc21744c97e8348e76",
@@ -1581,11 +1629,189 @@ namespace ArenaMapPort.Shared
             ScriptsSceneName: "Arena_Yard_Scripts",
             AllSceneNames: new[] { "Arena_Yard_Scripts", "Arena_Yard", "Arena_Yard_Grass", "Arena_Yard_DesignStuff", "Arena_Yard_TeamFight", "Arena_Yard_TeamFight_DesignStuff", "Arena_Yard_Light" },
             InfiltrationName: "ArenaYard",
-            LocaleName: "Arena: Yard (spike)",
-            LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
+            LocaleName: "Arena: Block",
+            LocaleDescription: "The Block from EFT Arena: the yard between the apartment houses of a city block, with a fortified playground tower, parked vans and wrecked cars, turned into a death-fighting arena. A small sealed team pocket sits at each end, one behind a swing gate and one behind a rising facade gondola, with the open yard between them.",
             IconX: 691,
             IconY: 799,
-            DbBaseJsonPath: "arena_yard/base.json");
+            DbBaseJsonPath: "arena_yard/base.json",
+            // Bake inputs (PLAN-YARD item 10 part 1, docs/progress/yard-release.md, 2026-11-21; tools/tests/test_yard_bake_inputs.py pins the numbers). The two gates of
+            // Arena_Yard_TeamFight_DesignStuff's DOORS are unit-level barriers, the paths the rows of tools/maps/yard.doors.json name: the swing gate of the north pocket
+            // (two leaves; its two standing posts stay and leave a 4.15 m doorway) and the rising gondola of the south pocket (the plate's collider is dropped; the gap
+            // between the jambs stays). Both are start gates: a mode plugin's hold keeps them closed, nothing stays closed after the release (HeldGates empty).
+            // Mirrors tools/maps/yard.json opened_barriers/start_gates.
+            OpenedBarriers: new[] { "DOORS/Metal_gate_1", "DOORS/Construction_Cradle_02" },
+            StartGates: new[] { "DOORS/Metal_gate_1", "DOORS/Construction_Cradle_02" },
+            // x -67..21 is Arena's own surface volume (x -66.4..20.8) rounded outward; z -1 drops the south band (the long wall of the Respawn building closes it, the
+            // cradle gap is the only opening; 2,085 m2 of walled-off ring at z -1) and z 162 is Arena's volume end; y 4..14: the yard decks reach 10.65, Arena's highest
+            // main-component surface 10.70, and nothing walkable above y 14 joins the yard. Arena's own mask 9/11/13/18/30 plus 29 for the 11 kept TeamFight cubes plus
+            // layer 0 for the excavator beside the cradle gap (EFT's physics matrix has Player x Default colliding; the fall-back without it is 9/11/13/18/29/30).
+            BakeBounds: new[] { -67.0f, 21.0f, 4.0f, 14.0f, -1.0f, 162.0f },
+            NavMeshBakeLayers: new[] { 0, 9, 11, 13, 18, 29, 30 },
+            // The 11 TeamFight_LevelBorders cubes and the 3 closing walls under the DOORS stay scene objects (otherwise MapBorderRepairs disables them at raid start);
+            // the other 104 cubes of Arena's Scripts scene are raised as invisible LevelBorder-layer walls from LevelBorderBoxes below.
+            KeepLevelBorders: true,
+            // Puddle footsteps: the rain-driven puddle decal material of the other maps (0877f2335044042e). Mirrors tools/maps/yard.json puddle_water_material_names.
+            PuddleWaterMaterialNames: new[] { "0877f2335044042e" },
+            // Native advancing server time (user, 2026-11-20): no Directional light exists in the imported scenes, the WeatherRig supplies it.
+            UsesServerTime: true,
+            // PLAN-YARD item 8 (docs/progress/yard-release.md): one exit per team pocket (rule R3), mirrors tools/maps/yard.exits.json. South: the raised platform of the
+            // sealed room behind the rising gondola; North: the east end of the north pocket. The names say "Block" after the map's player-facing name.
+            Exits: new[]
+            {
+                new ArenaExitDescriptor("Block South Gate", -20.75f, 7.48f, 11.25f),
+                new ArenaExitDescriptor("Block North Gate", -3.25f, 6.15f, 150.5f),
+            },
+            // Shader stand-ins (PLAN-YARD item 13; mirrors tools/maps/yard.json shader_fallback_names, this order): the four of Chop Shop plus the two tree shaders that
+            // exist in no EFT file (Nature/SpeedTree and the impostor crossfade; two trees, both inferred stand-ins). Switch: MaterialFixes/YardShaderStandins (bound at item 15).
+            ShaderFallbackNames: new[]
+            {
+                "Custom/Billboard_FogSheet_Simple",
+                "Cloth/ClothShader",
+                "Cloth/ClothShader_backface",
+                "p0/Reflective/Bumped Specular SMap Baked",
+                "Nature/SpeedTree",
+                "Impostors/Examples/StandardCrossfade",
+            },
+            // Arena animates the north gate's two leaves (a 90 degree turn about local z, 1.7 s linear) and the south pocket's gondola (a 2.446 m rise with DOTween's
+            // OutBack, 8 s) with DotAnimators. Decoded by tools/extract/extract_door_poses.py (Arena 0.6.2.0.48473). Mirrors tools/maps/yard.doors.json (DoorPoseSidecarTests).
+            DoorPoses: new[]
+            {
+                new ArenaDoorPose("DOORS/Construction_Cradle_02", "Construction_Cradle_02_A", "", "DotAnimator", 8.0f,
+                    new[] { 0.0f, 0.0f, 0.15f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 2.596f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "outBack", null, null),
+                new ArenaDoorPose("DOORS/Metal_gate_1", "gate_door_1", "", "DotAnimator", 1.7f,
+                    new[] { 1.89f, 0.0f, 1.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 1.89f, 0.0f, 1.0f }, new[] { 0.0f, 0.0f, 90.0f },
+                    "dotanimator", "linear", null, null),
+                new ArenaDoorPose("DOORS/Metal_gate_1", "gate_door_2", "", "DotAnimator", 1.7f,
+                    new[] { -1.89f, 0.0f, 1.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -1.89f, 0.0f, 1.0f }, new[] { 0.0f, 0.0f, -90.0f },
+                    "dotanimator", "linear", null, null),
+            },
+            // Score monitors (PLAN-YARD item 9, tools/maps/yard.monitors.json, docs/progress/score-monitors.md): the 8 TV props of Arena_Yard_TeamFight_DesignStuff, all
+            // active in the scene: five timers and three alive boards, no score board.
+            ScoreMonitors: new[]
+            {
+                new ArenaScoreMonitor("Arena_Yard_TeamFight_DesignStuff", "TV/Arena_Home_theater (3)", new[] { -1.3004f, 17.6102f, 72.5792f }, 0, true),
+                new ArenaScoreMonitor("Arena_Yard_TeamFight_DesignStuff", "TV/Arena_Home_theater (5)", new[] { -1.3004f, 17.6102f, 81.3602f }, 2, true),
+                new ArenaScoreMonitor("Arena_Yard_TeamFight_DesignStuff", "TV/Arena_Home_theater (6)", new[] { -37.525f, 12.4117f, 84.6822f }, 2, true),
+                new ArenaScoreMonitor("Arena_Yard_TeamFight_DesignStuff", "TV/Arena_Home_theater (7)", new[] { -17.3668f, 13.3711f, 128.4082f }, 0, true),
+                new ArenaScoreMonitor("Arena_Yard_TeamFight_DesignStuff", "TV/Arena_Home_theater (9)", new[] { -20.9698f, 17.3294f, 16.9741f }, 0, true),
+                new ArenaScoreMonitor("Arena_Yard_TeamFight_DesignStuff", "TV/Arena_Home_theater (10)", new[] { -70.9319f, 15.5565f, 71.4692f }, 2, true),
+                new ArenaScoreMonitor("Arena_Yard_TeamFight_DesignStuff", "TV/Arena_Home_theater (11)", new[] { -66.7743f, 15.5375f, 51.9587f }, 0, true),
+                new ArenaScoreMonitor("Arena_Yard_TeamFight_DesignStuff", "TV/Arena_Home_theater (14)", new[] { -37.5247f, 12.4055f, 90.7957f }, 0, true),
+            },
+            // Oriented invisible walls (LevelBorderBoxRepairs, PLAN-YARD item 10 part 2): Arena's 104 layer-29 cubes of the excluded Scripts scene (Arena_Yard_LevelBorders), from
+            // tools/maps/yard.borders.json via `python tools/extract/extract_level_borders.py --from-sidecar tools/maps/yard.borders.json --csharp`; they bound what a player can
+            // climb or vault over fences and roofs (in the model of the decided bake they take 4.8 m2 of the yard at its edges and cut nothing off, so bots need no carver and the bake no source).
+            LevelBorderBoxes: new[]
+            {
+                new ArenaBorderBox(-71.4257f, 18.0591f, 71.3217f, 0.1515f, 4.5352f, 32.9876f, 0.0f, 0.0f, 0.0f, 1.0f),
+                new ArenaBorderBox(-71.3237f, 11.4014f, 71.5175f, 0.7253f, 4.5352f, 11.7769f, 0.0f, 0.0f, 0.0f, 1.0f),
+                new ArenaBorderBox(-54.6077f, 12.9618f, 75.3964f, 0.583f, 3.4902f, 4.0315f, 0.0f, 0.0f, 0.025267f, 0.999681f),
+                new ArenaBorderBox(-41.2237f, 9.3825f, 34.5474f, 0.303f, 6.524f, 10.2446f, 0.0f, 0.893436f, 0.0f, 0.449191f),
+                new ArenaBorderBox(-20.8981f, 10.9793f, 5.7391f, 2.1279f, 3.4295f, 6.1405f, 0.0f, 0.70822f, 0.0f, 0.705992f),
+                new ArenaBorderBox(-11.8722f, 8.7377f, 0.8758f, 2.1279f, 3.9843f, 11.2272f, 0.0f, 0.70822f, 0.0f, 0.705992f),
+                new ArenaBorderBox(6.9743f, 8.4893f, 66.1654f, 3.571f, 4.651f, 1.0f, 0.0f, 0.670814f, 0.0f, 0.741626f),
+                new ArenaBorderBox(7.2662f, 8.4893f, 63.3188f, 2.1796f, 4.651f, 1.0f, 0.0f, 0.67531f, 0.0f, 0.737534f),
+                new ArenaBorderBox(7.7796f, 8.4893f, 60.5451f, 3.5657f, 4.651f, 1.0f, 0.0f, 0.630371f, 0.0f, 0.776294f),
+                new ArenaBorderBox(9.1475f, 8.4893f, 55.7338f, 6.5072f, 4.651f, 1.0f, 0.0f, 0.58498f, 0.0f, 0.811047f),
+                new ArenaBorderBox(9.0603f, 8.4893f, 42.6514f, 2.8646f, 4.651f, 1.0f, 0.0f, 0.88157f, 0.0f, 0.472053f),
+                new ArenaBorderBox(7.7303f, 8.4893f, 40.7424f, 2.8646f, 4.651f, 1.0f, 0.0f, 0.900992f, 0.0f, 0.433837f),
+                new ArenaBorderBox(6.2941f, 8.4893f, 38.6254f, 2.3805f, 4.651f, 1.0f, 0.0f, 0.857428f, 0.0f, 0.514603f),
+                new ArenaBorderBox(-52.5273f, 9.8676f, 76.1312f, 3.2237f, 0.3372f, 0.2236f, 0.0f, 0.707107f, 0.0f, 0.707107f),
+                new ArenaBorderBox(7.4206f, 8.4893f, 87.872f, 3.5959f, 4.651f, 1.0f, 0.0f, 0.676993f, 0.0f, 0.735989f),
+                new ArenaBorderBox(7.0093f, 8.4893f, 91.5153f, 3.7069f, 4.651f, 1.0f, 0.0f, 0.654174f, 0.0f, 0.756344f),
+                new ArenaBorderBox(6.1207f, 8.4893f, 94.5715f, 2.4714f, 4.651f, 1.0f, 0.0f, 0.505819f, 0.0f, 0.862639f),
+                new ArenaBorderBox(5.3293f, 8.4893f, 96.2714f, 1.3846f, 4.651f, 1.0f, 0.0f, 0.589766f, 0.0f, 0.807574f),
+                new ArenaBorderBox(5.0009f, 8.4893f, 97.9842f, 2.6251f, 4.651f, 1.0f, 0.0f, 0.658466f, 0.0f, 0.752611f),
+                new ArenaBorderBox(-32.9192f, 8.6315f, 102.9743f, 4.463f, 5.1678f, 0.2703f, 0.0f, 0.879563f, 0.0f, 0.475782f),
+                new ArenaBorderBox(-35.9938f, 8.6315f, 100.6203f, 3.9342f, 5.1678f, 0.6893f, 0.0f, 0.986359f, 0.0f, 0.164607f),
+                new ArenaBorderBox(-31.5067f, 8.6315f, 106.4124f, 1.7663f, 5.1678f, 0.6893f, 0.0f, -0.829609f, 0.0f, 0.558345f),
+                new ArenaBorderBox(-31.5857f, 8.6315f, 105.2594f, 1.4262f, 5.1678f, 0.6893f, 0.0f, -0.497291f, 0.0f, 0.867584f),
+                new ArenaBorderBox(-32.1598f, 8.6315f, 107.6229f, 2.1492f, 5.1678f, 0.6893f, 0.0f, 0.902299f, 0.0f, -0.431111f),
+                new ArenaBorderBox(-54.7937f, 12.9743f, 77.7364f, 0.583f, 3.4902f, 0.8316f, 0.0f, -0.130526f, 0.0f, 0.991445f),
+                new ArenaBorderBox(-33.8185f, 8.6315f, 108.4703f, 2.1791f, 5.1678f, 0.6893f, 0.0f, 0.996932f, 0.0f, -0.078277f),
+                new ArenaBorderBox(-37.3531f, 8.6315f, 108.2942f, 5.0333f, 5.1678f, 0.6893f, 0.0f, 0.997598f, 0.0f, 0.069274f),
+                new ArenaBorderBox(-40.2877f, 8.6315f, 107.7594f, 1.1951f, 5.1678f, 0.6893f, 0.0f, 0.980788f, 0.0f, 0.195075f),
+                new ArenaBorderBox(-20.8137f, 11.4839f, 36.3436f, 6.3421f, 7.3493f, 6.3489f, 0.0f, 0.385408f, 0.0f, 0.922746f),
+                new ArenaBorderBox(-16.6123f, 8.3928f, 5.679f, 0.5585f, 2.0681f, 2.0603f, 0.0f, 0.568524f, 0.0f, 0.822667f),
+                new ArenaBorderBox(-13.8573f, 8.816f, 2.0847f, 0.6311f, 2.9146f, 2.4404f, 0.0f, -0.707107f, 0.0f, 0.707107f),
+                new ArenaBorderBox(-49.6457f, 11.5165f, 81.3857f, 0.7658f, 2.9146f, 2.4404f, 0.0f, -0.707107f, 0.0f, 0.707107f),
+                new ArenaBorderBox(-21.5181f, 6.5462f, 91.6905f, 0.1554f, 2.9184f, 1.015f, 0.0f, -0.000002f, 0.0f, 1.0f),
+                new ArenaBorderBox(-21.2847f, 6.5462f, 90.8574f, 0.1554f, 2.9184f, 1.015f, 0.0f, -0.25882f, 0.0f, 0.965925f),
+                new ArenaBorderBox(-64.4067f, 7.4155f, 95.9374f, 0.583f, 3.4902f, 4.4463f, 0.0f, 0.382683f, 0.0f, 0.92388f),
+                new ArenaBorderBox(-42.9776f, 10.0053f, 115.5346f, 0.2859f, 8.6697f, 8.2124f, 0.0f, 0.450375f, 0.0f, 0.89284f),
+                new ArenaBorderBox(-46.8667f, 10.0053f, 112.7964f, 0.2859f, 8.6697f, 1.3635f, 0.0f, 0.520814f, 0.0f, 0.85367f),
+                new ArenaBorderBox(-37.5341f, 11.5725f, 117.3164f, 5.0503f, 5.3548f, 0.2634f, 0.0f, 0.0f, 0.0f, 1.0f),
+                new ArenaBorderBox(-29.6064f, 11.8038f, 117.3164f, 10.8051f, 4.8921f, 0.2634f, 0.0f, 0.0f, 0.0f, 1.0f),
+                new ArenaBorderBox(-24.3355f, 11.8038f, 119.3384f, 3.7891f, 4.8921f, 0.2634f, 0.0f, 0.707107f, 0.0f, 0.707107f),
+                new ArenaBorderBox(-19.2845f, 11.5737f, 121.3664f, 9.8393f, 5.3523f, 0.2634f, 0.0f, 1.0f, 0.0f, 0.0f),
+                new ArenaBorderBox(-14.4967f, 11.5737f, 124.3854f, 5.7763f, 5.3523f, 0.2634f, 0.0f, 0.707107f, 0.0f, 0.707106f),
+                new ArenaBorderBox(-20.7149f, 10.1545f, 119.7304f, 4.4868f, 8.129f, 0.2634f, 0.0f, 0.94516f, 0.0f, 0.326607f),
+                new ArenaBorderBox(-19.0005f, 10.1545f, 121.1451f, 0.2642f, 8.129f, 0.2634f, 0.0f, -0.707107f, 0.0f, 0.707107f),
+                new ArenaBorderBox(-23.4851f, 10.1545f, 118.0064f, 2.2089f, 8.129f, 0.2634f, 0.0f, -0.165827f, 0.0f, 0.986155f),
+                new ArenaBorderBox(-65.7206f, 6.6544f, 77.5739f, 1.6916f, 2.7729f, 2.4044f, 0.0f, 0.711309f, 0.0f, 0.70288f),
+                new ArenaBorderBox(-38.7534f, 11.4365f, 103.9922f, 9.1707f, 5.4307f, 0.2634f, 0.0f, -0.845884f, 0.0f, 0.533368f),
+                new ArenaBorderBox(-42.7407f, 11.5652f, 107.1094f, 4.7737f, 5.4355f, 0.5799f, 0.0f, -0.246674f, 0.0f, 0.969099f),
+                new ArenaBorderBox(-36.9299f, 11.5463f, 96.8204f, 6.3287f, 5.3453f, 0.4438f, 0.0f, 0.707107f, 0.0f, 0.707107f),
+                new ArenaBorderBox(-36.9297f, 12.8705f, 87.6224f, 12.0763f, 2.6976f, 0.4438f, 0.0f, 0.707107f, 0.0f, 0.707107f),
+                new ArenaBorderBox(-39.7924f, 12.8705f, 81.8064f, 5.2818f, 2.6976f, 0.4438f, 0.0f, 0.0f, 0.0f, 1.0f),
+                new ArenaBorderBox(-11.7952f, 13.2835f, 100.0994f, 6.1089f, 4.007f, 1.069f, 0.0f, 0.0f, 0.0f, 1.0f),
+                new ArenaBorderBox(-14.5807f, 12.7675f, 105.3704f, 9.8372f, 4.9875f, 0.4438f, 0.0f, 0.707107f, 0.0f, 0.707106f),
+                new ArenaBorderBox(-11.8197f, 13.2541f, 110.7064f, 6.1089f, 4.007f, 1.069f, 0.0f, 0.0f, 0.0f, 1.0f),
+                new ArenaBorderBox(0.0513f, 7.7201f, 148.8306f, 4.6872f, 3.2466f, 0.4438f, 0.0f, 0.707107f, 0.0f, 0.707106f),
+                new ArenaBorderBox(-52.5155f, 11.3775f, 89.0184f, 22.7032f, 3.4902f, 0.1627f, 0.0f, 0.707107f, 0.0f, 0.707107f),
+                new ArenaBorderBox(-52.5157f, 11.3775f, 59.4194f, 30.3042f, 3.4902f, 0.1627f, 0.0f, 0.707107f, 0.0f, 0.707107f),
+                new ArenaBorderBox(4.9723f, 9.9255f, 36.6694f, 2.4328f, 7.4719f, 0.4438f, 0.0f, 0.825485f, 0.0f, 0.564424f),
+                new ArenaBorderBox(1.3794f, 9.9255f, 35.229f, 6.0436f, 7.4719f, 0.4438f, 0.0f, -0.025889f, 0.0f, 0.999665f),
+                new ArenaBorderBox(-2.6218f, 9.9255f, 33.778f, 3.5388f, 7.4719f, 0.4438f, 0.0f, -0.427506f, 0.0f, 0.904013f),
+                new ArenaBorderBox(-4.5447f, 9.9255f, 31.1576f, 3.0006f, 7.4719f, 0.4438f, 0.0f, -0.486051f, 0.0f, 0.87393f),
+                new ArenaBorderBox(-5.6157f, 9.9255f, 29.0634f, 1.7324f, 7.4719f, 0.4438f, 0.0f, -0.498116f, 0.0f, 0.86711f),
+                new ArenaBorderBox(-7.3927f, 9.9255f, 25.6607f, 5.9744f, 7.4719f, 0.4438f, 0.0f, -0.512459f, 0.0f, 0.858712f),
+                new ArenaBorderBox(1.7253f, 9.9255f, 35.4764f, 5.3268f, 7.4719f, 0.4438f, 0.0f, -0.025889f, 0.0f, 0.999665f),
+                new ArenaBorderBox(3.3825f, 10.2135f, 35.9664f, 0.1225f, 2.9193f, 0.4738f, 0.0f, -0.025889f, 0.0f, 0.999665f),
+                new ArenaBorderBox(-52.5273f, 8.2665f, 76.8437f, 1.3683f, 3.4902f, 0.2236f, 0.0f, 0.707107f, 0.0f, 0.707107f),
+                new ArenaBorderBox(-15.0507f, 9.9255f, 19.5084f, 0.9186f, 7.4719f, 0.4438f, 0.0f, -0.525519f, 0.0f, 0.850782f),
+                new ArenaBorderBox(-15.5079f, 9.9255f, 18.6578f, 1.4797f, 7.4719f, 0.4438f, 0.0f, -0.549385f, 0.0f, 0.835569f),
+                new ArenaBorderBox(-16.4827f, 9.9255f, 17.0716f, 2.23f, 7.4719f, 0.4438f, 0.0f, -0.536784f, 0.0f, 0.84372f),
+                new ArenaBorderBox(-27.0289f, 9.9255f, 17.618f, 1.5232f, 7.4719f, 0.4438f, 0.0f, 0.389468f, 0.0f, 0.92104f),
+                new ArenaBorderBox(-26.3228f, 9.9255f, 16.6275f, 1.1624f, 7.4719f, 0.4438f, 0.0f, 0.57743f, 0.0f, 0.81644f),
+                new ArenaBorderBox(-29.1493f, 9.9255f, 18.9582f, 3.6099f, 7.4719f, 0.4438f, 0.0f, 0.220669f, 0.0f, 0.975349f),
+                new ArenaBorderBox(-32.4717f, 9.9255f, 20.4094f, 3.6099f, 7.4719f, 0.4438f, 0.0f, 0.200291f, 0.0f, 0.979737f),
+                new ArenaBorderBox(-35.8657f, 9.9255f, 21.7544f, 3.6099f, 7.4719f, 0.4438f, 0.0f, 0.189249f, 0.0f, 0.981929f),
+                new ArenaBorderBox(-38.8494f, 9.9255f, 23.2576f, 3.0414f, 7.4719f, 0.4438f, 0.0f, 0.258226f, 0.0f, 0.966084f),
+                new ArenaBorderBox(-53.9503f, 12.9555f, 65.9394f, 14.8832f, 3.4902f, 2.1189f, 0.0f, 0.707107f, 0.0f, 0.707107f),
+                new ArenaBorderBox(-41.2877f, 9.9255f, 25.1024f, 3.1612f, 7.4719f, 0.4438f, 0.0f, 0.374859f, 0.0f, 0.927082f),
+                new ArenaBorderBox(-44.9137f, 9.9255f, 28.7214f, 7.0836f, 7.4719f, 0.4438f, 0.0f, 0.390994f, 0.0f, 0.920393f),
+                new ArenaBorderBox(-2.7447f, 9.7955f, 51.3564f, 5.0679f, 7.4719f, 2.627f, 0.0f, -0.004363f, 0.0f, 0.99999f),
+                new ArenaBorderBox(-5.1014f, 9.7955f, 48.7726f, 0.159f, 7.4719f, 2.5955f, 0.0f, -0.026257f, 0.0f, 0.999655f),
+                new ArenaBorderBox(-5.1857f, 9.7955f, 46.3294f, 0.1776f, 7.4719f, 2.4955f, 0.0f, 0.057644f, 0.0f, 0.998337f),
+                new ArenaBorderBox(-3.9927f, 9.7955f, 45.1344f, 0.1776f, 7.4719f, 2.4955f, 0.0f, 0.705336f, 0.0f, 0.708873f),
+                new ArenaBorderBox(-1.7331f, 9.7955f, 45.0576f, 0.1776f, 7.4719f, 2.0115f, 0.0f, 0.731773f, 0.0f, 0.681549f),
+                new ArenaBorderBox(2.4095f, 9.7955f, 48.0801f, 0.1776f, 7.4719f, 8.2708f, 0.0f, 0.999496f, 0.0f, 0.031732f),
+                new ArenaBorderBox(0.9693f, 9.7955f, 52.2954f, 0.1776f, 7.4719f, 2.4955f, 0.0f, -0.709204f, 0.0f, 0.705003f),
+                new ArenaBorderBox(1.4964f, 9.7955f, 43.9261f, 0.1776f, 7.4719f, 2.2307f, 0.0f, 0.681051f, 0.0f, 0.732236f),
+                new ArenaBorderBox(-53.9503f, 12.9555f, 81.7899f, 5.3931f, 3.4902f, 2.1189f, 0.0f, 0.707107f, 0.0f, 0.707107f),
+                new ArenaBorderBox(-0.1687f, 9.7955f, 44.4384f, 0.1776f, 7.4719f, 1.683f, 0.0f, 0.920148f, 0.0f, 0.391572f),
+                new ArenaBorderBox(-18.3967f, 12.4306f, 65.0534f, 2.4464f, 7.4719f, 7.8743f, 0.0f, 1.0f, 0.0f, 0.000872f),
+                new ArenaBorderBox(-15.9502f, 12.4306f, 64.9664f, 2.4464f, 7.4719f, 7.6919f, 0.0f, 1.0f, 0.0f, 0.000872f),
+                new ArenaBorderBox(-12.371f, 12.4306f, 64.8964f, 4.8058f, 7.4719f, 7.8354f, 0.0f, 1.0f, 0.0f, 0.000872f),
+                new ArenaBorderBox(-15.0557f, 13.5453f, 75.5744f, 9.3894f, 7.4719f, 9.259f, 0.0f, 1.0f, 0.0f, 0.000872f),
+                new ArenaBorderBox(-40.1267f, 13.1528f, 62.6084f, 4.6982f, 7.4719f, 6.2673f, 0.0f, 1.0f, 0.0f, 0.000872f),
+                new ArenaBorderBox(-53.601f, 8.0425f, 80.9382f, 2.4126f, 1.0f, 6.9832f, 0.0f, 0.0f, 0.0f, 1.0f),
+                new ArenaBorderBox(-53.9507f, 12.9715f, 78.9264f, 0.583f, 3.4902f, 2.1189f, -0.092296f, 0.701057f, -0.092296f, 0.701057f),
+                new ArenaBorderBox(-41.4074f, 9.3825f, 43.0719f, 0.303f, 6.524f, 2.7792f, 0.0f, -0.50701f, 0.0f, 0.86194f),
+                new ArenaBorderBox(-39.3227f, 9.3825f, 41.4254f, 0.303f, 6.524f, 2.6999f, 0.0f, -0.360832f, 0.0f, 0.932631f),
+                new ArenaBorderBox(-37.5497f, 9.3825f, 39.3694f, 0.303f, 6.524f, 2.6999f, 0.0f, -0.314849f, 0.0f, 0.949142f),
+                new ArenaBorderBox(-36.1517f, 9.3825f, 37.1054f, 0.303f, 6.524f, 2.6999f, 0.0f, -0.222282f, 0.0f, 0.974982f),
+                new ArenaBorderBox(-35.5625f, 9.3825f, 34.4591f, 0.303f, 6.524f, 2.8924f, 0.0f, -0.006156f, 0.0f, 0.999981f),
+                new ArenaBorderBox(-33.9774f, 9.3825f, 32.3752f, 0.303f, 6.524f, 3.2007f, 0.0f, -0.569233f, 0.0f, 0.822176f),
+                new ArenaBorderBox(-32.8372f, 9.3825f, 31.0647f, 0.303f, 6.524f, 1.9194f, 0.0f, 0.178858f, 0.0f, 0.983875f),
+                new ArenaBorderBox(-34.2819f, 9.3825f, 30.6693f, 0.303f, 6.524f, 2.2544f, 0.0f, 0.814844f, 0.0f, 0.57968f),
+                new ArenaBorderBox(-35.8683f, 9.3825f, 31.134f, 0.303f, 6.524f, 2.7326f, 0.0f, 0.791368f, 0.0f, 0.61134f),
+            });
 
         // Source scene selection: tools/extract/plans/iceberg.json. Identity is permanent.
         public static readonly ArenaMapDescriptor Iceberg = new(

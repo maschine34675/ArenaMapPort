@@ -35,6 +35,8 @@
          HasNativeWater, the package directory, the identity rule of water.json, the texture file name rule). NativeWaterRepairs.cs (WaterSSR types) stays out; NativeWaterTests reads it as text. -->
     <Compile Include="..\ArenaMapPort.Client\NativeWaterModel.cs" Link="Client\NativeWaterModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\DoorPoseModel.cs" Link="Client\DoorPoseModel.cs" />
+    <!-- Level border walls (PLAN-YARD item 10 part 2): the Unity-free rules of LevelBorderBoxRepairs (names, layer, usable rows, world bounds, the idempotent pass). -->
+    <Compile Include="..\ArenaMapPort.Client\LevelBorderBoxModel.cs" Link="Client\LevelBorderBoxModel.cs" />
     <!-- Gate and door sounds (docs/progress/gate-sounds.md): the manifest, row matching, gain, seam pick and cut, and the WAV reader. No Unity type inside. -->
     <Compile Include="..\ArenaMapPort.Client\GateSoundModel.cs" Link="Client\GateSoundModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\PcmWav.cs" Link="Client\PcmWav.cs" />

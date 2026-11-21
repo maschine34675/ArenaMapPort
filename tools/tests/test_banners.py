@@ -23,10 +23,10 @@ class BannerTableTests(unittest.TestCase):
     """The BANNERS table itself: exactly the maps of the release, at the path_ids/names the
     2026-09-25 research pass (Equator, Bay5), the 2026-10-11 probe (AirPit), the 2026-10-18 probe (Bowl) and the
     2026-10-30 probe (Iceberg, PLAN-ICEBERG item 10) and the
-    2026-11-11 probe (Autoservice, PLAN-AUTOSERVICE item 9) verified against a live UnityPy read."""
+    2026-11-11 probe (Autoservice, PLAN-AUTOSERVICE item 9) and the 2026-11-20 probe (Yard, PLAN-YARD item 11) verified against a live UnityPy read."""
 
-    def test_exactly_the_six_banner_maps(self):
-        self.assertEqual(set(EB.BANNERS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice"})
+    def test_exactly_the_seven_banner_maps(self):
+        self.assertEqual(set(EB.BANNERS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice", "arena_yard"})
 
     def test_equator_asset_identity(self):
         self.assertEqual(EB.BANNERS["arena_equator"], {"asset_name": "Matchmaker_Banner_Equator", "path_id": 3030})
@@ -48,6 +48,12 @@ class BannerTableTests(unittest.TestCase):
         # singular). Arena 0.6.1.0.48206 resources.assets; the lookup is by the unique name, the path_id is a hint.
         self.assertEqual(EB.BANNERS["arena_iceberg"], {"asset_name": "Matchmaker_Banners_Iceberg", "path_id": 1482})
         self.assertEqual(EB.output_filename("arena_iceberg"), "arena_iceberg.jpg")
+
+    def test_yard_asset_identity(self):
+        # PLAN-YARD item 11: singular like Autoservice's; Arena's player-facing name is "Block" but the art keeps the scene word.
+        # The "_NY" reskin (path 513) is not the banner.
+        self.assertEqual(EB.BANNERS["arena_yard"], {"asset_name": "Matchmaker_Banner_Yard", "path_id": 979})
+        self.assertEqual(EB.output_filename("arena_yard"), "arena_yard.jpg")
 
     def test_autoservice_asset_identity(self):
         # PLAN-AUTOSERVICE item 9: singular like four of the other maps, lower-case with a hyphen ("chop-shop").
@@ -116,7 +122,7 @@ class CheckModeTests(unittest.TestCase):
     def test_reports_every_map_missing_from_an_empty_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
             missing = EB.check(tmp, "jpg")
-            self.assertEqual(set(missing), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice"})
+            self.assertEqual(set(missing), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice", "arena_yard"})
 
     def test_an_empty_file_still_counts_as_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -158,7 +164,7 @@ class RealSourceExtractionTests(unittest.TestCase):
     def test_every_banner_extracts_to_the_expected_size(self):
         with tempfile.TemporaryDirectory() as tmp:
             written = EB.extract_all(ARENA_SOURCE, tmp, ext="jpg", quality=90)
-            self.assertEqual(set(written), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice"})
+            self.assertEqual(set(written), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice", "arena_yard"})
             for map_key, path in written.items():
                 self.assertTrue(path.is_file())
                 self.assertGreater(path.stat().st_size, 1000, f"{map_key}: suspiciously small output file")

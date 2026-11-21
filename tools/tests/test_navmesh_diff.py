@@ -4,6 +4,7 @@ import json
 import struct
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -809,29 +810,99 @@ class EndToEndTests(unittest.TestCase):
 
 
 class ArenaSourceTableTests(unittest.TestCase):
-    """The per-map oracle rows (ARENA_SOURCES). Autoservice's row was measured on 2026-11-11 (docs/progress/autoservice-release.md, item 8);
-    test_autoservice_bake_inputs.py checks it against the installed Arena and the map's plan."""
+    """The per-map oracle rows (ARENA_SOURCES). Autoservice's row was measured on 2026-11-11 (docs/progress/autoservice-release.md, item 8) and
+    Yard's on 2026-11-20 (docs/progress/yard-release.md, item 10); test_autoservice_bake_inputs.py and test_yard_bake_inputs.py check them
+    against the installed Arena and the maps' plans."""
 
     def test_every_row_has_a_distinct_map_key_and_ai_scene_and_a_native_package(self):
         rows = nd.ARENA_SOURCES
-        self.assertEqual(sorted(rows), ["airpit", "autoservice", "bowl", "iceberg"])
+        self.assertEqual(sorted(rows), ["airpit", "autoservice", "bowl", "iceberg", "yard"])
         self.assertEqual(len({r.key for r in rows.values()}), len(rows))
         for stem, row in rows.items():
             self.assertEqual(row.key, "arena_" + stem)
             self.assertEqual(row.path_id, 2)
             self.assertRegex(row.package, r"^work/extract/" + stem + r"-native-v\d+$")
-            self.assertEqual(row.assets, f"sharedassets{row.ai_scene_index}.assets")
+            if stem == "yard":
+                # the one row whose NavMeshData is NOT in the assets file of its AI scene's own index: level 320 reads sharedassets281.assets
+                # (scenes 281 and 314 share it; sharedassets320.assets holds none)
+                self.assertEqual((row.assets, row.ai_scene_index), ("sharedassets281.assets", 320))
+            else:
+                self.assertEqual(row.assets, f"sharedassets{row.ai_scene_index}.assets")
 
     def test_autoservice_is_the_measured_row(self):
         row = nd.ARENA_SOURCES["autoservice"]
         self.assertEqual((row.key, row.assets, row.path_id, row.layer_mask), ("arena_autoservice", "sharedassets63.assets", 2, 0x40042A00))
         self.assertEqual((row.ai_scene_index, row.ai_scene_name, row.package), (63, "Arena_AutoService_AI", "work/extract/autoservice-native-v2"))
 
+    def test_yard_is_the_measured_row(self):
+        row = nd.ARENA_SOURCES["yard"]
+        self.assertEqual((row.key, row.assets, row.path_id, row.layer_mask), ("arena_yard", "sharedassets281.assets", 2, 0x40042A00))
+        self.assertEqual((row.ai_scene_index, row.ai_scene_name, row.package), (320, "Arena_Yard_AI", "work/extract/yard-native-v2"))
+        self.assertEqual(row.layer_mask, nd.AIRPIT_ARENA_LAYER_MASK)
+
     def test_the_other_rows_are_unchanged(self):
         self.assertEqual(nd.ARENA_SOURCES["bowl"].layer_mask, 0x40040A00)
         self.assertEqual((nd.ARENA_SOURCES["iceberg"].assets, nd.ARENA_SOURCES["iceberg"].ai_scene_index), ("sharedassets377.assets", 377))
         self.assertEqual((nd.ARENA_SOURCES["airpit"].assets, nd.ARENA_SOURCES["airpit"].package),
                          ("sharedassets33.assets", "work/extract/airpit-native-v8"))
+
+
+class SplitLongTrianglesTests(unittest.TestCase):
+    """Config.split_edge (Yard, 2026-11-20): longest-edge bisection of the bake sources, off by default so every other map's numbers stay."""
+
+    def test_it_is_off_by_default_and_the_default_run_is_the_unsplit_one(self):
+        self.assertEqual(nd.Config().split_edge, 0.0)
+        tris = np.array([[[0, 0, 0], [40, 0, 0], [0, 0, 40]]], dtype=float)
+        owner = np.array([7], dtype=np.int32)
+        cset = types.SimpleNamespace(tris=tris, tri_owner=owner)
+        mask = np.zeros(8, dtype=bool)
+        mask[7] = True
+        got, got_owner = nd._sources(cset, mask, nd.Config())
+        np.testing.assert_array_equal(got, tris)
+        np.testing.assert_array_equal(got_owner, owner)
+        split, split_owner = nd._sources(cset, mask, nd.Config(split_edge=5.0))
+        self.assertGreater(len(split), 1)
+        self.assertTrue((split_owner == 7).all())
+
+    def test_edges_stay_below_the_bound_and_area_and_winding_are_kept(self):
+        rng = np.random.default_rng(3)
+        tris = rng.uniform(-30, 30, size=(12, 3, 3))
+        tris[3] = [[-60, 5.9, 16.16], [10, 26.4, 16.3], [-64.8, 26.4, 16.27]]            # a Yard-like 75 m sliver
+        owner = np.arange(12, dtype=np.int32)
+        out, out_owner = nd.split_long_triangles(tris, owner, 1.0)
+        edges = np.concatenate([np.linalg.norm(out[:, a] - out[:, b], axis=1) for a, b in ((0, 1), (1, 2), (2, 0))])
+        self.assertLessEqual(float(edges.max()), 1.0 + 1e-9)
+
+        def area_and_normal(t):
+            n = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+            return 0.5 * np.linalg.norm(n, axis=1), n
+
+        a_in, n_in = area_and_normal(tris)
+        a_out, n_out = area_and_normal(out)
+        for k in range(12):
+            sel = out_owner == k
+            self.assertAlmostEqual(float(a_out[sel].sum()), float(a_in[k]), places=6)
+            # every piece faces the way its parent did: the floor test (normal.y > 0) of walk_model depends on the winding
+            self.assertTrue((np.einsum("ij,j->i", n_out[sel], n_in[k]) > 0).all())
+
+    def test_a_triangle_within_the_bound_is_untouched(self):
+        tris = np.array([[[0, 0, 0], [0.5, 0, 0], [0, 0, 0.5]]], dtype=float)
+        out, out_owner = nd.split_long_triangles(tris, np.array([4]), 1.0)
+        np.testing.assert_array_equal(out, tris)
+        self.assertEqual(out_owner.tolist(), [4])
+
+    def test_the_cli_flag_reaches_the_config(self):
+        seen = {}
+
+        def analyse(package, cfg, barriers, points, arena_data, **kw):
+            seen["cfg"] = cfg
+            return {}
+
+        with mock.patch.object(nd, "analyse", analyse), mock.patch.object(nd, "format_report", lambda report, top: ""):
+            self.assertEqual(nd.main(["--map", "yard", "--split-edge", "1.0"]), 0)
+            self.assertEqual(seen["cfg"].split_edge, 1.0)
+            self.assertEqual(nd.main(["--map", "bowl"]), 0)
+            self.assertEqual(seen["cfg"].split_edge, 0.0)
 
 
 if __name__ == "__main__":

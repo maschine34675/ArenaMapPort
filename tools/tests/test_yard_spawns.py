@@ -23,7 +23,9 @@ Rules (the numbers are what the committed layout measures, with a small margin):
   (spawn-rows-and-pocket-exits.md), the literal pin of the first rows is ``FIRST_ROWS`` below.
 * The 14 rows from Arena's AI points keep: 8 m to a gate's swept footprint, 10 m to every pocket marker, 5 m outside both spawn bounds,
   5 m to every Player row; the four fill rows keep: 10 m to a gate, 7 m to a pocket marker, 1.5 m outside both bounds, 5 m to every
-  Player row, 4 m to every other row, and stand north of z 17 (the south band is where Arena's mesh is cut straight at its bake volume).
+  Player row, 4 m to every other row, and stand north of z 17 (the long south wall of the Respawn building; the band south of it and the strips behind the two corner fences
+  are an outer ring that the port's bake does not join to the yard, test_yard_bake_inputs.py; fill-02 and fill-03 stood in it in the first
+  draft and were moved into the yard on 2026-11-21, before any build).
 * R3: every pocket holds exactly one exit whose centre lies inside the pocket's initial spawn bound (horizontally, the whole 4 x 4 m box
   inside as well), every Player and Bot row keeps 2.5 m to the box EDGE, there is floor under the centre and no solid stands in the box
   between floor + 0.3 and floor + 2.5 m.
@@ -72,20 +74,25 @@ DROPPED_BORN_POINTS = (0, 1, 6)
 MOVED_FROM_POINT = {"born-02": 1.85, "born-03": 0.8, "born-04": 1.85, "born-05": 1.85, "born-07": 1.95, "born-08": 1.55,
                     "born-09": 2.0, "born-10": 2.0}
 # R1: the first layout, in file order (id suffix, position). A frozen record: rows are appended-only from here (docs/progress/yard-release.md).
+# fill-02 and fill-03 are the positions of 2026-11-21 (moved out of the outer ring before any build or release, see the module docstring).
 FIRST_ROWS = [("core-01", [-61.97, 6.15, 54.27]), ("core-03", [-5.08, 6.15, 57.92]), ("core-04", [-12.88, 6.17, 87.03]),
               ("core-05", [-6.31, 6.16, 116.92]), ("core-06", [-36.5, 6.15, 112.19]), ("core-07", [-60.81, 6.15, 89.13]),
               ("born-02", [5.94, 6.18, 45.0]), ("born-03", [7.68, 6.2, 45.99]), ("born-04", [7.13, 7.38, 74.38]),
               ("born-05", [6.73, 7.38, 71.56]), ("born-07", [-56.14, 6.15, 98.7]), ("born-08", [-55.12, 6.15, 100.55]),
               ("born-09", [-59.78, 6.25, 49.32]), ("born-10", [-57.7, 6.25, 47.36]), ("fill-01", [-32.5, 6.15, 23.5]),
-              ("fill-02", [10.5, 6.15, 25.5]), ("fill-03", [-56.5, 6.21, 22.5]), ("fill-04", [-35.5, 6.15, 65.5])]
+              ("fill-02", [-25.0, 6.19, 42.0]), ("fill-03", [-7.0, 6.15, 39.0]), ("fill-04", [-35.5, 6.15, 65.5])]
 EXIT_POSITIONS = {"Block South Gate": [-20.75, 7.48, 11.25], "Block North Gate": [-3.25, 6.15, 150.5]}
 # The two gates (package DesignStuff DOORS/<path>), the horizontal footprint the rules use over the gate's whole travel (x0, x1, z0, z1):
 # the cradle rises (+2.446 m, only the vertical extent changes), so its plate's footprint is the swept one; the north gate's two leaves
-# swing +/-90 degrees about their hinges (doors sidecar); decoded in the 2026-11-20 review: both leaves swing toward -z (the yard side), so the swept
-# footprint is one-sided, x -11.88..-7.55, z about 125.7..127.9 (derived from Unity's rotation convention, not run in Unity).
+# swing +/-90 degrees about their hinges. Since plan item 10 part 1 (2026-11-21) the table is DERIVED, not decoded by hand: the leaf rows of
+# yard.doors.json (closed and open local position and euler angles) carried through the scene's own parent matrices, 37 poses over the travel,
+# every collider of the moved part, unioned with the standing frame; the closed pose reproduces the scene's world matrices to 0.0. Both leaves
+# swing toward -z (the yard side) in Unity's convention (Euler order Y X Z, the matrices of port_colliders), so the swept footprint is one-sided,
+# x -11.88..-7.55, z 125.81..127.91 (the hand-decoded table of the 2026-11-20 review had z0 125.65, 0.16 m wider; rows only gain room). Not run in
+# Unity: the swing direction is a host check of plan item 17. The literal is the rounded-outward result (the test below re-derives it).
 GATES = {
     "DOORS/Construction_Cradle_02/Construction_Cradle_02_A": (-24.4, -18.1, 16.2, 17.4),
-    "DOORS/Metal_gate_1": (-11.9, -7.5, 125.65, 127.9),
+    "DOORS/Metal_gate_1": (-11.9, -7.5, 125.8, 127.9),
 }
 GATE_ROOTS = {"DOORS/Construction_Cradle_02": "cradle", "DOORS/Metal_gate_1": "north gate"}
 NATIVE_GATE_MIN, NATIVE_MARKER_MIN, NATIVE_BOUND_MIN = 8.0, 10.0, 5.0
@@ -221,7 +228,8 @@ class YardSidecarTests(SidecarData, unittest.TestCase):
         self.assertEqual(self.map["infiltration_name"], "ArenaYard")
 
     def test_the_first_layout_is_the_committed_one(self):
-        """R1, the literal point of this pin: the 18 Bot rows as decided on 2026-11-20 (appended-only from here)."""
+        """R1, the literal point of this pin: the 18 Bot rows as decided on 2026-11-20, with fill-02 and fill-03 moved into the yard on
+        2026-11-21 before any build (appended-only from here)."""
         self.assertEqual(self.bot_points,
                          [{"id": f"arena_yard-bot-{s}", "position": pos, "radius": 25, "categories": ["Bot", "BotPmc"]} for s, pos in FIRST_ROWS])
 
@@ -539,7 +547,8 @@ class YardArenaMeshTests(SidecarData, unittest.TestCase):
 
     def test_the_rows_cover_the_25_m_rule_on_every_cell_outside_the_pockets(self):
         """ArenaMode places a bot only on a Bot row farther than 25 m (3D) from the player: every walkable cell outside the pocket footprints
-        keeps at least 5 such rows (measured: minimum 12, median 16 of 18; the 14 native rows alone gave 8 and 13)."""
+        keeps at least 5 such rows (measured: minimum 11, median 16 of 18; the 14 native rows alone gave 8 and 13; the minimum was 12 before
+        fill-02 and fill-03 moved out of the outer ring on 2026-11-21)."""
         np = self.np
         points, polys = self.no.sample_polygons(self.mesh, 1.0, origin=(0.5, 0.5))
         main = points[self.mesh.labels[polys] == 0]
@@ -554,7 +563,7 @@ class YardArenaMeshTests(SidecarData, unittest.TestCase):
         counts = np.zeros(len(cells), int)
         for row in self.bot_points:
             counts += (np.linalg.norm(cells - np.array(row["position"]), axis=1) > 25.0)
-        self.assertGreaterEqual(int(counts.min()), 12)
+        self.assertGreaterEqual(int(counts.min()), 11)
         self.assertGreaterEqual(int(np.median(counts)), 15)
         native_only = np.zeros(len(cells), int)
         for row in self.native_rows:
@@ -611,24 +620,95 @@ class YardPlacementTests(SidecarData, unittest.TestCase):
             names = sorted({self.probe.owner_paths[int(i)] for i in self.probe.tri_owner[inside]})
             self.assertEqual(names, [], f"{exit_point['name']}: solids inside the box: {names[:3]}")
 
-    def test_the_gate_table_contains_the_package_and_adds_only_the_leaf_swing(self):
+    def swept_footprints(self):
+        """{barrier root path: (x0, x1, z0, z1)} derived from yard.doors.json and the package: for every pose row the colliders of the moved part
+        carried through 37 poses between the closed and the open row (linear in position and euler angles, the part's own scale), unioned with
+        the colliders of the barrier that do not move."""
         np = self.np
-        for name, rect in GATES.items():
-            idx = [i for i, o in enumerate(self.cset.owners) if o.path == name or o.path.startswith(name + "/")]
-            self.assertTrue(idx, name)
+        scene = self.cset.scenes["Arena_Yard_TeamFight_DesignStuff"]
+        rows = load("yard.doors.json")["poses"]
+
+        def rotation(euler):
+            ex, ey, ez = np.radians(euler)
+            cx, sx, cy, sy, cz, sz = np.cos(ex), np.sin(ex), np.cos(ey), np.sin(ey), np.cos(ez), np.sin(ez)
+            rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
+            ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
+            rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
+            return ry @ rx @ rz
+
+        def find(path):
+            parts = path.split("/")
+            cur = [k for k in scene.roots() if scene.objects[k]["name"] == parts[0]]
+            for part in parts[1:]:
+                cur = [c for k in cur for c in scene.children.get(k, []) if scene.objects[c]["name"] == part]
+            return cur
+
+        out, moved_ids = {}, set()
+        for row in rows:
+            barrier = find(row["barrier"])
+            self.assertEqual(len(barrier), 1, row["barrier"])
+            part = [c for c in scene.children[barrier[0]] if scene.objects[c]["name"] == row["part"]]
+            self.assertEqual(len(part), 1, row["part"])
+            part = part[0]
+            obj = scene.objects[part]
+            world_parent, world_closed = scene.world(obj["parent_id"]), scene.world(part)
+
+            def local(t):
+                pos = np.array(row["closed"]["position"]) * (1 - t) + np.array(row["open"]["position"]) * t
+                euler = np.array(row["closed"]["euler"]) * (1 - t) + np.array(row["open"]["euler"]) * t
+                m = np.eye(4)
+                m[:3, :3] = rotation(euler) @ np.diag(obj["local_scale"])
+                m[:3, 3] = pos
+                return m
+
+            # the rows' closed pose IS the scene's pose: the derivation starts from the data, not from a convention
+            self.assertLess(float(np.abs(world_parent @ local(0.0) - world_closed).max()), 1e-6, row["part"])
+            idx = [i for i, o in enumerate(self.cset.owners) if o.scene == scene.name and part in scene.path(o.obj_id)]
+            moved_ids.update(idx)
             tris = self.cset.tris[np.isin(self.cset.tri_owner, idx)].reshape(-1, 3)
-            lo, hi = tris.min(axis=0), tris.max(axis=0)
-            if name.endswith("_A"):
-                # the cradle: the plate's footprint is the whole swept footprint (the drive is vertical), within 0.1 m
-                for got, want in ((lo[0], rect[0]), (hi[0], rect[1]), (lo[2], rect[2]), (hi[2], rect[3])):
-                    self.assertAlmostEqual(got, want, delta=0.1, msg=name)
-            else:
-                # the north gate: the frame and both leaves lie in the gate plane z 127.78..127.91; x is the table's within 0.05 m, z is the plane
-                # widened by the leaf length (2.0 m) and 0.1 m of slack to both sides
-                self.assertAlmostEqual(lo[0], rect[0], delta=0.05, msg=name)
-                self.assertAlmostEqual(hi[0], rect[1], delta=0.06, msg=name)
-                self.assertAlmostEqual(rect[2], lo[2] - 2.1, delta=0.06, msg=name)
-                self.assertAlmostEqual(rect[3], hi[2], delta=0.06, msg=name)   # one-sided: leaves swing toward -z only
+            lo, hi = out.get(row["barrier"], (np.full(3, np.inf), np.full(3, -np.inf)))
+            for t in np.linspace(0.0, 1.0, 37):
+                m = world_parent @ local(t) @ np.linalg.inv(world_closed)
+                v = tris @ m[:3, :3].T + m[:3, 3]
+                lo, hi = np.minimum(lo, v.min(axis=0)), np.maximum(hi, v.max(axis=0))
+            out[row["barrier"]] = (lo, hi)
+        for barrier, (lo, hi) in out.items():
+            key = [k for k in GATES if k == barrier or k.startswith(barrier + "/")]
+            self.assertEqual(len(key), 1, barrier)
+            root = find(barrier)[0]
+            standing = [i for i, o in enumerate(self.cset.owners) if o.scene == scene.name and root in scene.path(o.obj_id) and i not in moved_ids
+                        and o.layer in (18, 29)]
+            if standing:
+                t = self.cset.tris[np.isin(self.cset.tri_owner, standing)].reshape(-1, 3)
+                lo, hi = np.minimum(lo, t.min(axis=0)), np.maximum(hi, t.max(axis=0))
+            out[barrier] = (lo, hi)
+        return {next(k for k in GATES if k == b or k.startswith(b + "/")): (float(lo[0]), float(hi[0]), float(lo[2]), float(hi[2]))
+                for b, (lo, hi) in out.items()}
+
+    def test_the_gate_table_is_the_footprint_swept_by_the_doors_sidecar_rows(self):
+        derived = self.swept_footprints()
+        self.assertEqual(sorted(derived), sorted(GATES))
+        for name, rect in GATES.items():
+            got = derived[name]
+            # the literal contains the derivation (0.02 m of rounding at most) and is within 0.1 m of it on every side
+            self.assertLessEqual(rect[0], got[0] + 0.02, name)
+            self.assertGreaterEqual(rect[1], got[1] - 0.02, name)
+            self.assertLessEqual(rect[2], got[2] + 0.02, name)
+            self.assertGreaterEqual(rect[3], got[3] - 0.02, name)
+            for a, b in zip(rect, got):
+                self.assertAlmostEqual(a, b, delta=0.1, msg=name)
+        # the north gate: the swing is one-sided (toward -z), z 125.81..127.91 against the frame plane z 127.78..127.91
+        north = derived["DOORS/Metal_gate_1"]
+        self.assertAlmostEqual(north[2], 125.81, delta=0.03)
+        self.assertAlmostEqual(north[3], 127.91, delta=0.03)
+        self.assertAlmostEqual(north[0], -11.88, delta=0.03)
+        self.assertAlmostEqual(north[1], -7.55, delta=0.03)
+        # the cradle: the drive is vertical, the footprint is the plate's own (the overshoot of outBack changes only y)
+        cradle = derived["DOORS/Construction_Cradle_02/Construction_Cradle_02_A"]
+        self.assertAlmostEqual(cradle[0], -24.36, delta=0.03)
+        self.assertAlmostEqual(cradle[1], -18.1, delta=0.03)
+        self.assertAlmostEqual(cradle[2], 16.19, delta=0.03)
+        self.assertAlmostEqual(cradle[3], 17.41, delta=0.03)
 
     def test_the_exit_boxes_clear_the_swept_footprint_of_both_gates(self):
         for exit_point in self.exits["exits"]:
