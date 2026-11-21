@@ -15,7 +15,7 @@
   "locale_name": "Arena: Block",
   "locale_description": "The Block from EFT Arena: the yard between the apartment houses of a city block, with a fortified playground tower, parked vans and wrecked cars, turned into a death-fighting arena. A small sealed team pocket sits at each end, one behind a swing gate and one behind a rising facade gondola, with the open yard between them.",
   "icon_x": 691,
-  "icon_y": 799,
+  "icon_y": 857,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_yard/base.json",
   "fog_color": [

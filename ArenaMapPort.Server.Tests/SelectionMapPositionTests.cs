@@ -71,11 +71,11 @@ public sealed class SelectionMapPositionTests
     }
 
     [Fact]
-    public void OnlyIcebergAndChopShopAreDisplayedAwayFromTheirMeasurement()
+    public void OnlyIcebergChopShopAndBlockAreDisplayedAwayFromTheirMeasurement()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(RepoFile("tools", "maps", "selection", "markers.json")));
         var moved = document.RootElement.GetProperty("markers").EnumerateArray().Where(m => m.TryGetProperty("display", out _)).ToArray();
-        Assert.Equal(new[] { "arena_autoservice", "arena_iceberg" },
+        Assert.Equal(new[] { "arena_autoservice", "arena_iceberg", "arena_yard" },
             moved.Select(m => m.GetProperty("catalog_key").GetString()).OrderBy(k => k, StringComparer.Ordinal));
         foreach (var marker in moved)
         {
@@ -119,6 +119,67 @@ public sealed class SelectionMapPositionTests
             double gapY = Math.Max(label.top - box.bottom, box.top - label.bottom);
             Assert.True(Math.Max(gapX, gapY) >= 12, $"{name}: gap {Math.Max(gapX, gapY):F0} px");
         }
+    }
+
+    [Fact]
+    public void BlockIsDisplayedClearOfTheLabGroundZeroStreetsAndTheTitle()
+    {
+        // GPU-2, PMC flow on EFT's own location screen, 1920x1080, uibridge_snapshot of 2026-11-21 about 09:10 (build f355bc4, Block at its
+        // measured 691/799): 'ARENA: BLOCK' [807,148 218x32] lay on 'THE LAB' [815,147 149x32] (the snapshot marks the Lab as blocked).
+        // The dot of a toggle sits 10 px right of its left edge and 17 px below its top (the Chop Shop convention above), so the measured
+        // dot is (817, 165); a dot moves 0.79 px per IconX unit and 0.796 px per IconY unit (IconY grows upwards). The ink rule is the one of
+        // Chop Shop's test: padding left 5, right 28, top 8, bottom 7. The new position was predicted from that arithmetic and then measured
+        // on GPU-2 the same day (about 09:55, build of bb556b1 plus this change): 'ARENA: BLOCK' [807,102 218x32], 'THE LAB' [815,147 149x32] no
+        // longer marked as blocked. The user has not looked at it yet and may move it, as with Chop Shop's.
+        using var document = JsonDocument.Parse(File.ReadAllText(RepoFile("tools", "maps", "selection", "markers.json")));
+        var block = document.RootElement.GetProperty("markers").EnumerateArray()
+            .Single(m => m.GetProperty("catalog_key").ValueKind == JsonValueKind.String && m.GetProperty("catalog_key").GetString() == "arena_yard");
+        var display = block.GetProperty("display");
+        Assert.False(string.IsNullOrWhiteSpace(display.GetProperty("reason").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(display.GetProperty("decision").GetString()));
+        Assert.Equal((691, 857), (display.GetProperty("icon_x").GetInt32(), display.GetProperty("icon_y").GetInt32()));
+        Assert.Equal((display.GetProperty("icon_x").GetInt32(), display.GetProperty("icon_y").GetInt32()),
+            (ArenaMapRegistry.Yard.IconX, ArenaMapRegistry.Yard.IconY));
+        // The measured record is untouched.
+        Assert.Equal((691, 799), (block.GetProperty("icon_x").GetInt32(), block.GetProperty("icon_y").GetInt32()));
+
+        // The ink of THE LAB, GROUND ZERO and STREETS OF TARKOV: the snapshot rectangles less the padding. Y 84 is the end of the subtitle 'PVE ZONE'.
+        var labels = new[]
+        {
+            ("THE LAB", (left: 820.0, top: 155.0, right: 936.0, bottom: 172.0)),
+            ("GROUND ZERO", (left: 867.0, top: 206.0, right: 1051.0, bottom: 224.0)),
+            ("STREETS OF TARKOV", (left: 796.0, top: 297.0, right: 1049.0, bottom: 314.0)),
+        };
+        const double subtitleBottom = 84;
+        const double blockWidth = 218;
+
+        (double left, double top, double right, double bottom) InkOf(int iconX, int iconY)
+        {
+            double dotX = 817 + (iconX - 691) * .790;
+            double dotY = 165 - (iconY - 799) * .796;
+            return (dotX - 10 + 5, dotY - 17 + 8, dotX - 10 + blockWidth - 28, dotY + 15 - 7);
+        }
+        double Gap((double left, double top, double right, double bottom) a, (double left, double top, double right, double bottom) b) =>
+            Math.Max(Math.Max(b.left - a.right, a.left - b.right), Math.Max(b.top - a.bottom, a.top - b.bottom));
+
+        // Predicted: dot (817, 118.8), toggle [807, 101.8 .. 133.8], ink 812..997 x 109.8..126.8; 28 px of ink above THE LAB, 26 px below the subtitle.
+        var box = InkOf(ArenaMapRegistry.Yard.IconX, ArenaMapRegistry.Yard.IconY);
+        foreach (var (name, label) in labels)
+            Assert.True(Gap(box, label) >= 12, $"{name}: gap {Gap(box, label):F0} px");
+        Assert.True(box.top - subtitleBottom >= 12, $"subtitle: gap {box.top - subtitleBottom:F0} px");
+
+        // The defect this change removes: the measured anchor puts the ink on top of THE LAB's ink.
+        var measured = InkOf(691, 799);
+        Assert.True(Gap(measured, labels[0].Item2) < 12, $"the measured anchor would clear THE LAB by {Gap(measured, labels[0].Item2):F0} px");
+        Assert.True(Gap(measured, labels[0].Item2) < 0);
+
+        // The toggle rectangle itself must not reach THE LAB's [815,147 149x32] either (13 px of rectangle clearance, predicted and measured).
+        double toggleTop = 165 - (ArenaMapRegistry.Yard.IconY - 799) * .796 - 17;
+        double toggleBottom = toggleTop + 32;
+        Assert.True(147 - toggleBottom >= 12, $"rectangle gap to THE LAB {147 - toggleBottom:F1} px");
+        // The model against the host: the measured toggle of the displayed anchor is [807,102 218x32].
+        Assert.InRange(toggleTop, 101.0, 103.0);
+        Assert.InRange(817 + (ArenaMapRegistry.Yard.IconX - 691) * .790 - 10, 806.0, 808.0);
     }
 
     [Fact]

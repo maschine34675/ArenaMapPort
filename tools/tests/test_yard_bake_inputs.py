@@ -225,7 +225,7 @@ class SidecarTests(unittest.TestCase):
             self.assertNotIn(key, data, key)
         self.assertEqual(VD.bake_input_errors(data), [])
         self.assertEqual(data["key"], "arena_yard")
-        self.assertEqual((data["icon_x"], data["icon_y"]), (691, 799))          # the selection marker stays at the measured value until item 25
+        self.assertEqual((data["icon_x"], data["icon_y"]), (691, 857))          # the displayed marker (markers.json display block, item 25); the measured 691/799 covered THE LAB
         self.assertNotIn("(spike)", data["locale_name"])
         self.assertNotIn("Internal test build", data["locale_description"])
 

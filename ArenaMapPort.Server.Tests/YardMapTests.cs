@@ -53,7 +53,7 @@ public sealed class YardMapTests
         Assert.Equal("arena_yard", Yard.Key);
         Assert.Equal("187d5cbc21744c97e8348e76", Yard.IdField);
         Assert.Equal("ArenaYard", Yard.InfiltrationName);
-        Assert.Equal((691, 799), (Yard.IconX, Yard.IconY));                          // the stub position of markers.json until item 25
+        Assert.Equal((691, 857), (Yard.IconX, Yard.IconY));                          // displayed 58 units north of the measured 691/799 (markers.json display block, PLAN-YARD item 25; host-checked on GPU-2 on 2026-11-21)
         // The port's own fallback words (the official text is in the ignored pack and wins when it is there): factual, ASCII, no spike wording.
         Assert.DoesNotContain("spike", Yard.LocaleName, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Internal test build", Yard.LocaleDescription, StringComparison.OrdinalIgnoreCase);

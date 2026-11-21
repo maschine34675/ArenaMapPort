@@ -1632,7 +1632,7 @@ namespace ArenaMapPort.Shared
             LocaleName: "Arena: Block",
             LocaleDescription: "The Block from EFT Arena: the yard between the apartment houses of a city block, with a fortified playground tower, parked vans and wrecked cars, turned into a death-fighting arena. A small sealed team pocket sits at each end, one behind a swing gate and one behind a rising facade gondola, with the open yard between them.",
             IconX: 691,
-            IconY: 799,
+            IconY: 857, // displayed 58 units north of the measured 799 (it covered THE LAB; markers.json "display"; host-checked on GPU-2 on 2026-11-21: toggle [807,102 218x32], the Lab free)
             DbBaseJsonPath: "arena_yard/base.json",
             // Bake inputs (PLAN-YARD item 10 part 1, docs/progress/yard-release.md, 2026-11-21; tools/tests/test_yard_bake_inputs.py pins the numbers). The two gates of
             // Arena_Yard_TeamFight_DesignStuff's DOORS are unit-level barriers, the paths the rows of tools/maps/yard.doors.json name: the swing gate of the north pocket

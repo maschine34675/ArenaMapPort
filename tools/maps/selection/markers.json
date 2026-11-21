@@ -176,7 +176,14 @@
         275.073
       ],
       "icon_x": 691,
-      "icon_y": 799
+      "icon_y": 799,
+      "display": {
+        "icon_x": 691,
+        "icon_y": 857,
+        "reason": "On EFT's own PMC location screen (GPU-2 1920x1080, uibridge_snapshot 2026-11-21 about 09:10, build f355bc4, Block at its measured 691/799) the toggle 'ARENA: BLOCK' [807,148 218x32] lay on 'THE LAB' [815,147 149x32] and covered it: the snapshot marks THE LAB as blocked, so the Lab could not be clicked while Block was installed. Neighbours in the same snapshot: GROUND ZERO [862,198 217x33], ARENA: BOWL [988,242 211x33], WOODS [625,257 139x33], STREETS OF TARKOV [791,289 286x32], ARENA: ICEBERG [431,298 242x33], ARENA: EQUATOR [884,367 248x33]; the title and subtitle end at about y 84. 691/857 moves the dot 58 units (46 px, 0.796 px per IconY unit) up at the same X: PREDICTED dot about (817, 119), toggle about [807,102 218x32], 13 px of rectangle and 28 px of ink clear of THE LAB, 18 px of rectangle and 26 px of ink below the subtitle, 79 px of ink above GROUND ZERO. Not host-measured yet.",
+        "decision": "lead, 2026-11-21 (the user has not looked at it yet; the user moved Chop Shop's marker twice and may move this one): Block must not cover THE LAB; the pin stays above its true place",
+        "host_check": "Host check, GPU-2, 2026-11-21 about 09:55, build of bb556b1 plus this change: 'ARENA: BLOCK' [807,102 218x32], 'THE LAB' [815,147 149x32] no longer marked as blocked, 13 px between the two rectangles."
+      }
     },
     {
       "name": "Factory",

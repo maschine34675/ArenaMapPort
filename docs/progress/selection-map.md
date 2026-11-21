@@ -294,3 +294,24 @@ below the end of the word CUSTOMS and above INTERCHANGE. The toggle rectangles o
 INTERCHANGE and EQUATOR rectangles are from `uibridge_snapshot`), and the released-pin rule "at least 120 units of straight distance" is replaced by "rows at least 55 units apart or dots
 360 units apart" (the anchor is 103 units from Equator's, on a row 93 units above). Host (GPU-2, build `48b316d`, PMC flow): `toggle "ARENA: CHOP SHOP" click 986,457
 [849,441 275x32]`, `toggle "CUSTOMS" ... [696,415 163x33]`. Record: [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md).
+
+## 2026-11-21 - Block displayed north of its measured position (it covered THE LAB)
+
+Found on GPU-2 (1920x1080, PMC location screen, `uibridge_snapshot` of 2026-11-21 about 09:10, build `f355bc4`, Block at its measured `IconX` 691 / `IconY` 799): the toggle `ARENA: BLOCK`
+`[807,148 218x32]` lies on `THE LAB` `[815,147 149x32]`, which the snapshot marks as blocked, so the Lab cannot be clicked while Block is installed. Neighbours of the same snapshot:
+GROUND ZERO `[862,198 217x33]`, ARENA: BOWL `[988,242 211x33]`, WOODS `[625,257 139x33]`, STREETS OF TARKOV `[791,289 286x32]`, ARENA: ICEBERG `[431,298 242x33]`, ARENA: EQUATOR `[884,367 248x33]`,
+ARENA: CHOP SHOP `[849,441 275x32]`; title and subtitle ("SELECT LOCATION", "PVE ZONE") end at about y 84.
+
+Decision (lead, 2026-11-21, pending the user's look; the user moved Chop Shop's marker twice and may move this one): Block is displayed at **691/857**, 58 units north of the measured 799, same X. The measured
+691/799 stays the record in `markers.json`; the `display` block carries 691/857, the reason and the decision. Descriptor, `tools/maps/yard.json` and `db/arena_yard/base.json` (regenerated with
+`make_base_json.py`, only `IconY` changed) carry 857.
+
+Prediction (arithmetic, not measured): the measured dot is (817, 165) (left edge + 10, top + 17); 58 units x 0.796 px = 46.2 px up gives a dot of about (817, 119) and a toggle of about
+`[807,102 218x32]` (the lead's first estimate was [808,100]; my numbers are 2 px lower). THE LAB's rectangle then lies 13 px below it (ink to ink, with the padding left 5, right 28, top 8, bottom 7: 28 px), the
+subtitle 18 px above its rectangle (26 px of ink), GROUND ZERO 79 px of ink below, STREETS further. Nothing touches. The released-pin rule (rows at least 55 units apart or dots 360 apart) holds for all seven maps
+(nearest row: Bowl 679, 178 units). `SelectionMapPositionTests.BlockIsDisplayedClearOfTheLabGroundZeroStreetsAndTheTitle` checks that with the same ink rule as Chop Shop's test (at least 12 px) and asserts that
+the measured 691/799 would overlap THE LAB's ink. **Host check pending:** deploy, read the toggle rectangles of `ARENA: BLOCK` and `THE LAB` from `uibridge_snapshot`, then the user's verdict.
+
+### Host check of the Block marker (GPU-2, 2026-11-21 about 09:55)
+
+Deployed (client DLL, server DLL, `db/arena_yard/base.json` with `IconY` 857; server and EFT restarted, `16/16 identical`). `uibridge_snapshot` on EFT's own location screen: `toggle "ARENA: BLOCK" click 916,118 [807,102 218x32]`, `toggle "THE LAB" click 889,163 [815,147 149x32]` without the `BLOCKED by` mark, `GROUND ZERO [862,198 217x33]`, `ARENA: BOWL [988,242 211x33]`, `STREETS OF TARKOV [791,289 286x32]`. The toggle is where the arithmetic put it (top 101.8 predicted, 102 measured), 13 px above THE LAB's rectangle and 18 px below the subtitle; on the screenshot both labels read in full. `SelectionMapPositionTests` now also pins the model against that measured rectangle. The user has not looked at it yet; ArenaMode's own location screen was not opened (it has no Yard entry).
