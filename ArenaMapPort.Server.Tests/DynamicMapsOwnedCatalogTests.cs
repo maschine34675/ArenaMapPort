@@ -99,10 +99,11 @@ public sealed class DynamicMapsOwnedCatalogTests : IDisposable
         var warnings = new List<string>();
         dropdown.Scan(_catalog, "Maps", (map, _) => warnings.Add(map));
         Assert.Equal(new[] { "Equator", "Bay5", "AirPit" }, warnings);
-        Assert.Equal(4, dropdown.Definitions.Count);
-        Assert.Equal(3, dropdown.Times.Count);
+        Assert.Equal(5, dropdown.Definitions.Count);
+        Assert.Equal(4, dropdown.Times.Count);
         Assert.Same(foreign, dropdown.Definitions["Unrelated.json"]);
         Assert.True(dropdown.Definitions.ContainsKey(_assets.DefinitionFor("Bowl")));
+        Assert.True(dropdown.Definitions.ContainsKey(_assets.DefinitionFor("Yard")));
         WritePack("Equator");
         dropdown.Scan(_catalog, "Maps", (_, _) => { });
         Assert.True(dropdown.Definitions.ContainsKey(_assets.DefinitionFor("Equator")));

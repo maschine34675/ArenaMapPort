@@ -39,8 +39,8 @@ KEY_FILE_MAX_BYTES = 64 * 1024
 
 # Not every released map carries every optional payload. The key set of the release itself comes from
 # validate_map_descriptors.RELEASE_MAP_KEYS (seven maps since Yard, PLAN-YARD item 15, 2026-11-21; six since Autoservice, PLAN-AUTOSERVICE item 12,
-# 2026-11-11; five since Iceberg, PLAN-ICEBERG item 12, 2026-10-30). Six have overview packs (Chop Shop joined on 2026-11-14; Yard has none, a DynamicMaps overview
-# is a later item of its plan, so it is in no OVERVIEW_MAP_NAMES list). Yard has no MultiFlare package (0 of its 14 flare lights are active), no native water, and a
+# 2026-11-11; five since Iceberg, PLAN-ICEBERG item 12, 2026-10-30). All seven have overview packs (Chop Shop joined on 2026-11-14; Yard/Block on 2026-11-21).
+# Yard has no MultiFlare package (0 of its 14 flare lights are active), no native water, and a
 # crowd (extract_spectator.MAP_SCENES); its acoustics folder holds two room-tone WAVs (indoor and outdoor tone), which validate_acoustics handles by the graph's clip list. AirPit has no active flare light (item 22), so it has no
 # flare package; Bowl ships one (4 of its 28 lights are active, item 17).
 # Iceberg has an overview but no MultiFlare package (79 FlareLights, four with a negative total scale that need a reviewed
@@ -48,7 +48,7 @@ KEY_FILE_MAX_BYTES = 64 * 1024
 # validate_map_descriptors.CROWDLESS_MAP_KEYS, checked against the crowd maps (extract_spectator.MAP_SCENES) in validate().
 # Autoservice (PLAN-AUTOSERVICE item 11/12) HAS a MultiFlare package (8 active gas-lamp flares, work/extract/multiflare/arena_autoservice), so it is in
 # FLARE_MAP_KEYS; it has an overview but no water; since 2026-11-11 it has a crowd (extract_spectator.MAP_SCENES), so it is not in CROWDLESS_MAP_KEYS.
-OVERVIEW_MAP_NAMES = ('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService')
+OVERVIEW_MAP_NAMES = ('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService', 'Yard')
 FLARE_MAP_KEYS = ('arena_equator', 'arena_bay5', 'arena_bowl', 'arena_autoservice')
 # The maps with a native sea-water surface (the Sea/Plane mesh of Bay5's harbor and of Iceberg's sea, NativeWaterRepairs.cs): the one list
 # validate_map_descriptors.NATIVE_WATER_MAP_KEYS, which that validator holds equal to every sidecar's has_native_water and every descriptor's

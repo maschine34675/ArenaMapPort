@@ -466,6 +466,14 @@ MAP_PROFILES = {
                           "heights": (-4.1, -.1), "anchor": (-367.94, 492.36), "relative": True,
                           "connected_anchor": (-367.94, -3.79, 492.36), "seam_grid": .01,
                           "bounds": [-415, 464, -331, 515], "obstacle_tolerance": .20},
+    # Block (Arena_Yard): both team pockets share core 3's component. Connected
+    # ramps/platforms reach y 10.7; select in 3D before projecting the many roofs.
+    # The west alley reaches x -76 outside the bot bake: retain its physical floor
+    # as muted context with 1 m drawing margin. Other bounds follow the bake.
+    "arena_yard": {"name": "Block", "folder": "ArenaMapPort_Yard", "title": "BLOCK",
+                   "heights": (5.8, 11), "anchor": (-5.08, 57.92), "relative": True,
+                   "connected_anchor": (-5.08, 6.15, 57.92), "seam_grid": .01,
+                   "bounds": [-77, -1, 21, 162], "obstacle_tolerance": .25},
 }
 
 

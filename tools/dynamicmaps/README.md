@@ -368,3 +368,37 @@ in projection; no second floor layer is warranted. All 23 door rows are applied.
 The first export used the existing read-only bundle decoder because Unity's Editor
 license was unavailable. Its triangle multiset was independently checked against
 Iceberg's native Unity export before use. See [source and acceptance record](../../docs/progress/autoservice-dynamicmaps.md).
+
+## Block / Yard (2026-11-21)
+
+Arena calls this map **Block**; its location ID stays `arena_yard`, and the
+canonical package/selector is `Yard`. Use the accepted `yard-native-v2` package
+and the current plaintext `work/build/yard/arena_yard_navmesh.bundle`:
+
+```powershell
+& ./work/dynamicmaps/venv/Scripts/python.exe tools/dynamicmaps/export_equator.py `
+  --package work/extract/yard-native-v2 --descriptor tools/maps/yard.json `
+  --navmesh work/dynamicmaps/yard/navmesh.json --output work/dynamicmaps/yard
+pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot D:/SPT41 `
+  -DynamicMapsPackage work/dynamicmaps/yard/pack -DynamicMapsMap Yard
+```
+
+Create `navmesh.json` from that exact bundle with the isolated native probe above,
+or the read-only decoder after matching its triangles to a native Unity control.
+Review the preview and two-file dry run before `-Confirm`. Accepted files live in
+`work/dynamicmaps/release/ArenaMapPort_Yard`. The client allowlist and both release
+staging modes include them; deploy the matching client DLL and restart EFT.
+DynamicMaps' own installation remains untouched.
+
+The single overview includes both start pockets and the connected raised routes.
+Its 3D component starts at original Arena AI core 3 `(-5.08, 6.15, 57.92)`, within
+the 5.8..11 m height band. The accepted bake's component reaches 10.7 m, so a lower
+ceiling would remove traversable platforms. Disconnected roofs and outer ground
+islands are excluded before projection. Drawing bounds are X -77..21 / Z -1..162,
+north up: the west edge extends 10 m beyond the bake to include the source's
+dead-end alley (x -76..-67). Physical floors outside the bake are muted context;
+the light route footprint remains the actual baked component. The rising cradle and both rotating gate leaves
+use their released combat poses. Small areas overlap in projection; this is a
+combined route overview, not separate floor layers.
+
+See [generation and acceptance](../../docs/progress/yard-dynamicmaps.md).

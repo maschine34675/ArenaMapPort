@@ -173,7 +173,7 @@ class DistributionSidecarTests(unittest.TestCase):
                                                        if key in self.RELEASED})
             art_pin.start()
             self.addCleanup(art_pin.stop)
-        for name in ('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService'):      # Yard has no overview pack
+        for name in ('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService', 'Yard'):
             for file in (f'ArenaMapPort_{name}.jsonc', 'Layers/Ground.svg'):
                 relative = f'ArenaMapPort_{name}/{file}'
                 for root in (self.plugin/'dynamicmaps', self.repo/'work/dynamicmaps/release'):
@@ -268,7 +268,7 @@ class DistributionSidecarTests(unittest.TestCase):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_autoservice"}', encoding="utf-8")
         # Yard (PLAN-YARD item 15): bundles, shader sidecar, database, art (banner and loading images), AI sidecar, acoustics (the fixture stages one room tone per map; the real Yard package has two), gate sounds,
-        # monitors and a spectator package (put_spectators); no flares, no water and no overview pack (explicit absences, never fake data).
+        # monitors, an overview and a spectator package (put_spectators); no flares or water (explicit absences, never fake data).
         self.put_bundles("arena_yard")
         (self.plugin / "material-shaders.arena_yard.json").write_text("{}", encoding="utf-8")
         for folder in (self.server / "db/arena_yard", self.repo / "ArenaMapPort.Server/db/arena_yard"):
@@ -1173,6 +1173,30 @@ class DistributionSidecarTests(unittest.TestCase):
                 self.validate()
         finally:
             texture.write_bytes(data)
+        self.validate()
+
+    def test_yard_overview_must_be_complete_current_and_have_only_its_ground_layer(self):
+        overview = self.plugin / "dynamicmaps/ArenaMapPort_Yard/Layers/Ground.svg"
+        original = overview.read_bytes()
+        self.validate()
+        overview.write_bytes(b"stale Block plan")
+        with self.assertRaisesRegex(ValueError, "Stale overview map: ArenaMapPort_Yard/Layers/Ground.svg"):
+            self.validate()
+        overview.unlink()
+        with self.assertRaises(FileNotFoundError):
+            self.validate()
+        overview.write_bytes(original)
+        stray = overview.with_name("Upper.svg")
+        stray.write_text("<svg/>", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Unexpected or missing overview"):
+            self.validate()
+        stray.unlink()
+        definition = overview.parent.parent / "ArenaMapPort_Yard.jsonc"
+        accepted = definition.read_bytes()
+        definition.unlink()
+        with self.assertRaises(FileNotFoundError):
+            self.validate()
+        definition.write_bytes(accepted)
         self.validate()
 
     def test_iceberg_is_crowdless_and_carries_five_loadscreens_sea_and_overview_but_no_flares(self):

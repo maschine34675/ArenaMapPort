@@ -230,14 +230,15 @@ raid" (reinstall the complete client folder).
 
 ## DynamicMaps
 
-Overview maps for all six maps, including Chop Shop, are included. If DynamicMaps is
+Overview maps for Equator, Bay5, Air Pit, Bowl, Iceberg, Chop Shop and Block are included. If DynamicMaps is
 installed, open inventory → **MAP** during a raid.
 
 ArenaMapPort loads these maps from its own directory; you do not need to copy
 anything into DynamicMaps. The overviews are simplified ground-floor plans; the upper
 spectator areas of Air Pit and Bowl are deliberately omitted. Iceberg's is one
 overview of the connected combat routes across their different ground heights, not
-a separate upper-floor map.
+a separate upper-floor map. Block similarly combines its yard, both start pockets
+and connected raised routes; its west alley remains visible beyond the bot bake.
 
 ## Scope
 
