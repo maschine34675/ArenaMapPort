@@ -1,3 +1,4 @@
+#nullable disable
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -9,14 +10,15 @@ using HarmonyLib;
 namespace ArenaMapPort.Client
 {
     /// <summary>
-    /// DynamicMaps 1.2.1 loads only its own Maps folder and resolves SVGs relative to its plugin.
-    /// Add our owned packages before its native precache, rewriting only our ground-layer paths.
-    /// No binary dependency, config change or third-party file write. Native evidence: docs/progress/dynamicmaps-owned.md.
+    /// DynamicMaps scans only its own folders. Add our owned packages before its native precache:
+    /// 1.2.1 through its additive loader; 1.3.0 through a scoped merge before native preference registration.
+    /// No binary dependency or direct config/third-party file writes. Evidence: docs/progress/dynamicmaps-owned.md and dynamicmaps-130.md.
     /// </summary>
     internal static class DynamicMapsIntegration
     {
         internal const string PluginGuid = "com.mpstark.dynamicmaps";
         static DynamicMapAssets _assets;
+        static DynamicMapsOwnedCatalog _catalog;
         static MethodInfo _load;
         static PropertyInfo _layers, _image;
         static readonly HashSet<string> Reported = new HashSet<string>();
@@ -35,6 +37,31 @@ namespace ArenaMapPort.Client
             _load = dropdown?.GetMethod("LoadMapDefsFromPath", instance, null, new[] { typeof(string) }, null);
             var read = definition?.GetMethod("LoadFromPath", BindingFlags.Public | BindingFlags.Static,
                 null, new[] { typeof(string) }, null);
+            _assets = new DynamicMapAssets(Path.GetDirectoryName(typeof(Plugin).Assembly.Location));
+            if (read == null)
+            {
+                try
+                {
+                    if (_load?.ReturnType != typeof(void)) throw new MissingMethodException("LoadMapDefsFromPath(string)");
+                    _catalog = new DynamicMapsOwnedCatalog(_assets, dropdown, definition, layer);
+                    harmony.Patch(_load, prefix: new HarmonyMethod(typeof(DynamicMapsIntegration), nameof(CatalogScanPrefix)),
+                        finalizer: new HarmonyMethod(typeof(DynamicMapsIntegration), nameof(CatalogScanFinalizer)));
+                    harmony.Patch(_catalog.Preferences, prefix: new HarmonyMethod(typeof(DynamicMapsIntegration), nameof(CatalogPreferencesPrefix)));
+                    Plugin.Log.LogDebug("[DynamicMaps] Optional owned map loader installed (1.3 catalogue): " + _assets.Root);
+                }
+                catch (Exception ex)
+                {
+                    if (_load != null)
+                    {
+                        harmony.Unpatch(_load, HarmonyPatchType.Prefix, harmony.Id);
+                        harmony.Unpatch(_load, HarmonyPatchType.Finalizer, harmony.Id);
+                    }
+                    if (_catalog != null) harmony.Unpatch(_catalog.Preferences, HarmonyPatchType.Prefix, harmony.Id);
+                    _catalog = null;
+                    WarnOnce("api", "Optional map loader unavailable; expected DynamicMaps 1.2.1 or 1.3.0 API: " + ex.GetBaseException().Message);
+                }
+                return;
+            }
             _layers = definition?.GetProperty("Layers", instance);
             _image = layer?.GetProperty("ImagePath", instance);
             if (_load?.ReturnType != typeof(void) || read == null || read.ReturnType != definition
@@ -45,7 +72,6 @@ namespace ArenaMapPort.Client
                 WarnOnce("api", "DynamicMaps API differs from verified 1.2.1; optional maps integration skipped.");
                 return;
             }
-            _assets = new DynamicMapAssets(Path.GetDirectoryName(typeof(Plugin).Assembly.Location));
             try
             {
                 harmony.Patch(read, postfix: new HarmonyMethod(typeof(DynamicMapsIntegration), nameof(DefinitionPostfix)));
@@ -58,6 +84,26 @@ namespace ArenaMapPort.Client
                 harmony.Unpatch(_load, HarmonyPatchType.Postfix, harmony.Id);
                 WarnOnce("install", "Optional map loader unavailable: " + ex.Message);
             }
+        }
+
+        static void CatalogScanPrefix(object __instance, string __0, out DynamicMapsOwnedCatalog.Scan __state)
+        {
+            __state = null;
+            try { __state = _catalog.BeginScan(__instance, __0); }
+            catch (Exception ex) { WarnOnce("scan", "Could not scope owned map scan: " + ex.GetBaseException().Message); }
+        }
+
+        static Exception CatalogScanFinalizer(DynamicMapsOwnedCatalog.Scan __state, Exception __exception)
+        {
+            try { _catalog.EndScan(__state); }
+            catch (Exception ex) { WarnOnce("scan-end", "Could not finish owned map scan: " + ex.GetBaseException().Message); }
+            return __exception;
+        }
+
+        static void CatalogPreferencesPrefix(object __instance)
+        {
+            try { _catalog.PreparePreferences(__instance, WarnOnce); }
+            catch (Exception ex) { WarnOnce("load", "Could not load owned map data: " + ex.GetBaseException().Message); }
         }
 
         static void LoadPostfix(object __instance, string __0)
