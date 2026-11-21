@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ArenaMapPort.Server\ArenaMapPort.Server.csproj" />
     <Compile Include="..\ArenaMapPort.Client\RainExposurePolicy.cs" Link="Client\RainExposurePolicy.cs" />
+    <Compile Include="..\ArenaMapPort.Client\RainUnderRoofModel.cs" Link="Client\RainUnderRoofModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\DeveloperOptions.cs" Link="Client\DeveloperOptions.cs" />
     <Compile Include="..\ArenaMapPort.Client\PlayerOptions.cs" Link="Client\PlayerOptions.cs" />
     <Compile Include="..\ArenaMapPort.Client\AmbientAudioDefaults.cs" Link="Client\AmbientAudioDefaults.cs" />

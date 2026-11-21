@@ -104,6 +104,9 @@ namespace ArenaMapPort.Client
             // donor-settings-camera-weather §12 goal 3 — see RainCoverRepairs.cs.
             InstallRainCoverDepthMask(harmony);
 
+            // 2026-11-21 — rain drops on the screen: IsCameraUnderRain answered from the depth photo, see RainUnderRoofRepairs.cs.
+            RainUnderRoofRepairs.InstallHooks(harmony);
+
             // PLAN-TWO-MAPS item 5 follow-up — see PhysicsPropSoundRepairs.cs / PhysicsPropTeardownRepairs.cs.
             PhysicsPropSoundRepairs.Install(harmony);
             PhysicsPropTeardownRepairs.Install(harmony);

@@ -418,3 +418,116 @@ itself is logged before UiBridge starts recording, so the config read is the che
 CoverAll=False, FullyIndoorCover=False) [automatic raid bootstrap]`. Deployed to `D:\SPT41` (18:08) and, host-verified,
 to `D:\SPT41vanilla` (18:15; its server restart is the user's). Bay5's puddle content gap (above) is unchanged.
 **Status: item 6 VERIFIED on both maps; Equator's atrium rains by design.**
+
+
+## 2026-11-21 - rain drops on the screen: the camera-under-rain flag from the depth photo
+
+**Request (user, 2026-11-21):** "auch mal wegen den Regentropfen auf dem Bildschirm schauen" (have a look at the rain drops on the screen). Status: **unit-tested, host check pending**.
+
+**Cause (read from the EFT 0.16.9.5 decompile, not host-run).** `RainController.Update` sets the static `RainController.IsCameraUnderRain` every frame from
+`DepthPhotograper.CheckIfCameraUnderRain`: one ray from 100 m above the camera, 100 m long, against the one `MeshCollider` of `WeatherObstacle.Instance`; "under rain" means no hit, and the method
+returns false while no WeatherObstacle exists. No ported map has one (the deferral "Goal 3(c)" of `RainCoverRepairs`, section 12.4(c) of donor-settings-camera-weather.md), so the flag was false for ever.
+Host evidence of 2026-11-21 (Yard, standing in the open yard in a storm): `[Footsteps] ... environment=Outdoor underRoof=True cameraUnderRain=False`. The falling rain is a different mechanism and
+was never affected: its shader culls against the depth photo (`_WeatherDepthMap`), which `RainCoverRepairs` feeds.
+
+**Design (`RainUnderRoofRepairs.cs` glue, `RainUnderRoofModel.cs` Unity-free core, design note in work/tmp/yard-rain/handoff/design.md).** The flag is answered from the very photo the rain shader uses, so
+the drops on the screen and the falling streaks agree by construction, in every RainCover mode, with `FullyIndoorCover` and with the lab switches.
+- After every `DepthPhotograper.Render()` (Harmony postfix) the repair keeps that photo's parameters (`_MapStart`, `_MapScale`, dimension, the depth camera's top and far clip, reversed-Z) and bumps a
+  generation. While the camera moves it requests a window of at most 7 x 7 texels (about +-0.25 m) around the camera's texel with `AsyncGPUReadback` (no stall; at most two requests in flight; only when the
+  texel changed). The window's highest photographed surface is the top surface at the camera.
+- A postfix on `CheckIfCameraUnderRain` (per frame; one static bool read when nothing is armed) sets the flag to "under rain" when no surface was photographed there or the highest one is not higher than
+  the camera minus 0.1 m (`RainUnderRoofModel.CoverMargin` = -0.1: a surface at head height or a little below it still counts as a roof; the review of 2026-11-21 found that the first margin of +0.2 m, copied from
+  `RainExposurePolicy.IsOverhead`, leaned the WRONG way for a thin overhang just above the head). Latency is 2 to 3 frames; a result older than 2 m of camera travel (respawn, teleport) is not used.
+- Not ready, in every one of these cases the flag stays vanilla's false ("under roof", today's behaviour, the harmless error): no photo, no result yet, stale result, camera outside the photo, readback error,
+  the key off, and any photo that carries no cover (`RainCoverMethod` Off or the legacy RoofDepth, an unfinished scan, zero cover meshes). The window maximum, the negative margin (the conversion ignores the 0.1 m near plane and so reports surfaces up to 0.1 m too high, which leans the same way) and the not-ready state all lean
+  towards "under roof"; a false "under rain" indoors would be the harmful error.
+- A real `WeatherObstacle` with a collider always wins (the postfix returns before it writes). The vanilla "WeatherObstacle.Instance is null" LogError stays (cosmetic).
+- Raid end: `WeatherRig.OnSceneUnloaded` calls `RainUnderRoofRepairs.Release()`: disarm, new generation (late readbacks are dropped), and `RainController.IsCameraUnderRain` back to false when this repair ever wrote
+  true (the donor RainController is deactivated at raid end and would leave its last value for the menu, the hideout and the next raid). Vanilla raids and the hideout only ever pay the one static read.
+- The depth-to-height conversion and the texel mapping that the F8 readback logs are now the model's functions (`RainCoverRepairs.ReconstructHeightReversedAware`, `IsNothingPhotographed`, `WorldXZToTexel`
+  forward to them), so the tested math is the logged math.
+- The readback's row order is not assumed: once per session a 4 x 4 RFloat probe (a Texture2D with sixteen different texels, `Graphics.Blit`ed into an RFloat target, the way the photo is written) is read back
+  through the SAME region overload the windows use (one row, two columns) and classified by the logical row that came back: row 0 = the region's y is the texture's row, last row = the region's y counts flipped
+  native rows, anything else = unusable (`RainUnderRoofModel.ClassifyRegionProbe`; the first version classified a whole-texture copy, which cannot tell what a region's y means). Unusable keeps the repair off with
+  one Warning. The probe restores `RenderTexture.active` after its Blit.
+- A failed or short readback of the current photo asks for the camera's texel again on the next frame (`RainUnderRoofState.ForgetRequest`); a readback of an ended photo or after the raid counts neither as a
+  result nor as an error, so two short raids cannot switch the repair off for the session.
+
+**Why not the lead's first preference (a CPU copy of the whole photo, downsampled).** The photo is 4096 x 4096 RFloat (64 MiB). A whole-photo readback is a 64 MiB copy plus a 16.7 M sample reduction on the main
+thread at every camera change (every respawn in ArenaMode), the synchronous `CaptureDepthSnapshot` of the Equator-only `PrecipitationCover` stalls, a GPU downsample needs a max-filter shader the plugin does not
+have, and a mip chain averages roofs with open sky. The window needs none of that. **Why not a synthetic WeatherObstacle:** a combined non-convex MeshCollider would have to be cooked on the main thread at raid start,
+needs readable meshes, a downward ray only hits up-facing triangles and vanilla would draw the mesh into the photo a second time. **Why not a physics raycast:** a different truth than the photo (drops and
+streaks could disagree), invisible layer-29 border boxes and movement lids would count as roofs, and a roof without a collider on the chosen layers would give drops INDOORS.
+
+**Key.** `Lighting (<map key>)/RainUnderRoofCheck` (bool, default true, per map, not public, so `CompactConfiguration.IsPublic` and `MapConfigVisibility.IsPlayerOption` are unchanged). Off = vanilla (false) at once;
+switching it on photographs the depth again (`RainCoverRepairs.RescanAndRerender`).
+
+**Every other effect of the flag on a ported map (all read from the decompile; none host-checked).** The flag turns true wherever the photo shows no cover above the camera:
+- `RainScreenDropsPlacer.Update`: the screen drops (intended). They need `Intensity > 0.15` AND the flag, and their rate is scaled by how far the camera looks up (`(dot(forward, up) + 1) * 0.6`, no drops when that is 0.2 or less),
+  so there are no drops when the camera looks down steeper than about 42 degrees (`dot(forward, up) < -0.667`), a level view gives a factor of 0.6, looking up the most; light rain gives fewer drops. That is
+  vanilla's design, not a fault of the repair. **Test with the camera level and tilted up, not only tilted up.**
+- `ScreenWater.OnRenderImage`: with glasses (`_hasGlases`) the distortion amount ramps up while the flag is true and down when it is false (`_distortionCooldownTime`); so glasses now fog or distort in the open in rain.
+- `RippleController.Update`: the environment ripple cycle (`EnvironmentCucle`) advances only with the flag, so the environment ripples (the ripples on wet ground that is not a water puddle) move outdoors in rain
+  for the first time on ported maps. The water cycle never depended on it (see "Round 3" above).
+- `RainCondensator.UpdateValues`: renderers with a condensator take the falling rain vector in the open instead of 0.9 x their stored direction.
+- `Player.IsUnderRoof` (= `!flag` unless `_useSimpleUnderRoofCheck`): `Player.method_35` (called when a step surface is checked outdoors and when the season layer is built) hands it to
+  `PlayerStepLayerAudioController.UpdateUnderRoofStatus` and to `SendUnderRoofStatus`. `PlayerStepLayerAudioController.Play` returns without a sound when `Environment == Indoor` and, outdoors, plays the season
+  step layer (`bank.Play(...)`) only when `_isUnderRoof` is FALSE. Until now it was true everywhere, so the season step layer never played on a ported map; with the repair it plays outdoors in the open (and
+  stays silent under a roof) **if** a season movement set exists for the current season status (`InitSeasonStepLayerController` returns early with "Can't find movement sound set for season" otherwise, and the
+  footstep probe's `seasonLayerRun=` / `layerUnderRoof=` fields say which). If the Summer set has such a layer this is an audible change in every step outdoors; I could not tell which season sets carry banks.
+  When `UseSimpleUnderRoofCheck` of the map's AmbientAudioSystem is true the flag is not read at all (the player's Environment decides).
+  Other players' `ObservedPlayerAudioController` take the status from the network message, so bots are unaffected.
+
+**Log lines (Debug, tag `[RainUnderRoof]`).**
+- `[Harmony] patched DepthPhotograper.CheckIfCameraUnderRain (...)` and `... DepthPhotograper.Render (...)` at start.
+- `[RainUnderRoof] map=<key> armed on a new photo: generation=N dim=4096 texel=0.xxxm window=7x7 depthTop=.. far=.. reversedZ=True coverDraws=N margin=-0.10 orientation=<AsWritten|FlippedY|Unusable>` after every photo.
+- `[RainUnderRoof] readback orientation probe: AsWritten|FlippedY|Unusable` once per session.
+- `[RainUnderRoof] map=<key> cameraUnderRain=True|False camera=(x, y, z) photoTop=<h|nothing> margin=-0.10 generation=N` on every change of the answer (at most one line per 0.5 s).
+- `[RainUnderRoof] not armed for map=<key>: <why>` (RainCoverMethod, unfinished scan, no cover meshes) and `... released at the end of the raid`.
+- One Warning at most: `[RainUnderRoof] the rain-drops check cannot work (<why>): the screen drops stay at vanilla's setting ...`.
+- The decision's inputs also ride on the F8 readback line (`rainUnderRoof[armed=.. key=.. generation=.. orientation=.. margin=-0.10 lastCameraY=.. lastPhotoTop=.. atPosition: photoTop=.. cameraY=.. cameraUnderRain=..] (disarmed: `notReady=disarmed lastWhy=.. lastDisarm=<reason>`)`) and on the footstep
+  probe's `environment=... underRoof=... cameraUnderRain=...` line.
+
+**Tests.** `RainUnderRoofModelTests` (conversion in both depth conventions, texel mapping and its edges, window radius, clipping and flipped rows, top surface, the negative margin, region-probe classification and its plan, the engagement gate (`CarriesCover`), state: not ready,
+hall ceiling, open sky, ground, standing on a roof, one request per texel, a failed request asked again, a re-render replacing the photo and dropping in-flight results, new parameters, ordering, stale result, reset) and
+`RainUnderRoofSourcePinTests` (one static read first, no scene search, no string work, no allocation and no log in the frame path, the logging helper rate-limited, the real-obstacle early return, try/catch on every hook,
+Unity-free core, wiring, release at raid end, key through `Settings` and not public, the engagement gate asked before arming, the late-readback order, the region probe, the postfix signatures). The GPU glue (`AsyncGPUReadback`, the probe) is not covered by any unit test.
+
+**Blast radius, for the author (the repair is ON by default on all seven maps).** Five of them are released (Equator, Bay5, Air Pit, Bowl, Chop Shop in 0.6.0; Iceberg and Yard are not), so a released map changes in rain
+outdoors: drops run down the screen, glasses (if worn) distort, the environment ripples on wet ground move, and the outdoor step sound may gain the season layer (open question above). Under a roof nothing changes.
+What to look at and listen to: the screen drops (level and tilted up), the glasses, the ripples on the ground, and outdoor footsteps with the key off, then on. Whether the repair goes into a release, and with
+what wording, is the user's decision. Host check pending.
+
+**What the lead must check on the host (nothing of this is verified).**
+0. First look at `[RainUnderRoof] readback orientation probe:` (once per session, `AsWritten` or `FlippedY`; `Unusable` = repair off with the one Warning). The FlippedY branch is exercised by unit tests only: if
+   the probe says FlippedY, confirm in a hall and in the open that the flag is right (a mirrored row would put roofs at the opposite side of the photo).
+1. Yard, open yard, forced rain (`uibridge_hook` weather/rain as in the earlier rain checks), PMC at the south spawn: the log has the `armed on a new photo` line with `orientation=AsWritten` or `FlippedY` (not Unusable) and
+   `cameraUnderRain=True` at the open spot; screenshot with the camera tilted up 30 to 60 degrees for a few seconds: drops on the screen. Then walk or teleport into a house or a team pocket: `cameraUnderRain=False`
+   and no new drops; the F8 line shows `photoTop` above `cameraY` there.
+2. One hall map (Equator main hall or the Air Pit hall) in rain: under the roof no drops, and the F8 `height(reversedZ)` of the centre texel agrees with `photoTop`; Equator's open atrium lattice follows the photo
+   (beams are covered, gaps are not, so the flag may flicker there: the 7 x 7 window leans towards roof).
+3. The step audio: walk on the open yard and listen, and read the footstep probe's `seasonLayerRun=`, `layerUnderRoof=` and `underRoof=` fields before and after (key off then on: `Lighting (arena_yard)/RainUnderRoofCheck`).
+4. After leaving the raid: `[RainUnderRoof] released at the end of the raid`, then the hideout once (it must load) and a vanilla raid if one is at hand: no drops without rain, nothing logged by the repair.
+5. A/B: key off in the same spot, the drops stop at once and `cameraUnderRain` reads False again; frame time: `uibridge_status` `max` and ModProfiler `max_ms_in_frame` while walking (the repair issues at most one
+   small readback per frame while the camera moves).
+6. A respawn or teleport across the map: for 2 to 3 frames the flag is vanilla's false, then it follows.
+
+## 2026-11-21 - rain drops on the screen: the lead's acceptance and the host check (GPU-2, 17:44 to 17:50, EFT instance 11e5bf1a)
+
+**Read and run by the lead.** Both new files, the wiring and the reviews; `dotnet build` of the client (DllOnly, Release) 0 warnings; `dotnet test ... -c Release`: `Bestanden! Fehler: 0, erfolgreich: 3519`. Deployed with `-DllOnly`, server and EFT restarted (`16/16 identical`). The section above says "host check pending" throughout: this section is that check. One raid on Yard (not released) and one on Equator (released), both without bots, storm set at raid start (`rain 1`, clouds 1, wind 0.9), season AutumnLate; then the hideout.
+
+- **Hooks and probe:** `[Harmony] patched DepthPhotograper.CheckIfCameraUnderRain ...`, `... DepthPhotograper.Render (rain drops on the screen: new photo, new generation)` (HarmonyX lists two postfixes on `Render`, ours beside `RainCoverRepairs.RenderPostfix`); `[RainUnderRoof] readback orientation probe: AsWritten`. **The FlippedY branch therefore never ran on a host**; it is unit-tested only.
+- **Yard, open (north pocket, the spawn):** `[RainUnderRoof] map=arena_yard armed on a new photo: generation=1 dim=4096 texel=0.059m window=7x7 depthTop=60.70 far=68.58 reversedZ=True coverDraws=12049 margin=-0.10 orientation=Unusable` (the probe answers a moment later), then `cameraUnderRain=True camera=(-7.28, 7.68, 146.61) photoTop=6.16`: the same 6.16 the F8 readback of the morning gave there. Screenshot with the camera tilted up 35 degrees: drops running on the screen and falling streaks.
+- **Yard, south team room:** `cameraUnderRain=False camera=(-12.76, 8.94, 9.97) photoTop=28.65` (F8 of the morning: 28.60); screenshot, tilted up: no drop. North pocket open and south room covered are not mirror images of each other in the photo, so this pair also rules out a swapped row order.
+- **Yard, yard middle, camera level:** drops on the screen (screenshot). Sprinting and walking 36 m through the rain: `120.0 fps (mean 8.3 ms, p95 8.3 ms, max 10.1 ms ... over 1200 frames / 10.0 s)`, the figures of the baseline without the repair.
+- **Key A/B, live** (`uibridge_config_set ... persist=false`): off: `[RainUnderRoof] key switched off (disarmed)`, F10 `underRoof=True cameraUnderRain=False rainUnderRoof[armed=False key=off/none ... lastDisarm=key switched off]`; on: `[RainCover] ... re-rendered depth photo ... [RainUnderRoofCheck switched on]`, `armed on a new photo: generation=4 ... orientation=AsWritten`, `cameraUnderRain=True camera=(-14.93, 7.72, 39.53) photoTop=6.19`, F10 `underRoof=False cameraUnderRain=True`.
+- **The step layer:** the footstep probe printed no `seasonLayerRun=` line in either state, so the local player has no season step-layer controller on Yard at AutumnLate and outdoor steps cannot have changed there. Other seasons are not checked.
+- **Raid end:** `cameraUnderRain=False camera=(0.10, -9997.48, 0.12) photoTop=28.15` (EFT parks the camera far below the map; the answer there is "roof", the harmless side), `[RainUnderRoof] released at the end of the raid`.
+- **Equator (released), south booth (the spawn):** `armed on a new photo: generation=6 dim=4096 texel=0.038m ... coverDraws=7672 ... orientation=AsWritten`, `cameraUnderRain=False camera=(-4.25, 1.60, -38.96) photoTop=5.23`.
+- **Equator, atrium under the open lattice:** `cameraUnderRain=True camera=(0.10, 1.72, 1.93) photoTop=0.13`; screenshot, tilted up 40 degrees: drops on the screen, streaks falling through the lattice (rain through the lattice is the map's decided look). Walking west out of the atrium the answer changed several times within five metres (`photoTop=26.09`, `3.14`, `25.65`: the lattice's beams and a prop), as predicted; nothing of it is visible as flicker in the drops, which only stop spawning under a beam.
+- **Equator, mall corridor under the roof at (-25, 0.1, 0):** `cameraUnderRain=False ... photoTop=24.65`; screenshot, tilted up: no drop. Frame time over the walk: `120.0 fps (mean 8.3 ms, p95 8.3 ms, max 9.6 ms ... over 2400 frames / 19 s)`.
+- **Hideout:** opened once after the raids (`screen=Hideout` after 5.5 s), no line of the repair there. Warnings of the session from ArenaMapPort: only the known `[DynamicMaps] DynamicMaps API differs from verified 1.2.1`.
+
+**One diagnostic corrected after the run.** The footstep probe handed the player's FEET to `RainUnderRoofRepairs.Describe`, where the photographed floor itself counts as cover (`atPosition: photoTop=6.19 cameraY=6.20 cameraUnderRain=False` beside a true flag); it now hands over the camera's position. The flag itself always used the camera. This change is built and unit-tested, not host-run.
+
+**Verified on the host:** the cause, the flag in the open and under a roof on two maps, the screen drops, the live key, the release at raid end, the hideout, frame time while moving. **Not checked:** glasses (`ScreenWater`), the environment ripples and the condensators by eye; any season other than AutumnLate for the step layer; Bay5, Air Pit, Bowl, Iceberg and Chop Shop (same code, their own photos); light rain (the drops need intensity above 0.15); a vanilla raid after a ported one; a respawn in ArenaMode. **The author has not seen it.** It changes five released maps in rain; whether and how a release text names it is the user's decision.

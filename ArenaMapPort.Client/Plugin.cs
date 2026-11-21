@@ -162,6 +162,9 @@ namespace ArenaMapPort.Client
             // order relative to LightingLab.Install() itself does not matter, neither reads the other's state.
             RainCoverRepairs.InstallLab();
 
+            // 2026-11-21 - the per-map developer key of the rain-drops check (hooks are installed by HarmonyPatches). See RainUnderRoofRepairs.cs.
+            RainUnderRoofRepairs.Install();
+
             // §19 — per-renderer indoor floor smoothness (RoofDepthBlack's own depth photo classifies
             // covered floor-like renderers). Must install AFTER WeatherRig.Install() — its own OnSceneLoaded
             // reads WeatherRig.IsActiveForCurrentMap()/RainCoverForCurrentMap(), same ordering reasoning as

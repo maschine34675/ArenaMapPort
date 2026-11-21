@@ -54,8 +54,12 @@ namespace ArenaMapPort.Client
                     " afterQuery=" + player.CurrentSurface + " nativeHit=" + queried.Item1 +
                     " queriedSurface=" + queried.Item2 + " allHitCount=" + all.Length +
                     " nativeBufferCapacity=" + NonAllocLineCaster._nearestRayHits.Length);
+                // The rain flag is about the CAMERA: at the feet the photographed floor itself reads as cover (host 2026-11-21:
+                // "atPosition: photoTop=6.19 cameraY=6.20 cameraUnderRain=False" beside a true flag).
+                var rainCamera = Camera.main;
+                Vector3 rainPoint = rainCamera != null ? rainCamera.transform.position : player.Position + Vector3.up * 1.5f;
                 Plugin.Log.LogDebug(Tag + "environment=" + player.Environment + " underRoof=" + player.IsUnderRoof +
-                    " cameraUnderRain=" + RainController.IsCameraUnderRain + " season=" + season +
+                    " cameraUnderRain=" + RainController.IsCameraUnderRain + " " + RainUnderRoofRepairs.Describe(rainPoint) + " season=" + season +
                     " currentSet=" + (set != null ? set.Surface.ToString() : "<none>") +
                     " runBank=" + Bank(set?.RunSoundBank) + " duckBank=" + Bank(set?.DuckSoundBank) +
                     " sprintBank=" + Bank(set?.SprintSoundBank));

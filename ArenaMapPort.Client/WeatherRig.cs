@@ -1656,6 +1656,8 @@ namespace ArenaMapPort.Client
             }
             _activeMap = null;
             _activeRig = null;
+            // 2026-11-21: the rain-drops check is per raid and must not leave IsCameraUnderRain true behind the deactivated rig.
+            RainUnderRoofRepairs.Release();
         }
 
         // Public accessor ArenaLightingRepairs' gating reads. Reflects only a SUCCESSFUL activation for

@@ -1992,3 +1992,6 @@ Raid: `Lounge_zone_LOD0 ACCEPTED(8/25)` out of the box, indoor=610, clones=1106.
 Lever confirmed: the G-buffer specular (`_SpecColor × _Specularness`) is what the deferred reflection pass
 mirrors the sky with. Decision: `IndoorReflectionStrength` default 0.3 for Equator (new key in this build,
 nothing persisted anywhere but the host), 1.0 for Bay5 and every other map. Host state left at 0.31.
+
+**2026-11-21 pointer:** goal 3(c) (the flag `IsCameraUnderRain` without a WeatherObstacle) was not done as a synthetic WeatherObstacle but as a depth-photo readback,
+`RainUnderRoofRepairs`; see docs/progress/two-maps-item-6-raincover.md "2026-11-21 - rain drops on the screen". The text above stays as history.

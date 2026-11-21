@@ -629,3 +629,6 @@ The user asked for the rest of the feature check and waived the in-game test of 
 - **`underRoof=True cameraUnderRain=False` in the open yard is not Yard's:** `RainController.IsCameraUnderRain` is `DepthPhotograper.CheckIfCameraUnderRain`, which returns false while `WeatherObstacle.Instance` is null, and it is null on every ported map by the deferral recorded in `RainCoverRepairs.cs` (goal 3(c)); `Player.IsUnderRoof` is its negation. The falling rain itself follows the depth photo (the F8 readbacks of the earlier pass).
 
 **Item 19 is done for a first candidate.** Not done: a shot at a sofa, the paint cans' sound by ear, the height-fog light compared with Arena's own picture.
+
+**2026-11-21 pointer (rain drops on the screen):** the `cameraUnderRain=False` of the Yard host line above was the deferred goal 3(c); the user's request "auch mal wegen den Regentropfen auf dem Bildschirm schauen"
+is implemented by `RainUnderRoofRepairs` (unit-tested, host check pending), see docs/progress/two-maps-item-6-raincover.md "2026-11-21 - rain drops on the screen".

@@ -62,13 +62,14 @@ namespace ArenaMapPort.Client
     ///      <c>RenderObstacles</c> are still consumed by <c>_depthCamera.Render()</c> later in the same,
     ///      unmodified original method body).
     ///
-    /// Goal 3(c) of §12 (a synthetic <c>WeatherObstacle</c> for <c>DepthPhotograper.CheckIfCameraUnderRain</c>
-    /// — the separate "rain drops on screen indoors" mechanism, a physics raycast against
-    /// <c>WeatherObstacle.MeshCollider</c>, structurally independent of the depth-map coverage this file
-    /// targets) is still explicitly deferred — see docs/progress/donor-settings-camera-weather.md §12 for
-    /// the reasoning. <c>WeatherObstacle.Instance</c> stays null on every ported map; the resulting
-    /// once-per-camera-change <c>Debug.LogError("WeatherObstacle.Instance is null")</c> is left alone too
-    /// (cosmetic log noise only, not a per-frame cost — same doc section).
+    /// Goal 3(c) of §12 (the "rain drops on screen" flag, <c>RainController.IsCameraUnderRain</c>, which vanilla answers by a
+    /// physics raycast against <c>WeatherObstacle.MeshCollider</c> inside <c>DepthPhotograper.CheckIfCameraUnderRain</c>) is no longer
+    /// deferred (2026-11-21, user request about the drops on the screen): <see cref="RainUnderRoofRepairs"/> answers it from THIS depth
+    /// photo (a small asynchronous readback around the camera's texel), so the screen drops, the glasses' water and the falling streaks
+    /// agree by construction. It engages only while the photo really carries cover (<see cref="PhotoCarriesCover"/>), and a real
+    /// <c>WeatherObstacle</c> always wins. <c>WeatherObstacle.Instance</c> itself stays null on every ported map; the resulting
+    /// once-per-camera-change <c>Debug.LogError("WeatherObstacle.Instance is null")</c> is left alone (cosmetic log noise only, not a
+    /// per-frame cost, docs/progress/donor-settings-camera-weather.md §12). See docs/progress/two-maps-item-6-raincover.md "2026-11-21".
     ///
     /// Every entry point is gated on <see cref="ArenaMapRaid.IsLoaded"/>/<see cref="WeatherRig.IsActiveForCurrentMap"/>
     /// — each Harmony hook here runs for ANY loaded <c>DepthPhotograper</c>, including a real vanilla raid
@@ -1296,6 +1297,8 @@ namespace ArenaMapPort.Client
                 }
             }
 
+            // 2026-11-21 — the inputs of the rain-drops flag at this very position (the repair's own decision line).
+            sb.Append(' ').Append(RainUnderRoofRepairs.Describe(worldPos));
             return sb.ToString();
         }
 
@@ -1330,12 +1333,12 @@ namespace ArenaMapPort.Client
         // in shader-space is always the platform's own FAR sentinel — 0 under reversed-Z (this project's
         // D3D11 desktop build), 1 otherwise.
         internal static bool IsNothingPhotographed(float raw, bool reversedZ) =>
-            reversedZ ? raw <= 1e-4f : raw >= 1f - 1e-4f;
+            RainUnderRoofModel.IsNothing(raw, reversedZ);
 
         // §19 — the ONE formula that's actually real on this machine (AppendTexel below logs BOTH for a
         // human to compare; the classifier only ever wants the real one for usesReversedZBuffer).
         internal static float ReconstructHeightReversedAware(float raw, float camTopY, float farClip, bool reversedZ) =>
-            reversedZ ? camTopY - (1f - raw) * farClip : camTopY - raw * farClip;
+            RainUnderRoofModel.Height(raw, camTopY, farClip, reversedZ);
 
         // §19 — new accessor, same shape as LastAppliedCullingMaskForCurrentMap() below.
         internal static bool TryGetCachedCameraMeta(ArenaMapDescriptor map, out float camTopY, out float farClip)
@@ -1348,6 +1351,29 @@ namespace ArenaMapPort.Client
             }
             camTopY = float.NaN;
             farClip = float.NaN;
+            return false;
+        }
+
+        // 2026-11-21 — RainUnderRoofRepairs asks whether the photo that was just rendered really carries cover. Only
+        // RoofDepthBlack draws cover into the photo (RenderObstaclesPrefix); Off and the legacy RoofDepth leave an
+        // empty photo, which would read "open sky" inside a hall, so the repair stays out of those. Either a finished
+        // scan with at least one cover draw, or the CoverAll quad (FullyIndoorCover / the Lab switch: the photo is
+        // then covered everywhere, so "no rain on the camera" everywhere is consistent with it).
+        internal static bool PhotoCarriesCover(ArenaMapDescriptor map, out int coverDraws, out string why)
+        {
+            coverDraws = 0;
+            why = null;
+            if (map == null || !_states.TryGetValue(map.Key, out var state))
+            {
+                why = "no rain cover state for the map";
+                return false;
+            }
+            coverDraws = state.ElevatedMeshes != null ? state.ElevatedMeshes.Count : 0;
+            bool roofDepthBlack = state.Mode == WeatherRig.RainCoverMode.RoofDepthBlack;
+            bool coverAll = roofDepthBlack && (WeatherRig.FullyIndoorCoverForCurrentMap()
+                || (_labConfigs.TryGetValue(map.Key, out var lab) && lab.CoverAll.Value));
+            if (RainUnderRoofModel.CarriesCover(roofDepthBlack, coverAll, state.Computed, coverDraws, out why)) return true;
+            if (!roofDepthBlack) why = "RainCoverMethod=" + state.Mode + " (no cover is drawn into the photo)";
             return false;
         }
 
@@ -1375,8 +1401,7 @@ namespace ArenaMapPort.Client
         internal static void WorldXZToTexel(Vector3 mapStart, Vector3 mapScale, int dim, float worldX, float worldZ,
             out int px, out int py)
         {
-            px = Mathf.Clamp(Mathf.FloorToInt((worldX - mapStart.x) * mapScale.x * dim), 0, dim - 1);
-            py = Mathf.Clamp(Mathf.FloorToInt((worldZ - mapStart.z) * mapScale.z * dim), 0, dim - 1);
+            RainUnderRoofModel.TexelClamped(mapStart.x, mapStart.z, mapScale.x, mapScale.z, dim, worldX, worldZ, out px, out py);
         }
 
         // A partition needs many samples along roof edges. One CPU-readable snapshot avoids a GPU
