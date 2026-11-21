@@ -277,3 +277,12 @@ brain-table stand-in row (`ApplyBrainTable`/`ApplyPmcBrainTables`, Equator → `
    markers=N onNavMesh=N` with N equal to the number of Bot rows. Before the raid, `uibridge_teleport dryRun=true` from a Player row to every
    new row and exit (`accepted`, `path complete`; an exit behind a held gate is `path_partial` by design).
 5. Note anything the map needs that Equator did not — that is the next repair.
+
+## Before the first Unity build
+
+Run the normal-texture pre-flight on the package: `python tools/validate/normal_texture_preflight.py work/extract/<package> [--json rows.json]`.
+Unity's texture import stops at the first normal-flagged texture that `NormalTextureImportPolicy` does not know, after minutes of import; the
+pre-flight applies the same PNG checks, pixel statistics and usage list to every such texture and classifies them with the production C# policy
+(compiled by `pwsh`, no Python copy), printing each rejected texture with its slots. Exit 0 and `NORMAL_TEXTURE_PREFLIGHT_OK <n> textures` mean
+the import will not stop there. It needs `pwsh` and fails loudly without it. A rejected texture needs a reviewed policy row (and a pin in
+`tools/tests/test_normal_texture_import.ps1` and `tools/tests/test_normal_texture_preflight.py`), never a fallback.

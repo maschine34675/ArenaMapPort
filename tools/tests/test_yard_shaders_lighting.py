@@ -182,6 +182,8 @@ class PackageCensusTests(unittest.TestCase):
         self.assertEqual((len(self.materials), len(counts)), (750, 30))
         released = set()
         for sidecar in glob.glob(str(REPO / "dist" / "BepInEx" / "plugins" / "maschine-ArenaMapPort" / "material-shaders.*.json")):
+            if Path(sidecar).name == "material-shaders.arena_yard.json":
+                continue                                          # Yard's own sidecar is staged since its first build (2026-11-21): compare with the OTHER maps
             released |= {v["shader"] for v in json.loads(Path(sidecar).read_text(encoding="utf-8")).values()}
         if released:                                              # a checkout without the staged dist has no sidecars to compare with
             self.assertEqual(set(counts) - released, NEW_NAMES)

@@ -405,6 +405,43 @@ def iter_serialized_files(env):
         yield from _walk(f)
 
 
+def monoscript_resolver(env):
+    """Returns resolve(owner_file, script_ptr) -> the MonoScript object an m_Script PPtr points at, or None.
+
+    A PPtr is (m_FileID, m_PathID): file 0 is the object's own SerializedFile, file N is that file's
+    externals[N - 1], and a path id is unique only INSIDE one file. Until 2026-11-21 the two callers
+    looked a script up in one dictionary keyed by the path id alone, over every file of the bundle.
+    That held as long as no two files carried a MonoScript under the same path id. Yard's scenes bundle
+    does: the sharedAssets of its Scripts scene and of its Light scene both use 155, 156 and 157
+    (SeasonAmbientSoundPlayer / CullingLightObject, BotZone / VolumetricLight, EnvironmentManager /
+    BallisticCollider), so the Scripts scene's BotZone was read as a VolumetricLight and the check
+    "at least one BotZone MonoBehaviour found in the bundle" failed on a bundle that has one, and which
+    of the two scripts won depended on the order of the files. An external that is not a file of this
+    bundle (a Unity built-in) resolves to None, as an unknown path id did before."""
+    files = list(iter_serialized_files(env))
+    by_name = {str(getattr(sf, "name", "")).lower(): sf for sf in files}
+    scripts = {(id(sf), path_id): obj for sf in files for path_id, obj in sf.objects.items()
+               if obj.type.name == "MonoScript"}
+
+    def resolve(owner_file, script_ptr):
+        script_ptr = script_ptr or {}
+        path_id = script_ptr.get("m_PathID")
+        file_id = script_ptr.get("m_FileID") or 0
+        target = owner_file
+        if file_id:
+            externals = getattr(owner_file, "externals", None) or []
+            if not 0 < file_id <= len(externals):
+                return None
+            external = externals[file_id - 1]
+            path = str(getattr(external, "path", "") or getattr(external, "name", "") or "")
+            target = by_name.get(path.replace("\\", "/").rsplit("/", 1)[-1].lower())
+            if target is None:
+                return None
+        return scripts.get((id(target), path_id))
+
+    return resolve
+
+
 def validate_target_platform(env, bundle_label: str) -> None:
     sfiles = list(iter_serialized_files(env))
     if not check(len(sfiles) > 0, f"{bundle_label}: at least one SerializedFile found inside the bundle"):
@@ -1284,12 +1321,13 @@ def count_light_culling_in_bundle_scenes(env, scene_names: list[str]):
     read_typetree()->m_Script PPtr->MonoScript technique validate_eft_scripts uses, reused here
     rather than duplicated as a separate helper only for that function), to
     CullingLightObject/VolumetricLight/LightFlicker -- plus the LightFlicker curve wrap-mode
-    signature multiset (see light_flicker_curve_signatures_in_package). The MonoScript pool is
-    built once from the WHOLE bundle (validate_eft_scripts' own proven approach: a script PPtr can
-    resolve outside its MonoBehaviour's own nested SerializedFile), while MonoBehaviour objects are
+    signature multiset (see light_flicker_curve_signatures_in_package). A script PPtr usually
+    resolves outside its MonoBehaviour's own nested SerializedFile (into that scene's sharedAssets),
+    so it goes through monoscript_resolver, which honours the PPtr's file id (a path id alone is
+    ambiguous across files, see there), while MonoBehaviour objects are
     scoped to each scene's own nested "BuildPlayer-<SceneName>" file (count_disabled_in_bundle_scenes'
     own per-scene scoping), so counts never mix scenes together."""
-    monoscripts = {o.path_id: o for o in env.objects if o.type.name == "MonoScript"}
+    resolve_script = monoscript_resolver(env)
     by_name = {sf.name: sf for sf in iter_serialized_files(env)}
     counts: dict[str, dict[str, int]] = {}
     flicker_signatures: Counter = Counter()
@@ -1309,8 +1347,7 @@ def count_light_culling_in_bundle_scenes(env, scene_names: list[str]):
                 tt = obj.read_typetree()
             except Exception:  # noqa: BLE001
                 continue
-            script_ptr = (tt or {}).get("m_Script") or {}
-            script_obj = monoscripts.get(script_ptr.get("m_PathID"))
+            script_obj = resolve_script(sf, (tt or {}).get("m_Script"))
             if script_obj is None:
                 continue
             try:
@@ -1688,21 +1725,20 @@ def validate_navmesh_bundle(path: Path, require: bool) -> None:
 # ---------------------------------------------------------------------------
 
 def validate_eft_scripts(env, require: bool) -> None:
-    mono_objs = [o for o in env.objects if o.type.name == "MonoBehaviour"]
-    monoscripts = {o.path_id: o for o in env.objects if o.type.name == "MonoScript"}
+    resolve_script = monoscript_resolver(env)
+    mono_objs = [(sf, o) for sf in iter_serialized_files(env) for o in sf.objects.values()
+                 if o.type.name == "MonoBehaviour"]
 
     found: dict[str, list[dict]] = {k: [] for k in EXPECTED_EFT_COMPONENTS}
     unresolved = 0
     other_classes: list[str] = []
 
-    for obj in mono_objs:
+    for owner_file, obj in mono_objs:
         try:
             tt = obj.read_typetree()
         except Exception:
             tt = None
-        script_ptr = (tt or {}).get("m_Script") or {}
-        path_id = script_ptr.get("m_PathID")
-        script_obj = monoscripts.get(path_id)
+        script_obj = resolve_script(owner_file, (tt or {}).get("m_Script"))
         if script_obj is None:
             unresolved += 1
             continue

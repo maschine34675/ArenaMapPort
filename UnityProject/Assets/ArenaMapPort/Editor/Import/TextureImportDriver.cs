@@ -47,7 +47,7 @@ namespace ArenaMapPort.Editor.Import
 
             var result = new Dictionary<string, Texture>();
             int cubeCount = 0, volumeCount = 0, skippedUnassignableCount = 0;
-            int packedNormalCount = 0, rgbNormalCount = 0, clothMaskCount = 0;
+            int packedNormalCount = 0, rgbNormalCount = 0, clothMaskCount = 0, impostorAtlasCount = 0;
             foreach (var prop in pkg.Textures.Properties())
             {
                 string texId = prop.Name;
@@ -75,7 +75,9 @@ namespace ArenaMapPort.Editor.Import
                     result[texId] = ImportPreservedNormal(srcPng, texId, metadata, normalPlan);
                     if (normalPlan.Encoding == "PackedRaG") packedNormalCount++;
                     else if (normalPlan.Encoding == "RgbNormal") rgbNormalCount++;
-                    else clothMaskCount++;
+                    else if (normalPlan.Encoding == "ImpostorNormalDepth") impostorAtlasCount++;
+                    else if (normalPlan.Encoding == "ClothNormalsMask") clothMaskCount++;
+                    else throw new InvalidDataException("Unknown preserved normal plan '" + normalPlan.Encoding + "' for " + texId);
                     continue;
                 }
 
@@ -166,7 +168,8 @@ namespace ArenaMapPort.Editor.Import
                       " real Cubemap assets, " + volumeCount + " real Texture3D assets, " + skippedUnassignableCount +
                       " Tex3D/Tex2DArray source(s) never assignable to any material property, " +
                       packedNormalCount + " packed normals / " + rgbNormalCount + " RGB normals / " +
-                      clothMaskCount + " Cloth masks saved as native source-encoded Texture2D assets) -> " +
+                      clothMaskCount + " Cloth masks / " + impostorAtlasCount +
+                      " impostor atlases saved as native source-encoded Texture2D assets) -> " +
                       ArenaPaths.TexturesDir);
             return result;
         }

@@ -8,7 +8,7 @@ namespace ArenaMapPort.Editor.Import
     {
         public sealed class Usage
         {
-            public int NormalSlots, ClothMaskSlots, UnsupportedSlots;
+            public int NormalSlots, ClothMaskSlots, ImpostorDataSlots, UnsupportedSlots;
             public bool HasDxt1Keyword;
             public bool AllNormalReadersUseRgb = true;
 
@@ -32,6 +32,19 @@ namespace ArenaMapPort.Editor.Import
             // Detail_01/02_nmp, Ground_04_nmp; iceberg-release.md), so they take the PackedRaG route like any _BumpMap.
             const string Mk4RockShader = "MK4/Rock";
             const string Mk4RockSimpleShader = "MK4/Rock Simple";
+            // Yard (Arena 0.6.2, 2026-11-21; yard-release.md): two trees use Amplify Impostors' shaders. What those
+            // shaders read is inferred from the package's pixels; neither shader source is in this repository. The
+            // bark material (Impostors/Examples/StandardCrossfade) binds BarkNormal on _Normal: the layout of an
+            // ordinary packed DXT5 normal (512 x 1024, R = 255 in every pixel, |G - B| <= 6, alpha 0..255), so it
+            // takes the PackedRaG route like any _BumpMap. The impostor material (Hidden/Amplify Impostors/Octahedron
+            // Impostor) binds Tree_Impostor_NormalDepth on _Normals: NOT a tangent-space normal but, by its content,
+            // the baked atlas of the impostor: a full-sphere vector in RGB (decoded as 2x - 1: length 0.962 +/- 0.064
+            // over the non-empty texels of 2048 x 2048, 0.985 +/- 0.146 with the 3.04 percent empty texels 0,0,0,0
+            // counted; 53 percent of the texels have blue below 128) and a second quantity in alpha (0..248, taken
+            // to be the depth). The extractor's normal flag is a name heuristic; this texture is data whose four
+            // channels are preserved as they are (linear DXT5), never routed through a normal reader.
+            const string StandardCrossfadeShader = "Impostors/Examples/StandardCrossfade";
+            const string OctahedronImpostorShader = "Hidden/Amplify Impostors/Octahedron Impostor";
 
             public void Add(string shader, string property, bool dxt1Keyword)
             {
@@ -49,6 +62,7 @@ namespace ArenaMapPort.Editor.Import
                     case "_Normalmap" when shader == Mk4RockShader || shader == Mk4RockSimpleShader:
                     case "_DetailBump" when shader == Mk4RockShader:
                     case "_MaskBump" when shader == Mk4RockShader:
+                    case "_Normal" when shader == StandardCrossfadeShader:
                         NormalSlots++;
                         HasDxt1Keyword |= dxt1Keyword;
                         AllNormalReadersUseRgb &= dxt1Keyword ||
@@ -56,6 +70,9 @@ namespace ArenaMapPort.Editor.Import
                         break;
                     case "_NormalsMask" when IsClothShader(shader):
                         ClothMaskSlots++;
+                        break;
+                    case "_Normals" when shader == OctahedronImpostorShader:
+                        ImpostorDataSlots++;
                         break;
                     case "_SpecMap" when shader == SpecMapShader:
                         break; // co-usage of a normal texture; the normal slot decides the plan
@@ -74,6 +91,8 @@ namespace ArenaMapPort.Editor.Import
             public int MinB { get; private set; } = 255;
             public int MinA { get; private set; } = 255;
             public int MaxGreenBlueDifference { get; private set; }
+            /// <summary>Pixels whose blue is below 128 (for an RGB normal: texels whose vector leans backward).</summary>
+            public long BelowHalfBlue { get; private set; }
 
             public void Add(byte r, byte g, byte b, byte a)
             {
@@ -83,6 +102,7 @@ namespace ArenaMapPort.Editor.Import
                 MinB = Math.Min(MinB, b);
                 MinA = Math.Min(MinA, a);
                 MaxGreenBlueDifference = Math.Max(MaxGreenBlueDifference, Math.Abs(g - b));
+                if (b < 128) BelowHalfBlue++;
             }
         }
 
@@ -102,11 +122,25 @@ namespace ArenaMapPort.Editor.Import
         public static Plan Classify(string textureId, string sourceFormat, string colorSpace, string dimension,
             int width, int height, Pixels pixels, Usage usage)
         {
+            // Exactly one kind of reader may bind a texture: normal slots, the cloth mask slot or the impostor data slot.
+            int readerKinds = usage == null ? 0 :
+                (usage.NormalSlots != 0 ? 1 : 0) + (usage.ClothMaskSlots != 0 ? 1 : 0) + (usage.ImpostorDataSlots != 0 ? 1 : 0);
             if (dimension != "Tex2D" || width <= 0 || height <= 0 || width > 16384 || height > 16384
                 || pixels == null || pixels.Count != (long)width * height || usage == null
-                || usage.UnsupportedSlots != 0 || (usage.NormalSlots == 0 && usage.ClothMaskSlots == 0)
-                || (usage.NormalSlots != 0 && usage.ClothMaskSlots != 0))
+                || usage.UnsupportedSlots != 0 || readerKinds != 1)
                 throw Rejected(textureId, "invalid dimensions/pixels or unsupported/mixed material usage");
+
+            // Yard's Amplify impostor atlas (see Usage): a vector in RGB and a second quantity in alpha, linear DXT5.
+            // All four source channels are kept as they are. What admits a texture here is the shader and slot it is
+            // bound to; the pixel bounds only keep two known other layouts out: an opaque texture (the atlas uses
+            // its alpha) and a packed normal (R = 255 everywhere).
+            if (usage.ImpostorDataSlots > 0)
+            {
+                if (sourceFormat == "DXT5" && colorSpace == "Linear" && pixels.MinA < 255 && pixels.MinR < 255)
+                    return new Plan("ImpostorNormalDepth", "DXT5", false);
+                throw Rejected(textureId, "unverified impostor atlas encoding: format=" + sourceFormat + ", colorSpace=" +
+                    colorSpace + ", R=" + pixels.MinR + ".." + pixels.MaxR + ", minA=" + pixels.MinA);
+            }
 
             // The extractor's normal flag is a heuristic. Cloth's _NormalsMask is an authored
             // color-space mask, not a normal vector texture; never normal-repack this false positive.
@@ -143,12 +177,22 @@ namespace ArenaMapPort.Editor.Import
             // A real RGB-normal route must consume RGB, not the default packed R*A/G route.
             // City_Tarp_01_N is this source-authored sRGB DXT1 case, on Cloth/_NormalMap1 (AirPit) and on
             // Cloth_backface/_NormalMap2 (Bowl, City_Antisniper_tarps).
+            // The blue bound was "every pixel at 128 or more" (City_Tarp_01_N: B 231..255). Yard's Cloth_for_tree_N
+            // (2048 x 2048, sRGB DXT1, on Cloth_backface/_NormalMap1; 2026-11-21) is the same kind of RGB normal
+            // (unit length 1.002 +/- 0.014, alpha 255, mean B 247.5), but 1,639 of its 4,194,304 pixels (0.039
+            // percent) lie in deep folds whose vector leans backward (B down to 57). The bound is therefore a share:
+            // at most one pixel in a thousand below 128. With no such pixel it is the old rule. The gate of this
+            // route is the reader (AllNormalReadersUseRgb: the DXT1_NM keyword or a cloth normal slot); the blue
+            // share only refuses a texture on such a slot whose content is plainly not an RGB normal, and a bright
+            // colour or gloss map would pass it (three such DXT1 maps of Yard do, none of them on such a slot).
             if (usage.NormalSlots > 0 && usage.AllNormalReadersUseRgb && sourceFormat == "DXT1"
-                && (colorSpace == "Linear" || colorSpace == "sRGB") && pixels.MinA == 255 && pixels.MinB >= 128)
+                && (colorSpace == "Linear" || colorSpace == "sRGB") && pixels.MinA == 255
+                && pixels.BelowHalfBlue * 1000L <= pixels.Count)
                 return new Plan("RgbNormal", "DXT1", colorSpace == "sRGB");
 
             throw Rejected(textureId, "unverified normal encoding: format=" + sourceFormat + ", colorSpace=" +
                 colorSpace + ", R=" + pixels.MinR + ".." + pixels.MaxR + ", minA=" + pixels.MinA +
+                ", minB=" + pixels.MinB + ", belowHalfBlue=" + pixels.BelowHalfBlue + "/" + pixels.Count +
                 ", maxGreenBlueDifference=" + pixels.MaxGreenBlueDifference + ", DXT1_NM=" + usage.HasDxt1Keyword);
         }
 

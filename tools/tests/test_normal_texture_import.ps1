@@ -119,6 +119,61 @@ Assert-Plan (Classify 'DXT5' 'Linear' $box $specCo) 'PackedRaG' 'DXT5' $false
 Assert-Rejected { Classify 'DXT5' 'Linear' $box (New-Usage 'p0/Reflective/Bumped Specular SMap' '_SpecMap') }
 Assert-Rejected { Classify 'DXT5' 'Linear' $box (New-Usage 'p0/Reflective/Bumped Specular' '_SpecMap') }
 
+# Yard (2026-11-21): the Amplify bark shader's _Normal is an ordinary packed normal slot, on that shader only.
+Assert-Plan (Classify 'DXT5' 'Linear' $box (New-Usage 'Impostors/Examples/StandardCrossfade' '_Normal')) 'PackedRaG' 'DXT5' $false
+Assert-Rejected { Classify 'DXT5' 'Linear' $box (New-Usage 'p0/Reflective/Bumped Specular' '_Normal') }
+Assert-Rejected { Classify 'DXT5' 'Linear' $box (New-Usage 'Impostors/Examples/StandardCrossfade' '_DetailNormal') }
+# Yard's impostor atlas (Hidden/Amplify Impostors/Octahedron Impostor, _Normals): a vector in RGB and the depth in alpha,
+# kept as linear DXT5 with all four channels. Not on another shader, not sRGB, not another format, not opaque, not a packed
+# normal (R = 255 everywhere), and never together with a normal reader or a cloth mask.
+$atlasUsage = New-Usage 'Hidden/Amplify Impostors/Octahedron Impostor' '_Normals'
+$atlas = New-Pixels @(54,48,62,143,0,0,0,0)
+Assert-Plan (Classify 'DXT5' 'Linear' $atlas $atlasUsage 'Tex2D' 2 1) 'ImpostorNormalDepth' 'DXT5' $false
+Assert-Rejected { Classify 'DXT5' 'sRGB' $atlas $atlasUsage 'Tex2D' 2 1 }
+Assert-Rejected { Classify 'BC7' 'Linear' $atlas $atlasUsage 'Tex2D' 2 1 }
+Assert-Rejected { Classify 'DXT1' 'Linear' $atlas $atlasUsage 'Tex2D' 2 1 }
+Assert-Rejected { Classify 'DXT5' 'Linear' (New-Pixels @(54,48,62,255)) $atlasUsage }
+Assert-Rejected { Classify 'DXT5' 'Linear' $box $atlasUsage }
+Assert-Rejected { Classify 'DXT5' 'Linear' $atlas (New-Usage 'p0/Reflective/Bumped Specular' '_Normals') 'Tex2D' 2 1 }
+$atlasMixed = New-Usage 'Hidden/Amplify Impostors/Octahedron Impostor' '_Normals'
+$atlasMixed.Add('p0/Reflective/Bumped Specular', '_BumpMap', $false)
+Assert-Rejected { Classify 'DXT5' 'Linear' $atlas $atlasMixed 'Tex2D' 2 1 }
+Assert-Rejected { Classify 'DXT5' 'Linear' $box $atlasMixed }
+# The two pixel bounds of the atlas, at their edges: 254 passes for red and for alpha, 255 does not.
+Assert-Plan (Classify 'DXT5' 'Linear' (New-Pixels @(254,48,62,254)) $atlasUsage) 'ImpostorNormalDepth' 'DXT5' $false
+Assert-Rejected { Classify 'DXT5' 'Linear' (New-Pixels @(255,48,62,254)) $atlasUsage }
+Assert-Rejected { Classify 'DXT5' 'Linear' (New-Pixels @(254,48,62,255)) $atlasUsage }
+# Only plain DXT5 was measured for an atlas; the crunched spellings stay refused until one is seen.
+Assert-Rejected { Classify 'DXT5Crunched' 'Linear' $atlas $atlasUsage 'Tex2D' 2 1 }
+Assert-Rejected { Classify 'Format29' 'Linear' $atlas $atlasUsage 'Tex2D' 2 1 }
+$atlasUnsupported = New-Usage 'Hidden/Amplify Impostors/Octahedron Impostor' '_Normals'
+$atlasUnsupported.Add('Hidden/Amplify Impostors/Octahedron Impostor', '_MainTex', $false)
+Assert-Rejected { Classify 'DXT5' 'Linear' $atlas $atlasUnsupported 'Tex2D' 2 1 }
+# The bark slot is a packed-normal reader: an RGB normal on it is refused (no DXT1_NM keyword, not a cloth slot).
+Assert-Rejected { Classify 'DXT1' 'sRGB' $rgb (New-Usage 'Impostors/Examples/StandardCrossfade' '_Normal') }
+$atlasCloth = New-Usage 'Hidden/Amplify Impostors/Octahedron Impostor' '_Normals'
+$atlasCloth.Add('Cloth/ClothShader', '_NormalsMask', $false)
+Assert-Rejected { Classify 'DXT5' 'sRGB' (New-Pixels @(5,8,5,11)) $atlasCloth }
+# Yard's Cloth_for_tree_N: an RGB normal with 0.039 percent of its pixels below blue 128 (deep folds). The bound is one
+# pixel in a thousand: 1 of 1000 passes, 2 of 1000 and 1 of 999 do not, and without such a pixel it is the old rule.
+function New-RgbPixels([int]$count, [int]$low) {
+    $pixels = [ArenaMapPort.Editor.Import.NormalTextureImportPolicy+Pixels]::new()
+    for ($i = 0; $i -lt $count; $i++) {
+        if ($i -lt $low) { $pixels.Add(8, 174, 107, 255) } else { $pixels.Add(123, 125, 255, 255) }
+    }
+    return $pixels
+}
+$clothBack1 = New-Usage 'Cloth/ClothShader_backface' '_NormalMap1'
+Assert-Plan (Classify 'DXT1' 'sRGB' (New-RgbPixels 1000 1) $clothBack1 'Tex2D' 1000 1) 'RgbNormal' 'DXT1' $true
+Assert-Plan (Classify 'DXT1' 'sRGB' (New-RgbPixels 1000 0) $clothBack1 'Tex2D' 1000 1) 'RgbNormal' 'DXT1' $true
+Assert-Rejected { Classify 'DXT1' 'sRGB' (New-RgbPixels 1000 2) $clothBack1 'Tex2D' 1000 1 }
+Assert-Rejected { Classify 'DXT1' 'sRGB' (New-RgbPixels 999 1) $clothBack1 'Tex2D' 999 1 }
+Assert-Plan (Classify 'DXT1' 'Linear' (New-RgbPixels 1000 1) $dxt1 'Tex2D' 1000 1) 'RgbNormal' 'DXT1' $false
+Assert-Rejected { Classify 'DXT1' 'Linear' (New-RgbPixels 1000 1) $normal 'Tex2D' 1000 1 }
+$low = New-RgbPixels 1000 1
+if ($low.BelowHalfBlue -ne 1 -or $low.MinB -ne 107 -or $low.Count -ne 1000) { throw 'Blue statistics are wrong.' }
+$script:checks++
+
 # All currently used concrete normal properties qualify independently of texture names.
 foreach ($slot in @('_BumpMap','_BumpMap0','_BumpMap1','_BumpMap2','_NormalMap1','_NormalMap2')) {
     Assert-Plan (Classify 'DXT5' 'Linear' $box (New-Usage 'verified source shader' $slot)) 'PackedRaG' 'DXT5' $false

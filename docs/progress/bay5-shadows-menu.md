@@ -379,3 +379,7 @@ Evidence receipts: `smFinalDebugLog.json`, `smFinalLifecycleLog.json`, `smFinalE
 `smFinalOtherErrors.json`, `smFinalPlayerRepeat.json`, `smFinalLoadedAfterRaids.json`.
 Earlier MIA and consumed-item consequences documented above remain; the final sequence added
 no disconnect health penalty. No consumables or profile-file edits were used in these final runs.
+
+## 2026-11-21 - The policy has a fourth plan and a share rule (Yard)
+
+`NormalTextureImportPolicy` gained three rules with Yard's first build: `_Normal` on `Impostors/Examples/StandardCrossfade` is a packed-normal slot, `_Normals` on `Hidden/Amplify Impostors/Octahedron Impostor` is preserved as it is (plan `ImpostorNormalDepth`, linear DXT5, all four channels), and the RGB-normal route allows one pixel in a thousand below blue 128. A package can be checked before a build with `python tools/validate/normal_texture_preflight.py <package>`. Measurements and review: [yard-release.md](yard-release.md), 2026-11-21, item 16.
