@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using ArenaMapPort.Crypto;
 using ArenaMapPort.Shared;
 using BepInEx.Configuration;
 using Comfort.Common;
@@ -20,23 +22,27 @@ using Object = UnityEngine.Object;
 namespace ArenaMapPort.Client
 {
     /// <summary>
-    /// Native grass on Yard, stage 1: a developer-gated PROBE (PLAN-YARD item 23, shape E; design: work/tmp/yard-grass/handoff/design-final.md). Nothing changes for a player: the key
-    /// <c>Map (arena_yard)/NativeGrass</c> defaults to Off and is no public option.
+    /// Native grass on every map that has Arena grass (<see cref="ArenaMapDescriptor.HasNativeGrass"/>: Bowl, Iceberg, Yard; PLAN-YARD items 22 and 23; design: work/tmp/yard-grass/handoff/design-final.md),
+    /// ON by default (user, 2026-11-21): the key <c>Map (&lt;key&gt;)/Grass</c> is a bool that defaults to true and is no public option.
     ///
     /// What vanilla and Arena do: Arena's Grass scene carries two GPUInstancerPrefabManager (normal and optic camera) and a GrassInitialization component that reads
-    /// StreamingAssets/Grass/ArenaGrassPrefabs_Yard.pcl (68 bytes per clump: slice index and matrix) and feeds both managers; the prefab (a LODGroup with two Foliage_Simple meshes), the prototype and
+    /// StreamingAssets/Grass/ArenaGrassPrefabs_&lt;Name&gt;.pcl (68 bytes per clump: slice index and matrix) and feeds both managers; the prefab (a LODGroup with two Foliage_Simple meshes), the prototype and
     /// the two Texture2DArrays live in sharedassets95. EFT 0.16.9.5 ships the same GPUInstancer runtime (Streets and Ground Zero use it) and its real GPUInstancer/Foliage_Simple shader.
-    /// What the ported scene lacks: the package carries none of it (the Grass scene is three empty GameObjects), so Yard has no grass.
+    /// What the ported scene lacks: the package carries none of it (the Grass scene is three empty GameObjects), so the map has no grass.
     /// What this does: at a tick in Plugin.LateUpdate, once the map's scenes are loaded, the game camera and the optic camera exist and the worker delivered the placement and the art, it builds
     /// everything through EFT's own GPUInstancer runtime API, in the order of design-final.md section 2 (shader and noise, inactive holder with two managers, activation, prototype, prototype
-    /// fields, colour buffers and feed per manager, the motion-vector command-buffer fix-up of section 3), in a holder inside the map's Grass scene (never DontDestroyOnLoad). The art comes from the
-    /// player's verified Arena installation (NativeGrassArtSource: pinned offsets in sharedassets95.assets.resS, read on a worker, kept in memory only, dropped after the upload), or from the BSG-free
-    /// placeholder generator. Both managers are created and destroyed together (the motion-vector buffers are process-wide); teardown (key off, raid end, scene unload, camera lost or replaced,
-    /// failure) removes the command buffers and the HiZ component the build added and destroys every object, material, mesh and texture it created. Any exception latches the probe for the session
-    /// with ONE Warning and a teardown; later raids log Debug. The season never reaches the grass (NativeGrassColorModel: Arena's summer lists always).
+    /// fields, colour buffers and feed per manager, the motion-vector command-buffer fix-up of section 3), in a holder inside the map's Grass scene (never DontDestroyOnLoad). The data comes from
+    /// the map's staged grass bundle bundles/&lt;key&gt;_grass.bundle (NativeGrassArtSource: the grass pack, an AMPB container opened with the map's own content key, read on a worker, kept in memory only,
+    /// dropped after the upload; nothing here reads Arena's installation or asks the installation gate), or the BSG-free placeholder generator for the placement's own slices. Both managers are created and
+    /// destroyed together (the motion-vector buffers are process-wide); teardown (key off, raid end, scene unload, camera lost or replaced, failure) removes the command buffers and the HiZ component
+    /// the build added and destroys every object, material, mesh and texture it created. The season never reaches the grass (NativeGrassColorModel: Arena's summer lists always).
     ///
-    /// Status: the Unity-free core (placement, state machine, art facts, values) is unit-tested; this glue is unit-pinned by source tests only. Host check pending: every EFT-side fact (first manager
-    /// Awake on a ported scene, the prototype API, the compressed array upload, the command-buffer fix-up, HiZ) is read from the decompile, not run. Logs: Debug, tag [Grass].
+    /// Failures: a map whose pack is missing, refused or damaged has no grass in this session, ONE Warning with a reason code (a missing file was already warned about at startup, Plugin's "Required map file
+    /// is missing", and logs Debug here), and no other map is affected; an ENGINE-side failure (the build or the tick threw) latches the grass off for the whole session with ONE Warning. The map itself, its bundles
+    /// and the map notices never depend on the grass bundle.
+    ///
+    /// Status: the Unity-free core (pack reader, placement, state machine, art facts, values) is unit-tested; this glue is unit-pinned by source tests only. Stage 1 (the probe on Yard, art read from the
+    /// player's Arena files) was host-run on GPU-2 on 2026-11-21 (docs/progress/native-grass.md); stage 2 (the pack, three maps, default on) is not host-run yet. Logs: Debug, tag [Grass].
     /// </summary>
     internal static class NativeGrassRepairs
     {
@@ -44,7 +50,7 @@ namespace ArenaMapPort.Client
 
         sealed class KeySet
         {
-            internal ConfigEntry<string> Mode;
+            internal ConfigEntry<bool> Grass;
             internal ConfigEntry<bool> Drawing;
             internal ConfigEntry<string> Art;
             internal ConfigEntry<string> Upload;
@@ -92,13 +98,18 @@ namespace ArenaMapPort.Client
         static bool _wanted;
         static bool _drawingWanted = true;
         static int _signature;
-        static GrassArtKind _artKind = GrassArtKind.Arena;
+        static GrassArtKind _artKind = GrassArtKind.Pack;
         static GrassUploadPath _uploadPath = GrassUploadPath.SetPixelData;
 
         // The owned raid (set by the Scripts scene's sceneLoaded, cleared by its sceneUnloaded).
         static ArenaMapDescriptor _owned;
-        static NativeGrassMapRow _row;
         static KeySet _ownedKeys;
+        static string _lastMapKey = "?";
+
+        // The maps whose pack was refused in this session (map key -> the reason code): a refusal is the MAP's, so no other map is touched and no session latch is set.
+        static readonly Dictionary<string, string> _refused = new Dictionary<string, string>(StringComparer.Ordinal);
+        /// <summary>Per map: how often the worker was too slow (30 s). The first time is retried, the second is a refusal.</summary>
+        static readonly Dictionary<string, int> _slowReads = new Dictionary<string, int>(StringComparer.Ordinal);
         static bool[] _loaded;
 
         // The cameras.
@@ -123,31 +134,30 @@ namespace ArenaMapPort.Client
 
         // ---- install ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-        /// <summary>Binds the developer keys of every map with a grass row (Yard) through Settings and subscribes the scene events. Never throws.</summary>
+        /// <summary>Binds the keys of every map with native grass (descriptor HasNativeGrass) through Settings and subscribes the scene events. Never throws.</summary>
         internal static void Install()
         {
             try
             {
                 foreach (var map in ArenaMapRegistry.All)
                 {
-                    if (NativeGrassTable.ForMap(map.Key) == null) continue;
+                    if (!map.HasNativeGrass) continue;
                     string section = NativeGrassKeys.SectionOf(map.Key);
                     var keys = new KeySet
                     {
-                        Mode = Plugin.Instance.Settings.Bind(section, NativeGrassKeys.Mode, NativeGrassKeys.ModeDefault,
-                            new ConfigDescription("Developer probe: native grass of the original Arena data on this map (EFT's GPUInstancer, art read from the installed Arena). " +
-                                "Off = nothing is built. On = built once per raid when the cameras exist; Off again tears everything down. Live.",
-                                new AcceptableValueList<string>("Off", "On"))),
+                        Grass = Plugin.Instance.Settings.Bind(section, NativeGrassKeys.Grass, NativeGrassKeys.GrassDefault,
+                            "Native grass of the original Arena data on this map (EFT's GPUInstancer; the data is the map's grass bundle). On = built once per raid when the cameras exist; " +
+                            "off tears everything down. Live. Takes the grass of this map only."),
                         Drawing = Plugin.Instance.Settings.Bind(section, NativeGrassKeys.Drawing, NativeGrassKeys.DrawingDefault,
-                            "Developer probe A/B: false stops both grass managers from computing and drawing (no teardown: buffers, the HiZ pass and the motion-vector targets stay), true draws again. Live."),
+                            "Developer A/B: false stops both grass managers from computing and drawing (no teardown: buffers, the HiZ pass and the motion-vector targets stay), true draws again. Live."),
                         Art = Plugin.Instance.Settings.Bind(section, NativeGrassKeys.ArtSource, NativeGrassKeys.ArtSourceDefault,
-                            new ConfigDescription("Developer probe A/B: Arena = the textures of the installed Arena, Placeholder = generated coloured blades (the pcl slice shows as hue and blade count). A change rebuilds.",
-                                new AcceptableValueList<string>("Arena", "Placeholder"))),
+                            new ConfigDescription("Developer A/B: Pack = the textures of the grass bundle, Placeholder = generated coloured blades (the placement's slice shows as hue and blade count). A change rebuilds.",
+                                new AcceptableValueList<string>("Pack", "Placeholder"))),
                         Upload = Plugin.Instance.Settings.Bind(section, NativeGrassKeys.UploadPath, NativeGrassKeys.UploadPathDefault,
-                            new ConfigDescription("Developer probe A/B: how the compressed mips reach the texture arrays. SetPixelData = per (slice, mip), CopyTexture = one temporary Texture2D per slice. A change rebuilds.",
+                            new ConfigDescription("Developer A/B: how the compressed mips reach the texture arrays. SetPixelData = per (slice, mip), CopyTexture = one temporary Texture2D per slice. A change rebuilds.",
                                 new AcceptableValueList<string>("SetPixelData", "CopyTexture"))),
                     };
-                    keys.Mode.SettingChanged += (_, __) => Reflag();
+                    keys.Grass.SettingChanged += (_, __) => Reflag();
                     keys.Drawing.SettingChanged += (_, __) => Reflag();
                     keys.Art.SettingChanged += (_, __) => Reflag();
                     keys.Upload.SettingChanged += (_, __) => Reflag();
@@ -155,11 +165,11 @@ namespace ArenaMapPort.Client
                 }
                 SceneManager.sceneLoaded += OnSceneLoaded;
                 SceneManager.sceneUnloaded += OnSceneUnloaded;
-                Plugin.Log.LogDebug($"{Tag} keys bound for {_keys.Count} map(s); the probe is off unless 'NativeGrass' is On");
+                Plugin.Log.LogDebug($"{Tag} keys bound for {_keys.Count} map(s) ('Grass' defaults to {NativeGrassKeys.GrassDefault})");
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning($"{Tag} the grass probe keys could not be bound ({e.GetType().Name}: {e.Message}); no grass probe this session");
+                Plugin.Log.LogWarning($"{Tag} the grass keys could not be bound ({e.GetType().Name}: {e.Message}); no native grass this session");
             }
         }
 
@@ -170,11 +180,13 @@ namespace ArenaMapPort.Client
             try
             {
                 KeySet keys = _ownedKeys;
+                ArenaMapDescriptor owned = _owned;
                 if (keys != null)
                 {
-                    _wanted = string.Equals(keys.Mode.Value, "On", StringComparison.OrdinalIgnoreCase);
+                    // wanted = the key is on and this map's pack was not refused earlier in the session
+                    _wanted = keys.Grass.Value && (owned == null || !_refused.ContainsKey(owned.Key));
                     _drawingWanted = keys.Drawing.Value;
-                    _artKind = string.Equals(keys.Art.Value, "Placeholder", StringComparison.OrdinalIgnoreCase) ? GrassArtKind.Placeholder : GrassArtKind.Arena;
+                    _artKind = string.Equals(keys.Art.Value, "Placeholder", StringComparison.OrdinalIgnoreCase) ? GrassArtKind.Placeholder : GrassArtKind.Pack;
                     _uploadPath = string.Equals(keys.Upload.Value, "CopyTexture", StringComparison.OrdinalIgnoreCase) ? GrassUploadPath.CopyTexture : GrassUploadPath.SetPixelData;
                 }
                 else
@@ -205,18 +217,22 @@ namespace ArenaMapPort.Client
                 ArenaMapDescriptor map = ArenaMapRaid.MapForScriptsScene(scene.name);
                 if (map != null)
                 {
-                    NativeGrassMapRow row = NativeGrassTable.ForMap(map.Key);
                     KeySet keys;
-                    if (row != null && _keys.TryGetValue(map.Key, out keys))
+                    if (map.HasNativeGrass && _keys.TryGetValue(map.Key, out keys))
                     {
                         _owned = map;
-                        _row = row;
+                        _lastMapKey = map.Key;
                         _ownedKeys = keys;
                         _loaded = new bool[map.AllSceneNames.Length];
                         _tickBroken = false;
                         _state.NewRaid(); // the last raid's 'game stopped' latch ends here
                         DropPreparation();
                         Reflag();
+                        string earlier;
+                        if (_refused.TryGetValue(map.Key, out earlier))
+                        {
+                            Plugin.Log.LogDebug($"{Tag} no grass this raid on {map.Key}: its pack was refused earlier in this session ({earlier})");
+                        }
                     }
                 }
                 if (_owned != null)
@@ -253,7 +269,6 @@ namespace ArenaMapPort.Client
                 }
                 if (scripts)
                 {
-                    _row = null;
                     _ownedKeys = null;
                     Reflag();
                 }
@@ -297,7 +312,7 @@ namespace ArenaMapPort.Client
         {
             bool owned = _owned != null;
             _in.Wanted = _wanted;
-            _in.HasMapRow = owned && _row != null;
+            _in.HasGrassMap = owned;
             _in.InOwnedRaid = owned;
             _in.BuildSignature = _signature;
             _in.InputsReady = false;
@@ -332,6 +347,10 @@ namespace ArenaMapPort.Client
             if (_state.IsBuilt && _build != null && _build.DrawingApplied != _drawingWanted)
             {
                 ApplyDrawing(_drawingWanted);
+            }
+            if (_in.InputError != null && owned)
+            {
+                RefuseMap(_in.InputError);
             }
             ReportFailures();
             if (!_wanted && _prep != null && _build == null)
@@ -387,42 +406,32 @@ namespace ArenaMapPort.Client
             return status == GameStatus.Stopping || status == GameStatus.Stopped || status == GameStatus.SoftStopping;
         }
 
-        /// <summary>The worker side of the tick: start it when the grass is wanted and the gate has verified an installation, then poll it. Never blocks.</summary>
+        /// <summary>
+        /// The worker side of the tick: start it when the grass is wanted, then poll it. Never blocks. Thread map: <see cref="GrassPreparation.Start"/> runs HERE, on the game thread (it opens the pack file,
+        /// asks <see cref="BundleKeyResolver.TryPeekKey"/> (a cache hit only: it never calls the gate and never derives) for the map's key, which the map's own bundles already derived and cached, and picks the crypto provider); the worker decrypts and parses.
+        /// </summary>
         static void ReadInputs()
         {
             if (!NativeGrassState.WantsInputs(in _in) || _state.Failed || _build != null || _state.IsBuilt || _in.GameStopping || _state.RaidOver)
             {
-                return; // nothing wanted, latched, already built, or the raid is ending: the art is read again only for the next build
+                return; // nothing wanted, latched, already built, or the raid is ending: the pack is read again only for the next build
             }
             if (_prep != null && _prepKind != _artKind && _build == null)
             {
                 DropPreparation();
             }
+            ArenaMapDescriptor map = _owned;
+            if (map == null)
+            {
+                return;
+            }
             if (_prep == null)
             {
-                GateState gate = ArenaInstallationGate.State;
-                if (gate == GateState.Verified)
-                {
-                    ArenaInstallationResult result = ArenaInstallationGate.Result;
-                    if (result == null || !result.Verified || string.IsNullOrEmpty(result.InstallPath))
-                    {
-                        _in.InputError = "arena:NoVerifiedInstallation";
-                        return;
-                    }
-                    _prep = GrassPreparation.Start(_row, result.InstallPath, _artKind);
-                    _prepKind = _artKind;
-                    _prepStartedAt = Time.realtimeSinceStartup;
-                    Plugin.Log.LogDebug($"{Tag} worker started: art={_artKind}, placement={_row.PlacementRelativePath}");
-                }
-                else if (gate == GateState.NotStarted || gate == GateState.Running || gate == GateState.TimedOut)
-                {
-                    return; // the check is still running (or a bundle request stopped waiting for it): pending, not a refusal
-                }
-                else
-                {
-                    _in.InputError = "arena:" + gate;
-                    return;
-                }
+                string path = Path.Combine(Path.Combine(PluginDirectory(), "bundles"), map.GrassBundleFileName);
+                _prep = GrassPreparation.Start(map.Key, path, DiskGrassPackFiles.Instance, ResolveKey, SelectProvider, _artKind);
+                _prepKind = _artKind;
+                _prepStartedAt = Time.realtimeSinceStartup;
+                Plugin.Log.LogDebug($"{Tag} worker started: map={map.Key}, art={_artKind}, pack={map.GrassBundleFileName}");
             }
             if (_prep.IsCompleted)
             {
@@ -447,6 +456,51 @@ namespace ArenaMapPort.Client
             }
         }
 
+        static string PluginDirectory() => Path.GetDirectoryName(typeof(NativeGrassRepairs).Assembly.Location) ?? ".";
+
+        /// <summary>The map's content key from the one resolver the map's bundles use, by a non-blocking peek into its cache (derived once per map and session by the map's own bundles; a miss or a cached failure is "key-unavailable" for this map only). Game thread. The result is shared: GrassPreparation copies it.</summary>
+        static bool ResolveKey(string mapKey, out byte[] key) => BundleKeyResolver.Default.TryPeekKey(mapKey, out key);
+
+        /// <summary>The crypto provider (Windows CNG, or managed with the resolver's one Warning), chosen here on the game thread and handed to the worker.</summary>
+        static ICryptoProvider SelectProvider() => CryptoProviders.Select(text => Plugin.Log.LogWarning(BundleKeyResolver.BundlesTag + " " + text));
+
+        /// <summary>
+        /// The map's pack was refused: remember it for the session (this map only), say so once (Warning with the reason code; a pack that is simply missing was already warned about at startup by Plugin
+        /// and logs Debug), drop the worker and re-read the flags, which finds the map not wanted. No session latch: the other maps keep their grass.
+        /// </summary>
+        static void RefuseMap(string reason)
+        {
+            string key = _owned != null ? _owned.Key : _lastMapKey;
+            if ((reason == "worker:timeout" || reason == "worker:abandoned") && !_refused.ContainsKey(key))
+            {
+                // a slow disk (Syncthing writing, a cold cache) is not a damaged pack: drop the worker and let the next tick start one more, once per map and session
+                int tries;
+                _slowReads.TryGetValue(key, out tries);
+                _slowReads[key] = tries + 1;
+                if (tries < 1)
+                {
+                    Plugin.Log.LogDebug($"{Tag} the grass bundle of {key} was not ready in time ({reason}); one more attempt");
+                    DropPreparation();
+                    return;
+                }
+            }
+            bool first = !_refused.ContainsKey(key);
+            if (first)
+            {
+                _refused[key] = reason;
+                if (reason == "pack-missing")
+                {
+                    Plugin.Log.LogDebug($"{Tag} no native grass on {key}: the grass bundle is missing (reported at startup); this map has no grass in this session");
+                }
+                else
+                {
+                    Plugin.Log.LogWarning($"{Tag} no native grass on {key}: {reason}. This map has no grass in this session; the map itself and the other maps are not affected.");
+                }
+            }
+            DropPreparation();
+            Reflag();
+        }
+
         static void DropPreparation()
         {
             GrassPreparation prep = _prep;
@@ -463,7 +517,7 @@ namespace ArenaMapPort.Client
             string reason;
             if (_state.TakeWarningDue(out reason))
             {
-                Plugin.Log.LogWarning($"{Tag} no native grass: {reason}. The probe stays off for this session; later raids log Debug.");
+                Plugin.Log.LogWarning($"{Tag} no native grass: {reason} (map {_lastMapKey}). An engine-side failure: the grass stays off for the rest of this session; later raids log Debug.");
             }
             if (_state.TakeLatchedNoticeDue())
             {
@@ -510,16 +564,18 @@ namespace ArenaMapPort.Client
             GrassPreparation prep = _prep;
             GrassInputs inputs = prep != null ? prep.Result : null;
             if (inputs == null || !inputs.Ok) throw new InvalidOperationException("the inputs are not ready");
-            NativeGrassMapRow row = _row;
+            ArenaMapDescriptor map = _owned;
+            if (map == null) throw new InvalidOperationException("no owned grass map");
+            GrassPackLayout layout = inputs.Layout;
             GrassPlan plan = inputs.Plan;
             var b = new Build();
             _build = b;
             UpdateHot();
             long t;
 
-            Plugin.Log.LogDebug($"{Tag} inputs: art={inputs.ArtName} checks=\"{inputs.Checks}\" placement={inputs.PlacementLength} B records={plan.Count} slices={plan.HistogramText()} " +
-                $"extent x {plan.MinX:0.0}..{plan.MaxX:0.0} y {plan.MinY:0.0}..{plan.MaxY:0.0} z {plan.MinZ:0.0}..{plan.MaxZ:0.0} scale {plan.MinScale:0.00}..{plan.MaxScale:0.00} " +
-                $"read={inputs.BytesRead} B worker ms: placement={GrassInputs.Ms(inputs.PlacementTicks):0.0} art={GrassInputs.Ms(inputs.ArtTicks):0.0}");
+            Plugin.Log.LogDebug($"{Tag} inputs: map={map.Key} art={inputs.ArtName} container={inputs.Container} checks=\"{inputs.Checks}\" pack={layout.FileLength} B placement={inputs.PlacementLength} B records={plan.Count} slices={plan.HistogramText()} " +
+                $"extent x {plan.MinX:0.0}..{plan.MaxX:0.0} y {plan.MinY:0.0}..{plan.MaxY:0.0} z {plan.MinZ:0.0}..{plan.MaxZ:0.0} scale {plan.MinScale:0.00}..{plan.MaxScale:0.00} tilt<={plan.MaxTiltDegrees:0.0}deg " +
+                $"read={inputs.BytesRead} B worker ms: open={GrassInputs.Ms(inputs.OpenTicks):0.0} placement={GrassInputs.Ms(inputs.PlacementTicks):0.0} art={GrassInputs.Ms(inputs.ArtTicks):0.0}");
 
             // 1. the real shader and the noise texture (design-final.md section 2 step 1; G1 section 0 point 2: a stand-in shader must never reach a manager)
             t = Stopwatch.GetTimestamp();
@@ -537,7 +593,7 @@ namespace ArenaMapPort.Client
 
             // 3. meshes, materials, the prefab root with its LODGroup (inactive, in the Grass scene)
             t = Stopwatch.GetTimestamp();
-            Scene grassScene = SceneManager.GetSceneByName(row.GrassSceneName);
+            Scene grassScene = SceneManager.GetSceneByName(map.GrassSceneName);
             if (!grassScene.IsValid() || !grassScene.isLoaded) throw new InvalidOperationException("the Grass scene is not loaded");
             b.MeshLod0 = MakeMesh("ArenaMapPort_grass_lod0", NativeGrassValues.BuildMesh(true), new Bounds(new Vector3(0f, 0.5f, 0f), new Vector3(1f, 1f, 1f)));
             b.MeshLod1 = MakeMesh("ArenaMapPort_grass_lod1", NativeGrassValues.BuildMesh(false), new Bounds(new Vector3(0f, 0.5f, 0f), new Vector3(1f, 1f, 0f)));
@@ -589,7 +645,9 @@ namespace ArenaMapPort.Client
             ConfigurePrototype(proto);
 
             // 8. the feed per manager, in the call order of GrassInitialization.Awake (decompile GrassInitialization.cs 40-66): colour buffers, matrices, count, slice index
+            long tm = Stopwatch.GetTimestamp();
             Matrix4x4[] matrices = MakeMatrices(plan);
+            double matricesMs = Ms(tm);
             GrassColorLists lists = NativeGrassColorModel.SummerLists;
             List<Color> dry = ToColors(lists.Dry);
             List<Color> healthy = ToColors(lists.Healthy);
@@ -599,7 +657,7 @@ namespace ArenaMapPort.Client
             RecordClones(b);
             Plugin.Log.LogDebug($"{Tag} prototype: name={proto.name} shadow={proto.isShadowCasting}/{proto.shadowDistance:0}m originalShadowShader={proto.useOriginalShaderForShadow} maxDistance={proto.maxDistance:0}/{proto.maxDistanceOptic:0} " +
                 $"lodHeights={NativeGrassValues.Lod0ScreenHeight:0.0000}/{NativeGrassValues.Lod1ScreenHeight:0.0000} lodBias={QualitySettings.lodBias:0.0}; clones={b.Clones.Count} " +
-                $"(all on the real shader); instances={DescribeInstances(b.Normal)} / {DescribeInstances(b.Optic)}; ms={Ms(t):0.0}");
+                $"(all on the real shader); instances={DescribeInstances(b.Normal)} / {DescribeInstances(b.Optic)}; matricesMs={matricesMs:0.0} ms={Ms(t):0.0}");
 
             // 9. the motion-vector command buffers (design-final.md section 3): the second Awake disposed and re-created the static buffers, so the first manager's are stale
             t = Stopwatch.GetTimestamp();
@@ -612,7 +670,7 @@ namespace ArenaMapPort.Client
                 ApplyDrawing(false);
             }
             Plugin.Log.LogDebug(ContextLine());
-            Plugin.Log.LogDebug($"{Tag} built in {Ms(start):0.0} ms on the main thread: instances={plan.Count} x2 managers, art={inputs.ArtName}, upload={b.UploadPathUsed}, drawing={b.DrawingApplied}");
+            Plugin.Log.LogDebug($"{Tag} built in {Ms(start):0.0} ms on the main thread: map={map.Key} instances={plan.Count} x2 managers, art={inputs.ArtName}, upload={b.UploadPathUsed}, drawing={b.DrawingApplied}");
             // after the cost line on purpose: the one-shot light search below is not part of what the grass costs
             Plugin.Log.LogDebug(LayerLine(b));
         }
@@ -718,8 +776,8 @@ namespace ArenaMapPort.Client
             long t0 = Stopwatch.GetTimestamp();
             try
             {
-                b.TexArray = CreateArray(NativeGrassArt.TexArray, NativeGrassValues.TexArrayObjectName, inputs.TexArray, _uploadPath);
-                b.NormalArray = CreateArray(NativeGrassArt.NormalArray, NativeGrassValues.NormalArrayObjectName, inputs.NormalArray, _uploadPath);
+                b.TexArray = CreateArray(inputs.Layout.TexArray, NativeGrassValues.TexArrayObjectName, inputs.TexArray, _uploadPath);
+                b.NormalArray = CreateArray(inputs.Layout.NormalArray, NativeGrassValues.NormalArrayObjectName, inputs.NormalArray, _uploadPath);
             }
             catch (Exception e) when (_uploadPath == GrassUploadPath.SetPixelData && !(e is GrassMipLimitException))
             {
@@ -731,15 +789,15 @@ namespace ArenaMapPort.Client
                 b.NormalArray = null;
                 used = "CopyTexture";
                 t0 = Stopwatch.GetTimestamp();
-                b.TexArray = CreateArray(NativeGrassArt.TexArray, NativeGrassValues.TexArrayObjectName, inputs.TexArray, GrassUploadPath.CopyTexture);
-                b.NormalArray = CreateArray(NativeGrassArt.NormalArray, NativeGrassValues.NormalArrayObjectName, inputs.NormalArray, GrassUploadPath.CopyTexture);
+                b.TexArray = CreateArray(inputs.Layout.TexArray, NativeGrassValues.TexArrayObjectName, inputs.TexArray, GrassUploadPath.CopyTexture);
+                b.NormalArray = CreateArray(inputs.Layout.NormalArray, NativeGrassValues.NormalArrayObjectName, inputs.NormalArray, GrassUploadPath.CopyTexture);
             }
             double arraysMs = Ms(t0);
             long t1 = Stopwatch.GetTimestamp();
-            b.NormalTexture = CreatePlainTexture(NativeGrassArt.NormalTexture, NativeGrassValues.NormalTextureObjectName, inputs.NormalTexture);
+            b.NormalTexture = CreatePlainTexture(inputs.Layout.NormalTexture, NativeGrassValues.NormalTextureObjectName, inputs.NormalTexture);
             double plainMs = Ms(t1);
             b.UploadPathUsed = used;
-            // the buffers are dropped here: nothing keeps Arena's bytes
+            // the buffers are dropped here: nothing keeps the pack's bytes
             inputs.DropArt();
             return $"{Tag} upload: path={used}{fallback} {DescribeArray(b.TexArray)} {DescribeArray(b.NormalArray)} normalTexture={b.NormalTexture.width}x{b.NormalTexture.height} mips={b.NormalTexture.mipmapCount} " +
                 $"mipLimit={QualitySettings.globalTextureMipmapLimit} arraysMs={arraysMs:0.0} plainMs={plainMs:0.0} totalMs={Ms(t):0.0}";
@@ -750,11 +808,11 @@ namespace ArenaMapPort.Client
             return $"{a.name}={a.width}x{a.height}x{a.depth} mips={a.mipmapCount} fmt={a.graphicsFormat}";
         }
 
-        /// <summary>BC1 is GraphicsFormat.RGBA_DXT1_UNorm in this Unity (the serialized RGB_DXT1_UNorm of Arena's arrays is obsolete there and the same 8-byte block).</summary>
+        /// <summary>BC1 is GraphicsFormat.RGBA_DXT1_UNorm in this Unity (the serialized RGB_DXT1_UNorm of Arena's normal array is obsolete there and the same 8-byte block); the pack states DXT1 or DXT5 by its format field.</summary>
         static GraphicsFormat FormatOf(GrassArtRange r) => r.Format == GrassBlockFormat.Dxt5 ? GraphicsFormat.RGBA_DXT5_UNorm : GraphicsFormat.RGBA_DXT1_UNorm;
 
         /// <summary>
-        /// A compressed Texture2DArray of exactly Arena's format (the serialized GraphicsFormat 101 or 97, UNorm: this removes the linear/sRGB question), with the raw block chains of the buffer uploaded
+        /// A compressed Texture2DArray of Arena's format (DXT5 or DXT1 UNorm as the pack states: this removes the linear/sRGB question), with the raw block chains of the buffer uploaded
         /// per (slice, mip) or per slice through a temporary Texture2D. The mipmap-limit flag is set at creation (the array API has no ignoreMipmapLimit property): a limited array is refused.
         /// </summary>
         static Texture2DArray CreateArray(GrassArtRange r, string name, byte[] data, GrassUploadPath path)
@@ -1299,14 +1357,7 @@ namespace ArenaMapPort.Client
 
         static double Ms(long startTicks) => (Stopwatch.GetTimestamp() - startTicks) * 1000.0 / Stopwatch.Frequency;
 
-        /// <summary>Exception type and the first line of its message, cut short: enough for the one Warning.</summary>
-        static string Brief(Exception e)
-        {
-            string message = e.Message ?? string.Empty;
-            int line = message.IndexOf('\n');
-            if (line >= 0) message = message.Substring(0, line);
-            if (message.Length > 160) message = message.Substring(0, 160);
-            return e.GetType().Name + ": " + message;
-        }
+        /// <summary>The exception TYPE only: a message can carry a file path, and a reason code never does. The full text goes to Debug where a caller wants it.</summary>
+        static string Brief(Exception e) => e.GetType().Name;
     }
 }

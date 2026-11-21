@@ -428,6 +428,8 @@
            its preset bundle lands in the same shared preset dir. The map has a spectator crowd (27 fans) but no flare package, no native water and
            no DynamicMaps overview; its acoustics and gate sounds have their own staging targets. -->
       <ArenaMapPortYardBuildDir>$(MSBuildThisFileDirectory)..\work\build\yard</ArenaMapPortYardBuildDir>
+      <!-- The grass packs (the plaintext of the staged <map key>_grass.bundle files), written by python tools/extract/extract_grass.py pack (all maps); ignored work/ output, never in git. -->
+      <ArenaMapPortGrassBuildDir>$(MSBuildThisFileDirectory)..\work\build\grass</ArenaMapPortGrassBuildDir>
     </PropertyGroup>
     <ItemGroup>
       <ArenaMapPortBundles Include="$(ArenaMapPortFullBuildDir)\arena_equator_scenes.bundle"><MapKey>arena_equator</MapKey></ArenaMapPortBundles>
@@ -476,7 +478,16 @@
       <ArenaMapPortBundles Include="$(ArenaMapPortYardBuildDir)\arena_yard_navmesh.bundle"><MapKey>arena_yard</MapKey></ArenaMapPortBundles>
       <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_yard_preset.bundle"><MapKey>arena_yard</MapKey></ArenaMapPortBundles>
       <ArenaMapPortYardShaderSidecarSrc Include="$(ArenaMapPortYardBuildDir)\material-shaders.json" />
+      <!-- The grass bundles (2026-11-21, docs/progress/native-grass.md stage 2): the additional bundle of each map with Arena grass (ArenaMapDescriptor.HasNativeGrass: Bowl, Iceberg, Yard),
+           the project's own grass pack (format AMGP, NOT a Unity AssetBundle) built without Unity by python tools/extract/extract_grass.py pack (all maps) into work/build/grass. They are a hard
+           input of a non-DllOnly build like every other staged file, but a separate item list: validate_bundle_blocks.py reads UnityFS headers and must never see them. The stage command takes any
+           number of bundle arguments; the tool encrypts them with the map's own content key like the map's three bundles (<map key>_grass.bundle is a name it accepts). -->
+      <ArenaMapPortGrassBundles Include="$(ArenaMapPortGrassBuildDir)\arena_bowl_grass.bundle"><MapKey>arena_bowl</MapKey></ArenaMapPortGrassBundles>
+      <ArenaMapPortGrassBundles Include="$(ArenaMapPortGrassBuildDir)\arena_iceberg_grass.bundle"><MapKey>arena_iceberg</MapKey></ArenaMapPortGrassBundles>
+      <ArenaMapPortGrassBundles Include="$(ArenaMapPortGrassBuildDir)\arena_yard_grass.bundle"><MapKey>arena_yard</MapKey></ArenaMapPortGrassBundles>
     </ItemGroup>
+    <Error Text="[ArenaMapPort] expected grass bundle missing: %(ArenaMapPortGrassBundles.Identity) -- run python tools/extract/extract_grass.py pack --map all first (it builds the grass pack of every map with Arena grass from the installed Arena into work/build/grass)"
+           Condition="!Exists('%(ArenaMapPortGrassBundles.Identity)')" />
     <Error Text="[ArenaMapPort] expected bundle missing: %(ArenaMapPortBundles.Identity) -- run tools/build_all.ps1 (full, -MapKey arena_bay5, -MapKey arena_airpit -FullMap, -MapKey arena_bowl -FullMap, -MapKey arena_iceberg -FullMap, -MapKey arena_autoservice -FullMap and -MapKey arena_yard -FullMap) and tools/preset/patch_preset.py (all seven maps) first"
            Condition="!Exists('%(ArenaMapPortBundles.Identity)')" />
     <Error Text="[ArenaMapPort] expected Equator material-shaders.json missing: %(ArenaMapPortShaderSidecar.Identity) -- run tools/build_all.ps1 -MapKey arena_equator first"
@@ -528,16 +539,16 @@
     <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_equator @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_equator')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_equator)" StandardOutputImportance="high" />
     <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_bay5 @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_bay5')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_bay5)" StandardOutputImportance="high" />
     <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_airpit @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_airpit')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_airpit)" StandardOutputImportance="high" />
-    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_bowl @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_bowl')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_bowl)" StandardOutputImportance="high" />
+    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_bowl @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_bowl')->'--bundle &quot;%(FullPath)&quot;', ' ') @(ArenaMapPortGrassBundles->WithMetadataValue('MapKey','arena_bowl')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_bowl)" StandardOutputImportance="high" />
     <!-- Iceberg's FIRST staging creates its content key: pass -p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_iceberg once
          (only that map's stage command gets create-key) and back up work/release-keys at once -->
-    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_iceberg @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_iceberg')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_iceberg)" StandardOutputImportance="high" />
+    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_iceberg @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_iceberg')->'--bundle &quot;%(FullPath)&quot;', ' ') @(ArenaMapPortGrassBundles->WithMetadataValue('MapKey','arena_iceberg')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_iceberg)" StandardOutputImportance="high" />
     <!-- Autoservice's FIRST staging creates its content key (PLAN-AUTOSERVICE item 14): -p:ArenaMapPortCreateReleaseKeys=true
          -p:ArenaMapPortCreateKeyMap=arena_autoservice once, then back up work/release-keys at once -->
     <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_autoservice @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_autoservice')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_autoservice)" StandardOutputImportance="high" />
     <!-- Yard's FIRST staging creates its content key (PLAN-YARD item 17): -p:ArenaMapPortCreateReleaseKeys=true
          -p:ArenaMapPortCreateKeyMap=arena_yard once, then back up work/release-keys at once -->
-    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_yard @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_yard')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_yard)" StandardOutputImportance="high" />
+    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_yard @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_yard')->'--bundle &quot;%(FullPath)&quot;', ' ') @(ArenaMapPortGrassBundles->WithMetadataValue('MapKey','arena_yard')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_yard)" StandardOutputImportance="high" />
     <Copy SourceFiles="@(ArenaMapPortShaderSidecar)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_equator.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortBay5ShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_bay5.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortAirPitShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_airpit.json" SkipUnchangedFiles="false" />
@@ -547,6 +558,8 @@
     <Copy SourceFiles="@(ArenaMapPortYardShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_yard.json" SkipUnchangedFiles="false" />
     <Message Importance="high"
              Text="[ArenaMapPort] staged %(ArenaMapPortBundles.Filename)%(ArenaMapPortBundles.Extension) from work/build ENCRYPTED into dist/.../bundles/ (key files in dist/.../keys/)" />
+    <Message Importance="high"
+             Text="[ArenaMapPort] staged %(ArenaMapPortGrassBundles.Filename)%(ArenaMapPortGrassBundles.Extension) (grass pack) from work/build/grass ENCRYPTED into dist/.../bundles/" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_equator.json from $(ArenaMapPortFullBuildDir) into dist/.../ArenaMapPort/" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_bay5.json from $(ArenaMapPortBay5BuildDir) into dist/.../ArenaMapPort/" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_airpit.json from $(ArenaMapPortAirPitBuildDir) into dist/.../ArenaMapPort/" />

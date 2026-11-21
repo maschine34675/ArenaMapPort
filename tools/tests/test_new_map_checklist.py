@@ -49,6 +49,7 @@ import validate_map_descriptors as VD  # noqa: E402
 # Optional features: the map is in the real has-list, or here.
 NO_FLARES = frozenset({"arena_airpit", "arena_iceberg", "arena_yard"})              # no active flare lamps in the play space (CROWDLESS-style decision list)
 NO_WATER = frozenset({"arena_equator", "arena_airpit", "arena_bowl", "arena_autoservice", "arena_yard"})   # no sea mesh (NATIVE_WATER_MAP_KEYS is the has-list)
+NO_GRASS = frozenset({"arena_equator", "arena_bay5", "arena_airpit", "arena_autoservice"})   # no Arena grass (NATIVE_GRASS_MAP_KEYS is the has-list; Bowl, Iceberg and Yard ship the additional grass bundle since 2026-11-21)
 NO_OVERVIEW = frozenset({"arena_yard"})                                  # Yard has no DynamicMaps overview (plan: none); the other six ship one
 NO_OFFICIAL_DESCRIPTION = frozenset({"arena_iceberg"})                  # Arena's locales carry none; the port's own LocaleDescription is used
 # Maps that take an older path than the table the checklist asks about (their rows predate the table, listed so that the exemption is visible).
@@ -120,6 +121,7 @@ class Inputs:
         self.flare_keys = set(validate_distribution.FLARE_MAP_KEYS)
         self.crowdless = set(VD.CROWDLESS_MAP_KEYS)
         self.water = set(VD.NATIVE_WATER_MAP_KEYS)
+        self.grass = set(VD.NATIVE_GRASS_MAP_KEYS)
         self.release_names = set(VD.RELEASE_MAP_NAMES)
         self.release_keys = set(VD.RELEASE_MAP_KEYS)
         # read by AST, not imported: the exporter needs shapely and other packages the checklist must not depend on
@@ -149,6 +151,15 @@ class Inputs:
 def foreach_line(text: str) -> str:
     match = re.search(r"foreach \(var map in new\[\] \{([^}]*)\}\)", text)
     return match.group(1) if match else ""
+
+
+def sidecar_stems_with_grass() -> set[str]:
+    """The stems whose tools/maps/<stem>.json says has_native_grass (the sidecar half of the grass decision; validate_map_descriptors holds it equal to the C# flag)."""
+    stems = set()
+    for path in sorted((REPO / "tools" / "maps").glob("*.json")):
+        if "." not in path.stem and json.loads(path.read_text(encoding="utf-8")).get("has_native_grass") is True:
+            stems.add(path.stem)
+    return stems
 
 
 def decide(spec: Spec, label: str, has: bool, lacks: bool, where: str, out: list[str]) -> bool:
@@ -235,6 +246,9 @@ def checklist(spec: Spec, t: Inputs) -> list[str]:
     water = decide(spec, "native water", key in t.water, key in NO_WATER, "validate_map_descriptors.NATIVE_WATER_MAP_KEYS", out)
     need((f"{stem}-water\\water.json" in t.client_csproj) == water, f"native water: client csproj water rows for {stem!r} do not match the water decision ({water})")
 
+    grass = decide(spec, "native grass", key in t.grass, key in NO_GRASS, "validate_map_descriptors.NATIVE_GRASS_MAP_KEYS", out)
+    need(grass == (stem in {s for s in sidecar_stems_with_grass()}), f"native grass: tools/maps/{stem}.json has_native_grass does not match the grass decision ({grass})")
+
     overview = decide(spec, "overview", name in t.overview_names, key in NO_OVERVIEW, "validate_distribution.OVERVIEW_MAP_NAMES (by registry name)", out)
     if overview:
         need(f"ArenaMapPort_{name}\\ArenaMapPort_{name}.jsonc" in t.client_csproj, f"overview: client csproj ArenaMapPortStageDynamicMaps has no ArenaMapPort_{name}\\ArenaMapPort_{name}.jsonc row")
@@ -312,7 +326,7 @@ class ChecklistTests(unittest.TestCase):
 
     def test_the_written_decision_lists_hold_no_stale_entries(self):
         keys = {s.key for s in self.specs}
-        for label, entries in (("NO_FLARES", NO_FLARES), ("NO_WATER", NO_WATER), ("NO_OVERVIEW", NO_OVERVIEW),
+        for label, entries in (("NO_FLARES", NO_FLARES), ("NO_WATER", NO_WATER), ("NO_GRASS", NO_GRASS), ("NO_OVERVIEW", NO_OVERVIEW),
                                ("NO_OFFICIAL_DESCRIPTION", NO_OFFICIAL_DESCRIPTION), ("LEGACY_AMBIENT_EXPORT", LEGACY_AMBIENT_EXPORT),
                                ("LEGACY_NO_SOURCE_PLAN", LEGACY_NO_SOURCE_PLAN), ("LEGACY_NAVMESH_DIFF", LEGACY_NAVMESH_DIFF)):
             self.assertLessEqual(set(entries), keys, f"{label} names a map outside the registry: {sorted(set(entries) - keys)}")
@@ -326,7 +340,7 @@ class ChecklistTests(unittest.TestCase):
         for needle in ("sidecar: tools/maps/scratchmap.json", "native contract", "source plan: tools/extract/plans/scratchmap.json is missing",
                        "key source", "RELEASE_MAP_KEYS", "AUDIO_EXPORTERS", "door poses", "gate sounds", "score monitors", "loading screens", "banners",
                        "navmesh_diff.ARENA_SOURCES", "official description: in neither", "spectator crowd: in neither", "flares: in neither",
-                       "native water: in neither", "overview: in neither", "AmbientAudioProfiles.Table", "AmbientAudioDefaults.Values",
+                       "native water: in neither", "native grass: in neither", "overview: in neither", "AmbientAudioProfiles.Table", "AmbientAudioDefaults.Values",
                        "MapLightingDefaults.Rig has no", "NativeDecalRepairs.cs foreach", "RoomReverb.cs foreach", "Bay5AudioImporter.RootNameFor",
                        "ArenaMapBanners.ByMapKey", "server csproj: Content include", "client csproj: no scenes bundle row", "create-key allow-list"):
             self.assertIn(needle, text, f"the scratch map's list does not name {needle!r}:\n{text}")

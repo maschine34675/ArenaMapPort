@@ -6,58 +6,42 @@ using Xunit;
 namespace ArenaMapPort.Server.Tests;
 
 /// <summary>
-/// The Unity-free model of the native grass probe (PLAN-YARD item 23, shape E): the Yard row, the placement parser and the state machine the glue ticks. Real Arena data is in
-/// <see cref="NativeGrassRealDataTests"/>; the glue is pinned as text in <see cref="NativeGrassSourcePinTests"/>. Unit-tested only: nothing here is host-run.
+/// The Unity-free model of the native grass (PLAN-YARD item 23, stage 2): the keys, the generic placement parser (Yard's, Bowl's and Iceberg's records) and the state machine the glue ticks. The descriptor
+/// mirror is in <see cref="NativeGrassDescriptorTests"/>, the pack in <see cref="NativeGrassPackModelTests"/>, real data in <see cref="NativeGrassPackRealDataTests"/>; the glue is pinned as text in
+/// <see cref="NativeGrassSourcePinTests"/>. Unit-tested only: nothing here is host-run.
 /// </summary>
 public sealed class NativeGrassModelTests
 {
-    static readonly NativeGrassMapRow Yard = NativeGrassTable.Yard;
+    const int Slices = 5; // the slice count of the pack's albedo array (the length of Arena's colour lists)
 
-    // ---- the table and the keys ---------------------------------------------------------------------------------------------------------------------------------------------
-
-    [Fact]
-    public void YardIsTheOnlyRowAndItsSceneIsOneOfTheMapsOwnedScenes()
-    {
-        Assert.Single(NativeGrassTable.Rows);
-        Assert.Same(Yard, NativeGrassTable.ForMap("arena_yard"));
-        Assert.Equal(ArenaMapRegistry.Yard.Key, Yard.MapKey);
-        Assert.Contains(Yard.GrassSceneName, ArenaMapRegistry.Yard.AllSceneNames);
-        foreach (ArenaMapDescriptor map in ArenaMapRegistry.All)
-        {
-            if (map.Key != Yard.MapKey) Assert.Null(NativeGrassTable.ForMap(map.Key));
-        }
-        Assert.Null(NativeGrassTable.ForMap(null));
-        Assert.Null(NativeGrassTable.ForMap("ARENA_YARD"));
-    }
+    // ---- the keys -----------------------------------------------------------------------------------------------------------------------------------------------------------
 
     [Fact]
-    public void TheYardRowPinsTheMeasuredFile()
+    public void TheKeysAreInTheMapSectionAndGrassDefaultsToOn()
     {
-        Assert.Equal("EscapeFromTarkovArena_Data/StreamingAssets/Grass/ArenaGrassPrefabs_Yard.pcl", Yard.PlacementRelativePath);
-        Assert.Equal(688976L, Yard.ExpectedBytes);
-        Assert.Equal(0, Yard.ExpectedBytes % NativeGrassPlacement.RecordSize);
-        Assert.Equal(10132, Yard.ExpectedBytes / NativeGrassPlacement.RecordSize);
-        Assert.InRange(10132, Yard.MinCount, Yard.MaxCount);
-        Assert.Equal(5, Yard.SliceCount);
-        // the box holds the measured extent x -66.95..9.23, y 5.90..6.30, z 17.39..117.81 and the scales 0.184..1.124
-        Assert.True(Yard.MinX <= -66.95f && Yard.MaxX >= 9.23f);
-        Assert.True(Yard.MinY <= 5.90f && Yard.MaxY >= 6.30f);
-        Assert.True(Yard.MinZ <= 17.39f && Yard.MaxZ >= 117.81f);
-        Assert.True(Yard.MinScale <= 0.184f && Yard.MaxScale >= 1.124f);
-    }
-
-    [Fact]
-    public void TheKeysAreDeveloperKeysInTheMapSectionAndTheModeDefaultsToOff()
-    {
-        Assert.Equal("Map (arena_yard)", NativeGrassKeys.SectionOf(Yard.MapKey));
-        Assert.Equal("NativeGrass", NativeGrassKeys.Mode);
-        Assert.Equal("Off", NativeGrassKeys.ModeDefault);
+        Assert.Equal("Map (arena_yard)", NativeGrassKeys.SectionOf("arena_yard"));
+        Assert.Equal("Map (arena_bowl)", NativeGrassKeys.SectionOf("arena_bowl"));
+        Assert.Equal("Grass", NativeGrassKeys.Grass);
+        Assert.True(NativeGrassKeys.GrassDefault);                  // user, 2026-11-21: on by default
         Assert.True(NativeGrassKeys.DrawingDefault);
-        Assert.Equal("Arena", NativeGrassKeys.ArtSourceDefault);
+        Assert.Equal("GrassDrawing", NativeGrassKeys.Drawing);
+        Assert.Equal("GrassArt", NativeGrassKeys.ArtSource);
+        Assert.Equal("Pack", NativeGrassKeys.ArtSourceDefault);
+        Assert.Equal("GrassUpload", NativeGrassKeys.UploadPath);
         Assert.Equal("SetPixelData", NativeGrassKeys.UploadPathDefault);
         Assert.Equal(GrassUploadPath.SetPixelData, (GrassUploadPath)0);
-        var names = new[] { NativeGrassKeys.Mode, NativeGrassKeys.Drawing, NativeGrassKeys.ArtSource, NativeGrassKeys.UploadPath };
+        Assert.Equal(GrassArtKind.Pack, (GrassArtKind)0);
+        var names = new[] { NativeGrassKeys.Grass, NativeGrassKeys.Drawing, NativeGrassKeys.ArtSource, NativeGrassKeys.UploadPath };
         Assert.Equal(names.Length, names.Distinct().Count());
+    }
+
+    [Fact]
+    public void TheStage1KeysOfTheUnreleasedProbeAreNotTheNewKeys()
+    {
+        // a new key instead of a changed default (AGENTS.md hard rule on config keys): the four stage-1 names stay unbound, an orphan line in a developer's .cfg is harmless
+        var current = new[] { NativeGrassKeys.Grass, NativeGrassKeys.Drawing, NativeGrassKeys.ArtSource, NativeGrassKeys.UploadPath };
+        Assert.Equal(new[] { "NativeGrass", "NativeGrassDrawing", "NativeGrassArt", "NativeGrassUpload" }, NativeGrassKeys.RetiredStage1Keys);
+        foreach (string old in NativeGrassKeys.RetiredStage1Keys) Assert.DoesNotContain(old, current);
     }
 
     // ---- the placement parser -----------------------------------------------------------------------------------------------------------------------------------------------
@@ -83,7 +67,7 @@ public sealed class NativeGrassModelTests
         var file = new byte[count * NativeGrassPlacement.RecordSize];
         for (int i = 0; i < count; i++)
         {
-            Put(file, i, i % Yard.SliceCount, -30f + i % 20, 6.1f, 40f + i % 50);
+            Put(file, i, i % Slices, -30f + i % 20, 6.1f, 40f + i % 50);
             each?.Invoke(file, i);
         }
         return file;
@@ -107,7 +91,7 @@ public sealed class NativeGrassModelTests
     public void AValidFileParsesToTheSameNumbersInTheSameOrder()
     {
         byte[] file = Records(9000, (f, i) => { if (i == 7) Put(f, i, 3, -12.5f, 6.25f, 99.75f, 0.75f, 1.0f); });
-        GrassParseResult result = NativeGrassPlacement.Parse(file, file.Length, Yard);
+        GrassParseResult result = NativeGrassPlacement.Parse(file, file.Length, Slices);
         Assert.True(result.Ok, result.Error.ToString());
         Assert.Equal(-1, result.ErrorIndex);
         GrassPlan plan = result.Plan;
@@ -122,14 +106,14 @@ public sealed class NativeGrassModelTests
         Assert.Equal(0.75f * (float)Math.Cos(1.0f), plan.Element(7, 0, 0), 5);
         Assert.Equal(0.75f, plan.Element(7, 1, 1), 5);
         Assert.Equal(plan.Count, plan.SliceHistogram.Sum());
-        Assert.Equal(Yard.SliceCount, plan.SliceHistogram.Length);
+        Assert.Equal(Slices, plan.SliceHistogram.Length);
     }
 
     [Fact]
     public void TheHistogramCountsEverySliceAndPrintsSlashSeparated()
     {
         byte[] file = Records(9000, (f, i) => Put(f, i, i < 8 ? 1 : (i < 8100 ? 2 : (i < 9000 ? 3 : 4)), -30f, 6.1f, 40f));
-        GrassPlan plan = NativeGrassPlacement.Parse(file, file.Length, Yard).Plan;
+        GrassPlan plan = NativeGrassPlacement.Parse(file, file.Length, Slices).Plan;
         Assert.Equal(new[] { 0, 8, 8092, 900, 0 }, plan.SliceHistogram);
         Assert.Equal("0/8/8092/900/0", plan.HistogramText());
     }
@@ -142,7 +126,7 @@ public sealed class NativeGrassModelTests
             if (i == 0) Put(f, i, 1, -66.5f, 5.9f, 17.5f, 0.2f);
             if (i == 1) Put(f, i, 1, 9.0f, 6.3f, 117.5f, 1.1f);
         });
-        GrassPlan plan = NativeGrassPlacement.Parse(file, file.Length, Yard).Plan;
+        GrassPlan plan = NativeGrassPlacement.Parse(file, file.Length, Slices).Plan;
         Assert.Equal(-66.5f, plan.MinX);
         Assert.Equal(9.0f, plan.MaxX);
         Assert.Equal(5.9f, plan.MinY);
@@ -156,13 +140,13 @@ public sealed class NativeGrassModelTests
     [Fact]
     public void ANullBufferIsRefusedAsNoData()
     {
-        Assert.Equal(GrassPlacementError.NoData, NativeGrassPlacement.Parse(null, 0, Yard).Error);
+        Assert.Equal(GrassPlacementError.NoData, NativeGrassPlacement.Parse(null, 0, Slices).Error);
     }
 
     [Fact]
     public void AnEmptyFileIsRefused()
     {
-        GrassParseResult r = NativeGrassPlacement.Parse(new byte[0], 0, Yard);
+        GrassParseResult r = NativeGrassPlacement.Parse(new byte[0], 0, Slices);
         Assert.False(r.Ok);
         Assert.Equal(GrassPlacementError.Empty, r.Error);
         Assert.Null(r.Plan);
@@ -177,7 +161,7 @@ public sealed class NativeGrassModelTests
         byte[] file = Records(9000);
         var longer = new byte[file.Length + extra];
         Array.Copy(file, longer, file.Length);
-        Assert.Equal(extra % 68 == 0 ? GrassPlacementError.None : GrassPlacementError.LengthNotDivisible, NativeGrassPlacement.Parse(longer, longer.Length, Yard).Error);
+        Assert.Equal(extra % 68 == 0 ? GrassPlacementError.None : GrassPlacementError.LengthNotDivisible, NativeGrassPlacement.Parse(longer, longer.Length, Slices).Error);
     }
 
     [Fact]
@@ -186,27 +170,35 @@ public sealed class NativeGrassModelTests
         byte[] file = Records(9000);
         var padded = new byte[file.Length + 40];
         Array.Copy(file, padded, file.Length);
-        Assert.True(NativeGrassPlacement.Parse(padded, file.Length, Yard).Ok);
-        Assert.Equal(GrassPlacementError.LengthNotDivisible, NativeGrassPlacement.Parse(padded, padded.Length, Yard).Error);
+        Assert.True(NativeGrassPlacement.Parse(padded, file.Length, Slices).Ok);
+        Assert.Equal(GrassPlacementError.LengthNotDivisible, NativeGrassPlacement.Parse(padded, padded.Length, Slices).Error);
     }
 
     [Fact]
-    public void TooManyRecordsAreRefusedWhateverTheRowSays()
+    public void TooManyRecordsAreRefused()
     {
-        var wide = new NativeGrassMapRow("test", "S", "p", 1, 1, int.MaxValue, 5, -1000f, 1000f, -1000f, 1000f, -1000f, 1000f, 0.1f, 2f);
         var file = new byte[(NativeGrassPlacement.AbsoluteMaxRecords + 1) * NativeGrassPlacement.RecordSize];
-        Assert.Equal(GrassPlacementError.TooManyRecords, NativeGrassPlacement.Parse(file, file.Length, wide).Error);
+        Assert.Equal(GrassPlacementError.TooManyRecords, NativeGrassPlacement.Parse(file, file.Length, Slices).Error);
     }
 
     [Theory]
-    [InlineData(7999, "CountOutOfRange")]
-    [InlineData(8000, "None")]
-    [InlineData(12500, "None")]
-    [InlineData(12501, "CountOutOfRange")]
-    public void TheCountMustLieInTheRowsRange(int count, string expected)
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(7999)]
+    [InlineData(12501)]
+    [InlineData(113643)]    // Bowl's count; no per-map count range exists any more
+    public void AnyCountFromOneRecordUpToTheAbsoluteMaximumParses(int count)
     {
         byte[] file = Records(count);
-        Assert.Equal(Enum.Parse<GrassPlacementError>(expected), NativeGrassPlacement.Parse(file, file.Length, Yard).Error);
+        GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Slices);
+        Assert.True(r.Ok, r.Error.ToString());
+        Assert.Equal(count, r.Plan.Count);
+    }
+
+    [Fact]
+    public void ASliceCountBelowOneIsAProgrammingError()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => NativeGrassPlacement.Parse(new byte[68], 68, 0));
     }
 
     [Theory]
@@ -221,7 +213,7 @@ public sealed class NativeGrassModelTests
             {
                 if (i == 4321) BitConverter.GetBytes(bad).CopyTo(f, i * 68 + 4 + 4 * element);
             });
-            GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Yard);
+            GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Slices);
             Assert.Equal(GrassPlacementError.NonFiniteMatrix, r.Error);
             Assert.Equal(4321, r.ErrorIndex);
         }
@@ -235,49 +227,108 @@ public sealed class NativeGrassModelTests
     public void ASliceOutsideTheSliceCountIsRefused(int slice)
     {
         byte[] file = Records(9000, (f, i) => { if (i == 100) BitConverter.GetBytes(slice).CopyTo(f, i * 68); });
-        GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Yard);
+        GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Slices);
         Assert.Equal(GrassPlacementError.SliceOutOfRange, r.Error);
         Assert.Equal(100, r.ErrorIndex);
     }
 
     [Theory]
-    [InlineData(-70.1f, 6.1f, 40f)]
-    [InlineData(13.1f, 6.1f, 40f)]
-    [InlineData(-30f, 4.4f, 40f)]
-    [InlineData(-30f, 7.6f, 40f)]
-    [InlineData(-30f, 6.1f, 13.9f)]
-    [InlineData(-30f, 6.1f, 121.1f)]
-    public void APositionOutsideTheBoxIsRefused(float x, float y, float z)
+    [InlineData(-20001f, 6.1f, 40f)]
+    [InlineData(20001f, 6.1f, 40f)]
+    [InlineData(-30f, -20001f, 40f)]
+    [InlineData(-30f, 6.1f, 1e9f)]
+    public void AnAbsurdCoordinateIsRefused(float x, float y, float z)
     {
         byte[] file = Records(9000, (f, i) => { if (i == 55) Put(f, i, 2, x, y, z); });
-        GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Yard);
+        GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Slices);
         Assert.Equal(GrassPlacementError.OutsideBounds, r.Error);
         Assert.Equal(55, r.ErrorIndex);
     }
 
-    [Fact]
-    public void ABoxEdgeIsInside()
+    [Theory]
+    [InlineData(-66.95f, 5.9f, 117.81f)]      // Yard's own corners
+    [InlineData(300f, -50f, -400f)]           // another map's extent: no map box is pinned any more
+    [InlineData(20000f, 20000f, -20000f)]
+    public void AnyPlausibleCoordinateIsInside(float x, float y, float z)
     {
-        byte[] file = Records(9000, (f, i) => { if (i == 3) Put(f, i, 2, Yard.MinX, Yard.MinY, Yard.MaxZ); if (i == 4) Put(f, i, 2, Yard.MaxX, Yard.MaxY, Yard.MinZ); });
-        Assert.True(NativeGrassPlacement.Parse(file, file.Length, Yard).Ok);
+        byte[] file = Records(9000, (f, i) => { if (i == 3) Put(f, i, 2, x, y, z); });
+        Assert.True(NativeGrassPlacement.Parse(file, file.Length, Slices).Ok);
     }
 
     [Theory]
-    [InlineData(0.05f)]
-    [InlineData(2.5f)]
-    public void AScaleOutsideTheRowsRangeIsRefused(float scale)
+    [InlineData(0.005f)]
+    [InlineData(60f)]
+    public void AScaleOutsideTheGenericRangeIsRefused(float scale)
     {
         byte[] file = Records(9000, (f, i) => { if (i == 9) Put(f, i, 2, -30f, 6.1f, 40f, scale); });
-        GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Yard);
+        GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Slices);
         Assert.Equal(GrassPlacementError.ScaleOutOfRange, r.Error);
         Assert.Equal(9, r.ErrorIndex);
     }
 
-    [Fact]
-    public void AZeroScaleAxisIsRefusedAndNotDividedBy()
+    [Theory]
+    [InlineData(0.184f)]    // Yard's smallest
+    [InlineData(1.124f)]    // Yard's largest
+    [InlineData(2.24f)]     // Iceberg's largest (one axis only, see the tilted test)
+    [InlineData(0.011f)]
+    [InlineData(49f)]
+    public void EveryMeasuredScaleIsAccepted(float scale)
     {
-        byte[] file = Records(9000, (f, i) => { if (i == 2) BitConverter.GetBytes(0f).CopyTo(f, i * 68 + 4 + 4 * 5); });   // m11 = 0: the Y axis column is 0
-        Assert.Equal(GrassPlacementError.ScaleOutOfRange, NativeGrassPlacement.Parse(file, file.Length, Yard).Error);
+        byte[] file = Records(9000, (f, i) => { if (i == 9) Put(f, i, 2, -30f, 6.1f, 40f, scale); });
+        Assert.True(NativeGrassPlacement.Parse(file, file.Length, Slices).Ok);
+    }
+
+    /// <summary>A record rotated about X by <paramref name="tiltDegrees"/> and scaled per axis (sx, sy, sz): Iceberg's tilted, non-uniformly scaled clumps.</summary>
+    static void PutTilted(byte[] file, int record, int slice, float tiltDegrees, float sx, float sy, float sz, float px = 5f, float py = 3f, float pz = -80f)
+    {
+        int at = record * NativeGrassPlacement.RecordSize;
+        BitConverter.GetBytes(slice).CopyTo(file, at);
+        float c = (float)Math.Cos(tiltDegrees * Math.PI / 180.0), s = (float)Math.Sin(tiltDegrees * Math.PI / 180.0);
+        float[] m =
+        {
+            sx, 0f, 0f, 0f,                    // first column: the X axis, scaled
+            0f, c * sy, s * sy, 0f,            // second column: the up axis, tilted about X and scaled
+            0f, -s * sz, c * sz, 0f,           // third column
+            px, py, pz, 1f,
+        };
+        for (int k = 0; k < 16; k++) BitConverter.GetBytes(m[k]).CopyTo(file, at + 4 + 4 * k);
+    }
+
+    [Fact]
+    public void ATiltedAndNonUniformlyScaledRecordPassesAndTheTiltAndScalesAreMeasured()
+    {
+        // Iceberg's records: tilts up to 50 degrees and a scale up to 2.24 on one axis (G2 section 7)
+        byte[] file = Records(9000, (f, i) => { if (i == 123) PutTilted(f, i, 2, 50f, 1f, 2.24f, 1f); });
+        GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Slices);
+        Assert.True(r.Ok, r.Error.ToString());
+        Assert.Equal(50f, r.Plan.MaxTiltDegrees, 1);
+        Assert.Equal(2.24f, r.Plan.MaxScale, 3);
+        Assert.Equal(0.5f, r.Plan.MinScale, 3);                // the other records are uniform 0.5
+        Assert.Equal(2.24f * (float)Math.Cos(50 * Math.PI / 180.0), r.Plan.Element(123, 1, 1), 4);
+    }
+
+    [Fact]
+    public void AYawOnlyFileHasNoTiltAndASmallTiltIsMeasuredToo()
+    {
+        byte[] flat = Records(100);
+        Assert.Equal(0f, NativeGrassPlacement.Parse(flat, flat.Length, Slices).Plan.MaxTiltDegrees, 2);
+        byte[] bowl = Records(100, (f, i) => { if (i == 4) PutTilted(f, i, 1, 2.6f, 0.9f, 0.9f, 0.9f); });      // Bowl's largest tilt
+        Assert.Equal(2.6f, NativeGrassPlacement.Parse(bowl, bowl.Length, Slices).Plan.MaxTiltDegrees, 1);
+    }
+
+    [Fact]
+    public void ABrokenTiltedRecordIsStillRefused()
+    {
+        byte[] nan = Records(200, (f, i) => { if (i == 77) { PutTilted(f, i, 2, 50f, 1f, 2.24f, 1f); BitConverter.GetBytes(float.NaN).CopyTo(f, i * 68 + 4 + 4 * 6); } });
+        GrassParseResult r = NativeGrassPlacement.Parse(nan, nan.Length, Slices);
+        Assert.Equal(GrassPlacementError.NonFiniteMatrix, r.Error);
+        Assert.Equal(77, r.ErrorIndex);
+        byte[] projective = Records(200, (f, i) => { if (i == 78) { PutTilted(f, i, 2, 50f, 1f, 2.24f, 1f); BitConverter.GetBytes(0.25f).CopyTo(f, i * 68 + 4 + 4 * 7); } });
+        Assert.Equal(GrassPlacementError.NotAffine, NativeGrassPlacement.Parse(projective, projective.Length, Slices).Error);
+        byte[] badSlice = Records(200, (f, i) => { if (i == 79) { PutTilted(f, i, 5, 50f, 1f, 2.24f, 1f); } });
+        Assert.Equal(GrassPlacementError.SliceOutOfRange, NativeGrassPlacement.Parse(badSlice, badSlice.Length, Slices).Error);
+        byte[] collapsed = Records(200, (f, i) => { if (i == 80) { PutTilted(f, i, 2, 50f, 1f, 0f, 1f); } });
+        Assert.Equal(GrassPlacementError.ScaleOutOfRange, NativeGrassPlacement.Parse(collapsed, collapsed.Length, Slices).Error);
     }
 
     [Theory]
@@ -287,7 +338,7 @@ public sealed class NativeGrassModelTests
     public void AMatrixWithAProjectiveBottomRowIsRefused(int element)
     {
         byte[] file = Records(9000, (f, i) => { if (i == 12) BitConverter.GetBytes(0.5f).CopyTo(f, i * 68 + 4 + 4 * element); });
-        GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Yard);
+        GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Slices);
         Assert.Equal(GrassPlacementError.NotAffine, r.Error);
         Assert.Equal(12, r.ErrorIndex);
     }
@@ -296,22 +347,16 @@ public sealed class NativeGrassModelTests
     public void AMatrixWhoseCornerIsNotOneIsRefused()
     {
         byte[] file = Records(9000, (f, i) => { if (i == 12) BitConverter.GetBytes(2f).CopyTo(f, i * 68 + 4 + 4 * 15); });
-        Assert.Equal(GrassPlacementError.NotAffine, NativeGrassPlacement.Parse(file, file.Length, Yard).Error);
-    }
-
-    [Fact]
-    public void ARowIsRequired()
-    {
-        Assert.Throws<ArgumentNullException>(() => NativeGrassPlacement.Parse(new byte[68], 68, null));
+        Assert.Equal(GrassPlacementError.NotAffine, NativeGrassPlacement.Parse(file, file.Length, Slices).Error);
     }
 
     [Fact]
     public void TheErrorTextNamesTheCodeAndTheRecordAndNeverContent()
     {
         byte[] file = Records(9000, (f, i) => { if (i == 77) BitConverter.GetBytes(9).CopyTo(f, i * 68); });
-        GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Yard);
+        GrassParseResult r = NativeGrassPlacement.Parse(file, file.Length, Slices);
         Assert.Equal("placement 612000 B: SliceOutOfRange at record 77", NativeGrassPlacement.Describe(r, file.Length));
-        GrassParseResult ok = NativeGrassPlacement.Parse(Records(9000), 9000 * 68, Yard);
+        GrassParseResult ok = NativeGrassPlacement.Parse(Records(9000), 9000 * 68, Slices);
         Assert.Equal("placement 612000 B: 9000 records", NativeGrassPlacement.Describe(ok, 612000));
     }
 
@@ -320,7 +365,7 @@ public sealed class NativeGrassModelTests
     static GrassTickInputs Ready(int serial = 1) => new GrassTickInputs
     {
         Wanted = true,
-        HasMapRow = true,
+        HasGrassMap = true,
         InOwnedRaid = true,
         ScenesLoaded = true,
         CameraReady = true,
@@ -364,13 +409,13 @@ public sealed class NativeGrassModelTests
     }
 
     [Fact]
-    public void AMapWithoutARowOrOutsideARaidStaysIdle()
+    public void AMapWithoutGrassOrOutsideARaidStaysIdle()
     {
         var s = new NativeGrassState();
         GrassTickInputs i = Ready();
-        i.HasMapRow = false;
+        i.HasGrassMap = false;
         Assert.Equal(GrassAction.None, Run(s, i, 50));
-        Assert.Equal(GrassWait.NoMapRow, s.WaitReason);
+        Assert.Equal(GrassWait.NoGrassMap, s.WaitReason);
         Assert.Equal(GrassPhase.Idle, s.Phase);
         i = Ready();
         i.InOwnedRaid = false;
@@ -531,7 +576,7 @@ public sealed class NativeGrassModelTests
     {
         yield return new object[] { "Wanted", "KeyOff" };
         yield return new object[] { "InOwnedRaid", "RaidEnded" };
-        yield return new object[] { "HasMapRow", "RaidEnded" };
+        yield return new object[] { "HasGrassMap", "RaidEnded" };
         yield return new object[] { "ScenesLoaded", "ScenesUnloaded" };
         yield return new object[] { "CameraReady", "CameraLost" };
         yield return new object[] { "OpticCameraReady", "CameraLost" };
@@ -546,7 +591,7 @@ public sealed class NativeGrassModelTests
         {
             case "Wanted": i.Wanted = false; break;
             case "InOwnedRaid": i.InOwnedRaid = false; break;
-            case "HasMapRow": i.HasMapRow = false; break;
+            case "HasGrassMap": i.HasGrassMap = false; break;
             case "ScenesLoaded": i.ScenesLoaded = false; break;
             case "CameraReady": i.CameraReady = false; break;
             case "OpticCameraReady": i.OpticCameraReady = false; break;
@@ -691,17 +736,38 @@ public sealed class NativeGrassModelTests
     }
 
     [Fact]
-    public void AnInputRefusalLatchesWithoutOwingATeardown()
+    public void AnInputRefusalIsTheMapsAndNeverASessionLatch()
+    {
+        // decision 6 of stage 2: a map whose pack is missing, refused or damaged has no grass, and a failure on one map must not switch the grass off on another map in the same session
+        var s = new NativeGrassState();
+        GrassTickInputs i = Ready();
+        i.InputError = "container:HeaderAuth";
+        Assert.Equal(GrassAction.None, s.Tick(i));
+        Assert.False(s.Failed);                                              // no latch, no Warning due from the state machine
+        Assert.Equal(GrassWait.InputsRefused, s.WaitReason);
+        Assert.Equal(GrassPhase.Waiting, s.Phase);
+        Assert.False(s.TakeWarningDue(out _));
+        // the glue records the map as refused and the tick finds it not wanted
+        i.Wanted = false;
+        Assert.Equal(GrassAction.None, s.Tick(i));
+        Assert.Equal(GrassPhase.Idle, s.Phase);
+        // another map in the same session builds with the same machine
+        Assert.Equal(GrassAction.Build, Run(s, Ready(5)));
+        Assert.False(s.Failed);
+    }
+
+    [Fact]
+    public void ARefusedMapOwesNoTeardownAndAnEngineFailureStillLatchesTheSession()
     {
         var s = new NativeGrassState();
         GrassTickInputs i = Ready();
-        i.InputError = "StreamSizeDiffers";
-        Assert.Equal(GrassAction.None, s.Tick(i));
+        i.InputError = "placement:NotAffine@12";
+        s.Tick(i);
+        s.Tick(i);
+        Assert.False(s.Failed);
+        Assert.Equal(GrassAction.None, s.Tick(i));                           // nothing owed
+        s.Fail("build: NullReferenceException");                              // the engine-side failure keeps its session latch
         Assert.True(s.Failed);
-        Assert.Equal("inputs: StreamSizeDiffers", s.FailureReason);
-        Assert.Equal(GrassPhase.Failed, s.Phase);
-        i.InputError = null;
-        Assert.Equal(GrassAction.None, Run(s, i));                          // no Teardown owed, no Build either
         Assert.Equal(GrassPhase.Failed, s.Phase);
     }
 
@@ -798,12 +864,12 @@ public sealed class NativeGrassModelTests
     }
 
     [Fact]
-    public void WantsInputsOnlyWhileTheKeyIsOnTheMapHasARowAndARaidIsOn()
+    public void WantsInputsOnlyWhileTheKeyIsOnTheMapHasGrassAndARaidIsOn()
     {
         GrassTickInputs i = Ready();
         Assert.True(NativeGrassState.WantsInputs(i));
         i = Ready(); i.Wanted = false; Assert.False(NativeGrassState.WantsInputs(i));
-        i = Ready(); i.HasMapRow = false; Assert.False(NativeGrassState.WantsInputs(i));
+        i = Ready(); i.HasGrassMap = false; Assert.False(NativeGrassState.WantsInputs(i));
         i = Ready(); i.InOwnedRaid = false; Assert.False(NativeGrassState.WantsInputs(i));
     }
 

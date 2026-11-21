@@ -5,14 +5,14 @@ using Xunit;
 namespace ArenaMapPort.Server.Tests;
 
 /// <summary>
-/// Source pins of the native grass probe (PLAN-YARD item 23, shape E; design-final.md section 5 "Source pins": they replace the unverifiable "grep for BSG bytes"): the three model files stay
-/// Unity-free and do no file access, no file of the grass ever exports, hashes or caches Arena's bytes, the keys stay developer keys, and, once the glue files exist, they keep the rules of
-/// the lead's brief (Settings not Config, no DontDestroyOnLoad, no Info line, the worker touches neither Unity nor the log, files open read-only with sharing). A pin on a glue file that
-/// does not exist yet is skipped with its reason. The GPU glue itself is host-checked only.
+/// Source pins of the native grass (PLAN-YARD item 23; design-final.md section 5 "Source pins": they replace the unverifiable "grep for BSG bytes"; stage 2, 2026-11-21): the four model files stay Unity-free and do
+/// no file access, no file of the grass touches Arena's installation or its gate or exports, hashes or caches bytes, the keys stay non-public keys that default ON, and the glue files keep the rules of the lead's
+/// brief (Settings not Config, no DontDestroyOnLoad, no Info line, the worker touches neither Unity nor the log, files open read-only with sharing, a map's refusal is no session latch). The GPU glue itself is
+/// host-checked only.
 /// </summary>
 public sealed class NativeGrassSourcePinTests
 {
-    static readonly string[] ModelFiles = { "NativeGrassModel.cs", "NativeGrassArtModel.cs", "NativeGrassColorModel.cs" };
+    static readonly string[] ModelFiles = { "NativeGrassModel.cs", "NativeGrassArtModel.cs", "NativeGrassColorModel.cs", "NativeGrassPackModel.cs" };
 
     static string ClientDir()
     {
@@ -40,7 +40,7 @@ public sealed class NativeGrassSourcePinTests
     }
 
     [Fact]
-    public void TheThreeModelFilesExistAndAreLinkedIntoTheTests()
+    public void TheFourModelFilesAndTheArtSourceExistAndAreLinkedIntoTheTests()
     {
         string csproj = File.ReadAllText(Path.Combine(ClientDir(), "..", "ArenaMapPort.Server.Tests", "ArenaMapPort.Server.Tests.csproj"));
         foreach (string file in ModelFiles)
@@ -48,12 +48,14 @@ public sealed class NativeGrassSourcePinTests
             Assert.True(Exists(file), file);
             Assert.Contains("..\\ArenaMapPort.Client\\" + file, csproj);
         }
+        Assert.Contains("..\\ArenaMapPort.Client\\NativeGrassArtSource.cs", csproj);
     }
 
     [Theory]
     [InlineData("NativeGrassModel.cs")]
     [InlineData("NativeGrassArtModel.cs")]
     [InlineData("NativeGrassColorModel.cs")]
+    [InlineData("NativeGrassPackModel.cs")]
     public void TheModelFilesHaveNoUnityNoBepInExNoLogAndNoFileAccess(string file)
     {
         string code = Code(Source(file));
@@ -65,6 +67,7 @@ public sealed class NativeGrassSourcePinTests
     [InlineData("NativeGrassModel.cs")]
     [InlineData("NativeGrassArtModel.cs")]
     [InlineData("NativeGrassColorModel.cs")]
+    [InlineData("NativeGrassPackModel.cs")]
     public void TheModelFilesTouchNothingThatReadsTheClockOrRandomOrTheEnvironment(string file)
     {
         string code = Code(Source(file));
@@ -73,7 +76,7 @@ public sealed class NativeGrassSourcePinTests
     }
 
     [Fact]
-    public void NoGrassFileExportsHashesOrCachesArenasBytes()
+    public void NoGrassFileExportsHashesOrCachesBytes()
     {
         foreach (string file in GrassFiles())
         {
@@ -82,9 +85,48 @@ public sealed class NativeGrassSourcePinTests
             {
                 "File.Write", "File.Create", "File.Append", "File.Copy", "File.Move", "WriteAllBytes", "WriteAllText", "FileMode.Create", "FileMode.CreateNew", "FileMode.OpenOrCreate", "FileMode.Append", "FileMode.Truncate",
                 "FileAccess.Write", "FileAccess.ReadWrite", "EncodeToPNG", "EncodeToJPG", "EncodeToEXR", "EncodeToTGA", "GetRawTextureData", "ReadPixels", "GetPixelData", "persistentDataPath", "temporaryCachePath",
-                "Paths.ConfigPath", "Paths.CachePath", "Path.GetTempPath", "SHA256", "SHA1", "MD5", "ComputeHash", "HashAlgorithm", "CryptoProviders", "Sha256",
+                "Paths.ConfigPath", "Paths.CachePath", "Path.GetTempPath", "SHA256", "SHA1", "MD5", "ComputeHash", "HashAlgorithm", "Sha256",
             })
                 Assert.True(!code.Contains(banned), file + " contains " + banned);
+        }
+    }
+
+    [Fact]
+    public void OnlyTheGlueChoosesTheCryptoProviderAndOnlyOnce()
+    {
+        // the provider is chosen on the game thread (the resolver's own one-time Warning wording) and handed to the worker; nothing else of the grass names the provider class
+        foreach (string file in GrassFiles())
+        {
+            string code = Code(Source(file));
+            int count = Regex.Matches(code, @"CryptoProviders\.").Count;
+            Assert.Equal(file == "NativeGrassRepairs.cs" ? 1 : 0, count);
+        }
+        Assert.Contains("CryptoProviders.Select(text => Plugin.Log.LogWarning(BundleKeyResolver.BundlesTag + \" \" + text))", Source("NativeGrassRepairs.cs"));
+    }
+
+    [Fact]
+    public void NoGrassFileTouchesTheArenaInstallationOrItsGate()
+    {
+        // stage 2: the grass is read from its own staged bundle; Arena's installation, its folders, the gate and the Arena file layer are not the grass code's business any more
+        foreach (string file in GrassFiles())
+        {
+            string text = Source(file);
+            string code = Code(text);
+            foreach (string banned in new[] { "ArenaInstallation", "ArenaInstallationGate", "ArenaInstallationResult", "GateState", "IArenaFiles", "DirectoryArenaFiles", "InstallPath", "KeyPath", "OpenArenaFiles" })
+                Assert.False(code.Contains(banned, StringComparison.Ordinal), file + " must not contain " + banned);
+            foreach (string banned in new[] { "EscapeFromTarkovArena_Data", "assets.resS", "ConsistencyInfo" })
+                Assert.False(text.Contains(banned, StringComparison.Ordinal), file + " must not name Arena's file " + banned);
+        }
+    }
+
+    [Fact]
+    public void TheStage1ConstantsOfArenasFilesAreGone()
+    {
+        foreach (string file in GrassFiles())
+        {
+            string code = Code(Source(file));
+            foreach (string gone in new[] { "AssetsSize", "StreamSize", "StreamPath", "AssetsPath", "NormalTextureOffset", "TexArrayOffset", "NormalArrayOffset", "StreamTailPadding", "NativeGrassMapRow", "NativeGrassTable", "CheckFileSizes", "PlacementRelativePath", "ExpectedBytes" })
+                Assert.False(code.Contains(gone, StringComparison.Ordinal), file + " must not contain " + gone);
         }
     }
 
@@ -102,37 +144,84 @@ public sealed class NativeGrassSourcePinTests
     [Fact]
     public void TheGrassKeysAreNotPublic()
     {
-        // nothing of the probe is a player option: it is in neither list, and the README and the packer's texts do not name it
+        // nothing of the grass is a player option: its keys are in neither list, and the README and the packer's texts do not name them
         foreach (string file in new[] { "CompactConfiguration.cs", "MapConfigVisibility.cs", "PlayerOptions.cs" })
         {
             string text = Source(file);
-            Assert.DoesNotContain("NativeGrass", text);
-            Assert.DoesNotContain("NativeGrassDrawing", text);
+            foreach (string key in new[] { "\"Grass\"", "GrassDrawing", "GrassArt", "GrassUpload", "NativeGrass", NativeGrassKeysName })
+                Assert.DoesNotContain(key, text);
         }
         string root = Path.Combine(ClientDir(), "..");
-        Assert.DoesNotContain("NativeGrass", File.ReadAllText(Path.Combine(root, "README.md")));
-        Assert.DoesNotContain("NativeGrass", File.ReadAllText(Path.Combine(root, "tools", "release", "make_release_zips.py")));
+        foreach (string text in new[] { File.ReadAllText(Path.Combine(root, "README.md")), File.ReadAllText(Path.Combine(root, "tools", "release", "make_release_zips.py")) })
+        {
+            Assert.DoesNotContain("GrassDrawing", text);
+            Assert.DoesNotContain("GrassUpload", text);
+            Assert.DoesNotContain("NativeGrassKeys", text);
+        }
     }
 
+    const string NativeGrassKeysName = "NativeGrassKeys";
+
     [Fact]
-    public void TheModeKeyDefaultsToOff()
+    public void TheGrassKeyDefaultsToOnAndTheStage1KeysAreNeverBoundAgain()
     {
-        Assert.Contains("internal const string ModeDefault = \"Off\";", Source("NativeGrassModel.cs"));
+        string model = Source("NativeGrassModel.cs");
+        Assert.Contains("internal const bool GrassDefault = true;", model);
+        Assert.Contains("internal const string Grass = \"Grass\";", model);
+        Assert.Contains("internal const string ArtSourceDefault = \"Pack\";", model);
         if (Exists("NativeGrassRepairs.cs"))
         {
             string glue = Source("NativeGrassRepairs.cs");
-            Assert.Contains("NativeGrassKeys.ModeDefault", glue);
-            Assert.DoesNotContain("NativeGrassKeys.Mode, \"On\"", glue);
+            Assert.Contains("NativeGrassKeys.Grass, NativeGrassKeys.GrassDefault", glue);
+            foreach (string old in new[] { "\"NativeGrass\"", "\"NativeGrassDrawing\"", "\"NativeGrassArt\"", "\"NativeGrassUpload\"", "NativeGrassKeys.Mode", "ModeDefault" })
+                Assert.DoesNotContain(old, glue);
+        }
+        // the four stage-1 names appear in one place only: the model's list of retired keys
+        foreach (string file in GrassFiles())
+        {
+            if (file == "NativeGrassModel.cs") continue;
+            string text = Source(file);
+            foreach (string old in new[] { "\"NativeGrass\"", "\"NativeGrassDrawing\"", "\"NativeGrassArt\"", "\"NativeGrassUpload\"" })
+                Assert.DoesNotContain(old, text);
         }
     }
 
     [Fact]
-    public void TheDistributionIsNotTouchedByTheProbe()
+    public void TheGrassBundleIsStagedAsAHardInputOfAFullBuildAndNeverSeenByTheUnityFsValidator()
     {
-        // stage 1 is a client-only probe: no bundle, package, descriptor, staging or packer row of its own
-        string csproj = File.ReadAllText(Path.Combine(ClientDir(), "ArenaMapPort.Client.csproj"));
-        Assert.DoesNotContain("grass", csproj, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("NativeGrass", File.ReadAllText(Path.Combine(ClientDir(), "..", "ArenaMapPort.Shared", "ArenaMapDescriptor.cs")));
+        string csproj = Source("ArenaMapPort.Client.csproj");
+        foreach (string key in new[] { "arena_bowl", "arena_iceberg", "arena_yard" })
+        {
+            Assert.Contains("<ArenaMapPortGrassBundles Include=\"$(ArenaMapPortGrassBuildDir)\\" + key + "_grass.bundle\"><MapKey>" + key + "</MapKey></ArenaMapPortGrassBundles>", csproj);
+            Assert.Contains("@(ArenaMapPortGrassBundles->WithMetadataValue('MapKey','" + key + "')->'--bundle &quot;%(FullPath)&quot;', ' ')", csproj);
+        }
+        Assert.Equal(3, Regex.Matches(csproj, "<ArenaMapPortGrassBundles Include=").Count);
+        Assert.Equal(3, Regex.Matches(csproj, @"@\(ArenaMapPortGrassBundles->WithMetadataValue").Count);       // the stage commands of the three grass maps only
+        Assert.Contains("work\\build\\grass</ArenaMapPortGrassBuildDir>", csproj);
+        // a missing pack stops a full build with the Error that names the extractor; a DllOnly build never gets there (the whole target's condition)
+        string error = Between(csproj, "<Error Text=\"[ArenaMapPort] expected grass bundle missing", "/>");
+        Assert.Contains("python tools/extract/extract_grass.py pack --map all", error);
+        Assert.Contains("Condition=\"!Exists('%(ArenaMapPortGrassBundles.Identity)')\"", Between(csproj, "<Error Text=\"[ArenaMapPort] expected grass bundle missing", "<Error Text=\"[ArenaMapPort] expected Equator"));
+        Assert.Contains("Condition=\"'$(Configuration)'=='Release' And '$(ArenaMapPortDllOnly)'!='true'\"", Between(csproj, "<Target Name=\"ArenaMapPortStageWpOutputs\"", ">"));
+        // validate_bundle_blocks.py reads UnityFS headers: only the map bundles are given to it
+        string validator = csproj.Split('\n').Single(l => l.Contains("validate_bundle_blocks.py", StringComparison.Ordinal) && l.Contains("<Exec", StringComparison.Ordinal));
+        Assert.Contains("@(ArenaMapPortBundles->", validator);
+        Assert.DoesNotContain("Grass", validator);
+        Assert.Contains("staged %(ArenaMapPortGrassBundles.Filename)", csproj);
+    }
+
+    [Fact]
+    public void ThePluginWarnsAboutAMissingGrassBundleLikeAnyRequiredFileWithoutMakingTheMapUnavailable()
+    {
+        string plugin = Source("Plugin.cs");
+        string banner = Between(plugin, "void LogStartupBanner()", "void OnDestroy()");
+        Assert.Contains("if (map.HasNativeGrass)", banner);
+        Assert.Contains("LogExpectedFile(Path.Combine(bundlesDir, map.GrassBundleFileName));", banner);
+        // the same helper, hence the same one Warning per file; the map's own availability code never names the file
+        Assert.Contains("Required map file is missing", Between(plugin, "void LogExpectedFile(", "}\n    }"));
+        // the grass glue logs a missing pack at Debug only (it was warned about here)
+        string refuse = Between(Source("NativeGrassRepairs.cs"), "static void RefuseMap(", "static void ReportFailures()");
+        Assert.Contains("pack-missing", refuse);
     }
 
     // ---- the glue files, when they exist -----------------------------------------------------------------------------------------------------------------------------------
@@ -158,13 +247,46 @@ public sealed class NativeGrassSourcePinTests
     }
 
     [GlueFact("NativeGrassArtSource.cs")]
-    public void TheArtSourceNeverTouchesUnityOrTheLogAndOpensFilesReadOnlyWithSharing()
+    public void TheArtSourceNeverTouchesUnityOrTheLogAndOpensTheFileReadOnlyWithSharing()
     {
         string code = Code(Source("NativeGrassArtSource.cs"));
-        foreach (string banned in new[] { "UnityEngine", "LogDebug", "LogWarning", "LogError", "LogInfo", "Plugin.", "Debug.", "FileAccess.Write", "FileAccess.ReadWrite" })
+        foreach (string banned in new[] { "UnityEngine", "LogDebug", "LogWarning", "LogError", "LogInfo", "Plugin.", "Debug.", "FileAccess.Write", "FileAccess.ReadWrite", "BundleKeyResolver", "BundleHost", "ArenaMapRaid" })
             Assert.DoesNotContain(banned, code);
-        // either DirectoryArenaFiles (read-only, FileShare.ReadWrite | Delete, inside the installation folder) or an explicit read-only open with sharing
-        Assert.True(code.Contains("DirectoryArenaFiles") || (code.Contains("FileAccess.Read") && code.Contains("FileShare.ReadWrite")), "the art source must open Arena's files read-only with sharing");
+        Assert.Contains("FileAccess.Read", code);
+        Assert.Contains("FileShare.ReadWrite | FileShare.Delete", code);
+    }
+
+    [GlueFact("NativeGrassArtSource.cs")]
+    public void TheKeyIsAskedOnTheCallersThreadCopiedAndClearedByTheWorker()
+    {
+        string source = Source("NativeGrassArtSource.cs");
+        string code = Code(source);
+        string start = Between(code, "internal static GrassPreparation Start(", "static GrassPreparation Done(");
+        string load = Between(code, "internal static GrassInputs Load(", "static bool Gone(");
+        // the resolver is asked inside Start (the game thread) and never inside Load (the worker); the worker gets a COPY
+        Assert.Contains("resolveKey(mapKey, out shared)", start);
+        Assert.DoesNotContain("resolveKey", load);
+        Assert.Contains("(byte[])shared.Clone()", start);
+        Assert.Contains("provider()", start);
+        // Load clears the copy it was given in a finally and right after the stream took it, and nothing in it logs or throws
+        Assert.Equal(2, Regex.Matches(load, @"Clear\(key\);").Count);
+        Assert.Contains("catch (AmpbException e)", load);
+        Assert.Contains("catch (Exception e)", load);
+        Assert.Contains("e.GetType().Name", load);               // the exception type only, never a message
+        Assert.DoesNotContain("e.Message", code);
+        // the key never reaches a string or a field
+        Assert.DoesNotContain("static byte[]", code);
+    }
+
+    [GlueFact("NativeGrassArtSource.cs")]
+    public void TheWorkerReadsOnlyThroughThePackReaderAndTheDecryptingStream()
+    {
+        string code = Code(Source("NativeGrassArtSource.cs"));
+        string load = Between(code, "internal static GrassInputs Load(", "static bool Gone(");
+        foreach (string needed in new[] { "new AmpbReadStream(file, mapKey, key, provider, 4, false)", "NativeGrassPack.Parse(header, got, pack.Length, mapKey, out layout)", "NativeGrassPlacement.Parse(records, records.Length, layout.SliceCount)", "NativeGrassArt.CheckBlocks(data, range)" })
+            Assert.Contains(needed, load);
+        Assert.Contains("Ampb.IsAmpb(file)", Between(code, "internal static GrassPreparation Start(", "static GrassPreparation Done("));
+        Assert.Contains("TaskCreationOptions.LongRunning", code);
     }
 
     // ---- the glue's rules (the lead's brief of 2026-11-21): idle cost, entry points, build order, teardown, worker, wiring -------------------------------------------------------------
@@ -207,7 +329,7 @@ public sealed class NativeGrassSourcePinTests
                 Assert.False(part.Contains(banned, StringComparison.Ordinal), name + " must not contain " + banned);
         }
         // the input reader allocates nothing and logs only the one 'worker started' line
-        string inputs = Between(code, "static void ReadInputs()", "static void DropPreparation()");
+        string inputs = Between(code, "static void ReadInputs()", "static string PluginDirectory()");
         Assert.DoesNotContain(" new ", inputs);
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(inputs, "Log(Debug|Warning|Error)"));
         // the phase-change line sits behind an early return: nothing is formatted while the state stays
@@ -351,7 +473,7 @@ public sealed class NativeGrassSourcePinTests
         string code = Repairs();
         Assert.Contains("SceneManager.MoveGameObjectToScene(b.Holder, grassScene);", code);
         Assert.Contains("SceneManager.MoveGameObjectToScene(root, scene);", code);
-        Assert.Contains("row.GrassSceneName", code);
+        Assert.Contains("map.GrassSceneName", code);
         Assert.DoesNotContain("DontDestroyOnLoad", code);
         Assert.DoesNotContain("HideFlags.DontSave", code);
     }
@@ -363,13 +485,51 @@ public sealed class NativeGrassSourcePinTests
         Assert.DoesNotContain("EnsureVerified", code);
         Assert.DoesNotContain("WaitForResult", code);
         Assert.DoesNotContain(".Wait(", code);
-        Assert.Contains("ArenaInstallationGate.State", code);
         Assert.Contains("GrassPreparation.Start(", code);
         // the worker's result is polled, with a watchdog
         Assert.Contains("WorkerTimeoutSeconds", code);
-        // the glue itself reads no file: the art source does, on its worker
-        foreach (string banned in new[] { "File.", "FileStream", "ReadAllBytes", "Directory.", "StreamReader", "System.IO" })
+        // the glue itself reads no file: the art source does, on its worker (it only builds the path of the bundle)
+        foreach (string banned in new[] { "File.", "FileStream", "ReadAllBytes", "Directory.", "StreamReader", "Stream " })
             Assert.False(code.Contains(banned, StringComparison.Ordinal), "NativeGrassRepairs.cs must not contain " + banned);
+    }
+
+    [GlueFact("NativeGrassRepairs.cs")]
+    public void TheKeyComesFromTheOneResolverTheMapsBundlesUse()
+    {
+        string code = Repairs();
+        // a non-blocking peek (a cache hit only): the grass never reaches the gate or derives on the game thread
+        Assert.Contains("BundleKeyResolver.Default.TryPeekKey(mapKey, out key)", code);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(code, @"TryPeekKey\("));
+        Assert.DoesNotContain("TryGetKey(", code.Replace("BundleKeyResolver.TryGetKey", ""));
+        // handed to the art source as a method group: the game thread asks, the worker never does
+        Assert.Contains("GrassPreparation.Start(map.Key, path, DiskGrassPackFiles.Instance, ResolveKey, SelectProvider, _artKind)", code);
+        Assert.Contains("Path.Combine(Path.Combine(PluginDirectory(), \"bundles\"), map.GrassBundleFileName)", Source("NativeGrassRepairs.cs"));
+        // the key is never put in a log line, a field or a string
+        string resolve = Between(code, "static bool ResolveKey(", "static ICryptoProvider SelectProvider()");
+        Assert.DoesNotContain("Log", resolve);
+        Assert.DoesNotContain("ToString", resolve);
+    }
+
+    [GlueFact("NativeGrassRepairs.cs")]
+    public void AMapsRefusalIsPerMapAndNeverASessionLatch()
+    {
+        string code = Repairs();
+        string raw = Source("NativeGrassRepairs.cs");
+        string refuse = Between(raw, "static void RefuseMap(", "static void ReportFailures()");
+        Assert.DoesNotContain("_state.Fail(", refuse);                       // no session latch
+        Assert.Contains("_refused[key] = reason;", refuse);
+        Assert.Contains("DropPreparation();", refuse);
+        Assert.Contains("Reflag();", refuse);
+        // exactly one Warning for the map, and a missing pack is Debug only
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(refuse, @"LogWarning\("));
+        Assert.True(refuse.IndexOf("if (reason == \"pack-missing\")", StringComparison.Ordinal) < refuse.IndexOf("LogWarning(", StringComparison.Ordinal));
+        // the tick routes a worker refusal there, and the flags read the per-map record
+        Assert.Contains("RefuseMap(_in.InputError);", Between(code, "static void TickCore()", "static bool AllScenesLoaded()"));
+        Assert.Contains("_refused.ContainsKey(owned.Key)", Between(code, "static void Reflag()", "static void UpdateHot()"));
+        // only an exception of the build or the tick latches the session
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(code, @"_state\.Fail\(").Count);
+        // a later raid of a refused map says so at Debug
+        Assert.Contains("its pack was refused earlier in this session", Between(raw, "static void OnSceneLoaded(", "static void OnSceneUnloaded("));
     }
 
     [GlueFact("NativeGrassRepairs.cs")]
@@ -409,20 +569,14 @@ public sealed class NativeGrassSourcePinTests
     public void TheKeysAreBoundThroughSettingsWithTheModelsNamesAndDefaults()
     {
         string code = Repairs();
-        foreach (string key in new[] { "NativeGrassKeys.Mode, NativeGrassKeys.ModeDefault", "NativeGrassKeys.Drawing, NativeGrassKeys.DrawingDefault", "NativeGrassKeys.ArtSource, NativeGrassKeys.ArtSourceDefault", "NativeGrassKeys.UploadPath, NativeGrassKeys.UploadPathDefault" })
+        foreach (string key in new[] { "NativeGrassKeys.Grass, NativeGrassKeys.GrassDefault", "NativeGrassKeys.Drawing, NativeGrassKeys.DrawingDefault", "NativeGrassKeys.ArtSource, NativeGrassKeys.ArtSourceDefault", "NativeGrassKeys.UploadPath, NativeGrassKeys.UploadPathDefault" })
             Assert.Contains(key, code);
         Assert.Equal(4, System.Text.RegularExpressions.Regex.Matches(code, @"Plugin\.Instance\.Settings\.Bind\(").Count);
         Assert.Contains("NativeGrassKeys.SectionOf(map.Key)", code);
-        Assert.Contains("NativeGrassTable.ForMap(map.Key) == null", code);   // a map without a row binds nothing
-    }
-
-    [GlueFact("NativeGrassRepairs.cs")]
-    public void ATimedOutGateIsPendingNotARefusal()
-    {
-        string inputs = Between(Repairs(), "static void ReadInputs()", "static void DropPreparation()");
-        string pendingLine = inputs.Split('\n').Single(l => l.Contains("GateState.NotStarted", StringComparison.Ordinal));
-        Assert.Contains("GateState.Running", pendingLine);
-        Assert.Contains("GateState.TimedOut", pendingLine);   // the check can still finish after a bundle request stopped waiting for it
+        Assert.Contains("if (!map.HasNativeGrass) continue;", code);          // a map without native grass binds nothing
+        // the live keys re-read the flags; the Grass key is a bool and the wanted flag is key AND not refused
+        Assert.Contains("keys.Grass.SettingChanged += (_, __) => Reflag();", code);
+        Assert.Contains("_wanted = keys.Grass.Value && (owned == null || !_refused.ContainsKey(owned.Key));", code);
     }
 
     [GlueFact("NativeGrassRepairs.cs")]

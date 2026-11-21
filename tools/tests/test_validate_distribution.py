@@ -24,6 +24,7 @@ import fix_stored_blocks
 import validate_distribution as distribution
 from test_bundle_blocks import build_unityfs, equal_size_chunk, fixture_unityfs, packed, stored
 from test_multiflare_extraction import graph as flare_graph
+from test_native_grass import pack_for as grass_pack_for
 import extract_banners
 import extract_loadscreens
 import extract_monitor_templates as extract_monitors
@@ -95,7 +96,7 @@ class StubCrypt:
         name = Path(path).name
         self.calls.append(("inspect", name, key_store, verify_chunks))
         self._fail_if_asked("inspect", name)
-        key = self.map_key_of.get(name, re.sub(r"_(?:scenes|navmesh|preset)\.bundle$", "", name))
+        key = self.map_key_of.get(name, re.sub(r"_(?:scenes|navmesh|preset|grass)\.bundle$", "", name))
         return {"map_key": key, "plaintext_length": len(self.plaintext(path)), "mac_verified": True,
                 "chunks": "verified" if verify_chunks else None}
 
@@ -182,6 +183,10 @@ class DistributionSidecarTests(unittest.TestCase):
         bundles = self.plugin / "bundles"
         bundles.mkdir(parents=True)
         self.crypt = StubCrypt()
+        # The fixture's grass packs hold 3 placement records and a tiny art set; the real pin is each map's clump count (113,643 / 15,410 / 10,132).
+        records_pin = patch.object(distribution, "GRASS_PLACEMENT_RECORDS", {key: 3 for key in distribution.GRASS_MAP_KEYS})
+        records_pin.start()
+        self.addCleanup(records_pin.stop)
         self.put_bundles("arena_equator")
         (self.plugin / "material-shaders.arena_equator.json").write_text("{}", encoding="utf-8")
         for key, scene in (("arena_equator", "Arena_Equator_Lighting"),
@@ -295,6 +300,10 @@ class DistributionSidecarTests(unittest.TestCase):
             plain = fixture_unityfs(f"fixture container {key} {kind}")
             assert plain.startswith(UNITYFS)
             (self.plugin / "bundles" / f"{key}_{kind}.bundle").write_bytes(b"AMPB" + plain[len(UNITYFS):])
+        if key in distribution.GRASS_MAP_KEYS:      # the additional grass bundle: an AMPB container whose plaintext is the grass pack, not a UnityFS bundle
+            name = f"{key}_grass.bundle"
+            (self.plugin / "bundles" / name).write_bytes(b"AMPB" + f"fixture container {key} grass".encode())
+            self.crypt.plaintext_of[name] = grass_pack_for(key)
 
     def put_key_files(self):
         """keys/<key>.json for every released map, as the tool writes them."""
@@ -515,7 +524,7 @@ class DistributionSidecarTests(unittest.TestCase):
         self.assertEqual(Path(descriptors[1]).name, "validate_map_descriptors.py")
         # The bundle-name validator is told where the key store is: it reads the encrypted bundles through the tool.
         self.assertEqual(names[-2:], ["--key-store", str(self.repo / "work" / "release-keys")])
-        self.assertIn("DISTRIBUTION_OK 7 maps 21 bundles 7 sidecars encrypted", output.getvalue())
+        self.assertIn("DISTRIBUTION_OK 7 maps 21 bundles 3 grass bundles 7 sidecars encrypted", output.getvalue())
 
     def test_distribution_accepts_bots_exits_and_other_dotted_sidecars(self):
         (self.maps / "equator.bots.json").write_text('{"player_spawns": []}', encoding="utf-8")
@@ -690,6 +699,83 @@ class DistributionSidecarTests(unittest.TestCase):
                             path.write_bytes(original)
         self.validate()
 
+    def test_the_grass_bundles_are_required_for_the_grass_maps_and_for_no_other_map(self):
+        self.assertEqual(distribution.GRASS_MAP_KEYS, ("arena_bowl", "arena_iceberg", "arena_yard"))
+        for key in self.RELEASED:
+            path = self.plugin / "bundles" / f"{key}_grass.bundle"
+            with self.subTest(key=key):
+                if key in distribution.GRASS_MAP_KEYS:
+                    original = path.read_bytes()
+                    path.unlink()
+                    try:
+                        with self.assertRaisesRegex(ValueError, rf"Bundle set mismatch: missing=\['{key}_grass.bundle'\] unexpected=\[\]"):
+                            self.validate()
+                    finally:
+                        path.write_bytes(original)
+                else:
+                    path.write_bytes(b"AMPB" + b"stray grass")
+                    try:
+                        with self.assertRaisesRegex(ValueError, rf"Bundle set mismatch: missing=\[\] unexpected=\['{key}_grass.bundle'\]"):
+                            self.validate()
+                    finally:
+                        path.unlink()
+        self.validate()
+
+    def test_a_grass_bundle_is_checked_as_a_pack_and_never_as_a_unityfs_bundle(self):
+        self.validate()
+        for key in distribution.GRASS_MAP_KEYS:
+            name = f"{key}_grass.bundle"
+            self.assertIn(("inspect", name, self.repo / "work" / "release-keys", True), self.crypt.calls, name)
+            self.assertIn(("read_range", name, 0, distribution.GRASS_HEADER_SIZE), self.crypt.calls, name)
+            self.assertNotIn(("read_range", name, 0, 8), self.crypt.calls, name)        # the UnityFS prefix check is for the map's three bundles
+            self.assertEqual([c for c in self.crypt.calls if c[0] == "read_range" and c[1] == name and c[3] != distribution.GRASS_HEADER_SIZE], [], name)   # no block table read
+
+    def test_a_grass_bundle_that_is_not_an_ampb_container_or_not_a_valid_pack_fails_the_distribution(self):
+        name = "arena_bowl_grass.bundle"
+        path = self.plugin / "bundles" / name
+        original, pack = path.read_bytes(), self.crypt.plaintext_of[name]
+        try:
+            path.write_bytes(pack)       # the plain pack itself
+            with self.assertRaisesRegex(ValueError, f"Plaintext grass pack in dist .*: {name}"):
+                self.validate()
+            path.write_bytes(original)
+            self.crypt.plaintext_of[name] = b"UnityFS\0" + pack[8:]
+            with self.assertRaisesRegex(ValueError, f"Bundle {name} does not decrypt to a grass pack"):
+                self.validate()
+            self.crypt.plaintext_of[name] = pack[:-1]
+            with self.assertRaisesRegex(ValueError, f"Bundle {name} is not a valid grass pack"):
+                self.validate()
+            self.crypt.plaintext_of[name] = grass_pack_for("arena_yard")
+            with self.assertRaisesRegex(ValueError, f"Bundle {name} is not a valid grass pack: .*is for map"):
+                self.validate()
+        finally:
+            path.write_bytes(original)
+            self.crypt.plaintext_of[name] = pack
+        self.validate()
+
+    def test_the_grass_check_sits_after_the_encryption_checks_and_before_the_block_tables(self):
+        source = (REPO / "tools" / "validate" / "validate_distribution.py").read_text(encoding="utf-8")
+        order = [source.index(call) for call in ("    validate_encrypted_bundles(plugin/'bundles', keys, key_store_dir())",
+                                                 "    validate_grass_bundles(plugin/'bundles', keys, key_store_dir())",
+                                                 "    validate_block_tables(plugin/'bundles', keys, key_store_dir())")]
+        self.assertEqual(order, sorted(order))
+
+    def test_a_plain_grass_pack_anywhere_in_dist_is_refused(self):
+        pack = self.crypt.plaintext_of["arena_yard_grass.bundle"]
+        for relative in ("stray.dat", "BepInEx/plugins/other/pack.bin", "SPT_Runtime/user/mods/ArenaMapPort/backup/arena_yard_grass.bundle.bak"):
+            path = self.repo / "dist" / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(pack)
+            try:
+                with self.subTest(relative=relative):
+                    with self.assertRaisesRegex(ValueError, "Plaintext grass pack in dist: " + re.escape(relative)):
+                        self.validate()
+            finally:
+                path.unlink()
+                if path.parent.name in ("other", "backup"):
+                    path.parent.rmdir()
+        self.validate()
+
     def test_every_bundle_is_inspected_with_its_chunks_and_its_prefix_read(self):
         self.validate()
         calls = self.crypt.calls
@@ -765,6 +851,11 @@ class DistributionSidecarTests(unittest.TestCase):
         self.crypt.map_key_of.clear()
         self.crypt.prefix_of["arena_bowl_navmesh.bundle"] = b"PK\x03\x04\0\0\0\0"
         with self.assertRaisesRegex(ValueError, "Bundle arena_bowl_navmesh.bundle does not decrypt to a UnityFS bundle"):
+            self.validate()
+        self.crypt.prefix_of.clear()
+        # the inverse of the grass rule: a MAP bundle whose plaintext is a grass pack is no UnityFS bundle
+        self.crypt.prefix_of["arena_bowl_scenes.bundle"] = b"AMGP\x01\0\0\0"
+        with self.assertRaisesRegex(ValueError, "Bundle arena_bowl_scenes.bundle does not decrypt to a UnityFS bundle"):
             self.validate()
         self.crypt.prefix_of.clear()
         self.crypt.fail[("read_range", "arena_bowl_navmesh.bundle")] = "FAIL the offset is outside the plaintext"

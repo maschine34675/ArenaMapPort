@@ -64,7 +64,10 @@ class ParkedDistributionTests(unittest.TestCase):
                      self.server / 'db/arena_autoservice/base.json',
                      self.client / 'bundles/arena_yard_scenes.bundle', self.client / 'bundles/arena_yard_navmesh.bundle',
                      self.client / 'bundles/arena_yard_preset.bundle', self.client / 'material-shaders.arena_yard.json',
-                     self.server / 'db/arena_yard/base.json']
+                     self.server / 'db/arena_yard/base.json',
+                     # The additional grass bundles of the three grass maps (2026-11-21) are released files too: the parked list names no grass bundle.
+                     self.client / 'bundles/arena_bowl_grass.bundle', self.client / 'bundles/arena_iceberg_grass.bundle',
+                     self.client / 'bundles/arena_yard_grass.bundle']
         for path in preserved:
             self.put(path, b'preserved')
         self.run_script('Client'); self.run_script('Server')

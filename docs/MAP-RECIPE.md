@@ -278,6 +278,10 @@ brain-table stand-in row (`ApplyBrainTable`/`ApplyPmcBrainTables`, Equator → `
    new row and exit (`accepted`, `path complete`; an exit behind a held gate is `path_partial` by design).
 5. Note anything the map needs that Equator did not — that is the next repair.
 
+## Native grass (only for a map whose Arena level has a Grass scene)
+
+Bowl, Iceberg and Yard ship Arena's grass as an additional encrypted bundle (docs/progress/native-grass.md "Stage 2"). A new map with Arena grass needs, in one commit: the descriptor flag `HasNativeGrass` (`ArenaMapPort.Shared/ArenaMapDescriptor.cs`; its `_Grass` scene must be in `AllSceneNames`), `has_native_grass: true` in `tools/maps/<stem>.json`, the key in `validate_map_descriptors.NATIVE_GRASS_MAP_KEYS` (`validate_distribution.GRASS_MAP_KEYS`, the packer and `validate_port` share it), a row in `tools/extract/extract_grass.py` (level file of the Grass scene, scene name) and its pinned counts (`validate_distribution.GRASS_PLACEMENT_RECORDS`, `NativeGrassPackRealDataTests`, `test_grass_pack.py`), the grass bundle in the client csproj item list `ArenaMapPortGrassBundles` and in that map's stage command, and the removal of the map from `NO_GRASS` in `tools/tests/test_new_map_checklist.py`. Then `python tools/extract/extract_grass.py pack --map <stem>` and `verify`, a Release client build without DllOnly, `validate_distribution.py` (expects `bundles/<key>_grass.bundle` as an AMPB container whose plaintext starts with `AMGP`). The plaintext pack holds bytes of a key-source file: it never reaches `dist/` plain.
+
 ## Before the first Unity build
 
 Run the normal-texture pre-flight on the package: `python tools/validate/normal_texture_preflight.py work/extract/<package> [--json rows.json]`.

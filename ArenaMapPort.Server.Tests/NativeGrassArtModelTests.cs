@@ -5,34 +5,39 @@ using Xunit;
 namespace ArenaMapPort.Server.Tests;
 
 /// <summary>
-/// The pinned facts of the grass art and its checks (PLAN-YARD item 23, shape E). The numbers are those UnityPy read from the installed Arena 0.6.2.0.48473 on 2026-11-21
-/// (tools/tests/test_grass_art_ranges.py re-reads them; <see cref="NativeGrassRealDataTests"/> checks the file sizes). Unit-tested; nothing here is host-run.
+/// The facts of the grass art and its checks (PLAN-YARD item 23, stage 2): the mip-chain arithmetic, the ranges as the pack states them, the structure checks that need no hash and the BSG-free placeholder
+/// art. The numbers of Arena's real art (1024 x 1024, eleven mips, five slices) were read from the installed Arena 0.6.2.0.48473 on 2026-11-21; since stage 2 no offset or size is pinned in the client,
+/// the pack states them and <see cref="NativeGrassPackModelTests"/> / <see cref="NativeGrassPackRealDataTests"/> check them. Unit-tested; nothing here is host-run.
 /// </summary>
 public sealed class NativeGrassArtModelTests
 {
+    static GrassArtRange TexArray => GrassTestPack.RealLayout().TexArray;
+    static GrassArtRange NormalArray => GrassTestPack.RealLayout().NormalArray;
+    static GrassArtRange NormalTexture => GrassTestPack.RealLayout().NormalTexture;
+
     // ---- the mip-chain arithmetic -------------------------------------------------------------------------------------------------------------------------------------------
 
     [Fact]
     public void ADxt5ChainOf1024ElevenMipsSumsToThePerSliceSizeOfTheRealFile()
     {
-        GrassArtRange r = NativeGrassArt.TexArray;
+        GrassArtRange r = TexArray;
         long[] expected = { 1048576, 262144, 65536, 16384, 4096, 1024, 256, 64, 16, 16, 16 };
         for (int m = 0; m < 11; m++) Assert.Equal(expected[m], r.MipBytes(m));
         Assert.Equal(1398128L, r.SliceBytes);
         Assert.Equal(6990640L, r.ComputedSize);
-        Assert.Equal(NativeGrassArt.TexArraySize, r.ComputedSize);
+        Assert.Equal(6990640L, r.Size);
     }
 
     [Fact]
     public void ADxt1ChainIsHalfAndThe4x4MipsArePaddedToOneBlock()
     {
-        GrassArtRange r = NativeGrassArt.NormalArray;
+        GrassArtRange r = NormalArray;
         long[] expected = { 524288, 131072, 32768, 8192, 2048, 512, 128, 32, 8, 8, 8 };
         for (int m = 0; m < 11; m++) Assert.Equal(expected[m], r.MipBytes(m));
         Assert.Equal(699064L, r.SliceBytes);
         Assert.Equal(3495320L, r.ComputedSize);
-        Assert.Equal(699064L, NativeGrassArt.NormalTexture.SliceBytes);
-        Assert.Equal(NativeGrassArt.NormalTextureSize, NativeGrassArt.NormalTexture.ComputedSize);
+        Assert.Equal(699064L, NormalTexture.SliceBytes);
+        Assert.Equal(699064L, NormalTexture.ComputedSize);
         // the last three mips are 4 x 4, 2 x 2 and 1 x 1 pixels and each takes a whole block
         Assert.Equal(4, r.MipWidth(8));
         Assert.Equal(2, r.MipWidth(9));
@@ -45,7 +50,7 @@ public sealed class NativeGrassArtModelTests
     [Fact]
     public void TheOffsetsAreSliceMajorWithTheWholeChainPerSlice()
     {
-        GrassArtRange r = NativeGrassArt.TexArray;
+        GrassArtRange r = TexArray;
         Assert.Equal(0L, r.ElementOffset(0, 0));
         Assert.Equal(1048576L, r.ElementOffset(0, 1));
         Assert.Equal(1048576L + 262144L, r.ElementOffset(0, 2));
@@ -53,7 +58,7 @@ public sealed class NativeGrassArtModelTests
         Assert.Equal(1398128L + 1048576L, r.ElementOffset(1, 1));
         Assert.Equal(4L * 1398128L, r.ElementOffset(4, 0));
         Assert.Equal(6990640L - 16L, r.ElementOffset(4, 10));                // the last 1 x 1 mip of the last slice is the last block of the range
-        Assert.Equal(699072L + 1398128L, r.AbsoluteOffset(1, 0));
+        Assert.Equal(r.Offset + 1398128L, r.AbsoluteOffset(1, 0));
         Assert.Equal(r.Size, r.ElementOffset(4, 10) + r.MipBytes(10));
         for (int s = 0; s < 5; s++)
             for (int m = 0; m < 11; m++)
@@ -63,7 +68,7 @@ public sealed class NativeGrassArtModelTests
     [Fact]
     public void EveryElementOffsetIsDistinctAndTilesTheRangeExactly()
     {
-        foreach (GrassArtRange r in NativeGrassArt.Ranges)
+        foreach (GrassArtRange r in GrassTestPack.RealLayout().Ranges)
         {
             long next = 0;
             for (int s = 0; s < r.Slices; s++)
@@ -78,63 +83,51 @@ public sealed class NativeGrassArtModelTests
         }
     }
 
-    // ---- the pinned ranges --------------------------------------------------------------------------------------------------------------------------------------------------
+    // ---- the ranges as a pack states them -----------------------------------------------------------------------------------------------------------------------------------
 
     [Fact]
-    public void TheThreeRangesAreTheMeasuredOnesInFileOrder()
+    public void TheThreeRangesCarryTheFactsOfTheirEntries()
     {
-        Assert.Equal(new[] { "Grass_new_1_N", "GrassTexArray", "GrassNormalArray" }, NativeGrassArt.Ranges.Select(r => r.Name).ToArray());
-        Assert.Equal(new[] { 0L, 699072L, 7689712L }, NativeGrassArt.Ranges.Select(r => r.Offset).ToArray());
-        Assert.Equal(new[] { 699064L, 6990640L, 3495320L }, NativeGrassArt.Ranges.Select(r => r.Size).ToArray());
-        Assert.All(NativeGrassArt.Ranges, r => { Assert.Equal(1024, r.Width); Assert.Equal(1024, r.Height); Assert.Equal(11, r.MipCount); });
-        Assert.Equal(new[] { 1, 5, 5 }, NativeGrassArt.Ranges.Select(r => r.Slices).ToArray());
-        Assert.Equal(new[] { false, true, true }, NativeGrassArt.Ranges.Select(r => r.IsArray).ToArray());
-        Assert.Equal(GrassBlockFormat.Dxt5, NativeGrassArt.TexArray.Format);
-        Assert.Equal(GrassBlockFormat.Dxt1, NativeGrassArt.NormalArray.Format);
-        Assert.Equal(GrassBlockFormat.Dxt1, NativeGrassArt.NormalTexture.Format);
-        Assert.Equal(16, NativeGrassArt.TexArray.BlockBytes);
-        Assert.Equal(8, NativeGrassArt.NormalArray.BlockBytes);
-        Assert.Equal(101, NativeGrassArt.TexArray.FormatId);                // GraphicsFormat RGBA_DXT5_UNorm
-        Assert.Equal(97, NativeGrassArt.NormalArray.FormatId);              // GraphicsFormat RGB_DXT1_UNorm
-        Assert.Equal(10, NativeGrassArt.NormalTexture.FormatId);            // TextureFormat DXT1
-        Assert.True(NativeGrassArt.TexArray.IgnoreMipmapLimit);
-        Assert.True(NativeGrassArt.NormalArray.IgnoreMipmapLimit);
-        Assert.False(NativeGrassArt.NormalTexture.IgnoreMipmapLimit);
-        Assert.All(NativeGrassArt.Ranges, r => { Assert.Equal(2, r.FilterMode); Assert.Equal(1, r.WrapMode); Assert.True(r.Linear); });
+        GrassPackLayout layout = GrassTestPack.RealLayout();
+        GrassArtRange[] ranges = layout.Ranges;
+        Assert.Equal(new[] { "GrassTexArray", "GrassNormalArray", "Grass_new_1_N" }, ranges.Select(r => r.Name).ToArray());
+        Assert.All(ranges, r => { Assert.Equal(1024, r.Width); Assert.Equal(1024, r.Height); Assert.Equal(11, r.MipCount); });
+        Assert.Equal(new[] { 5, 5, 1 }, ranges.Select(r => r.Slices).ToArray());
+        Assert.Equal(new[] { true, true, false }, ranges.Select(r => r.IsArray).ToArray());
+        Assert.Equal(GrassBlockFormat.Dxt5, layout.TexArray.Format);
+        Assert.Equal(GrassBlockFormat.Dxt1, layout.NormalArray.Format);
+        Assert.Equal(GrassBlockFormat.Dxt1, layout.NormalTexture.Format);
+        Assert.Equal("DXT5", layout.TexArray.FormatName);
+        Assert.Equal("DXT1", layout.NormalArray.FormatName);
+        Assert.Equal(16, layout.TexArray.BlockBytes);
+        Assert.Equal(8, layout.NormalArray.BlockBytes);
+        Assert.True(layout.TexArray.IgnoreMipmapLimit);
+        Assert.True(layout.NormalArray.IgnoreMipmapLimit);
+        Assert.False(layout.NormalTexture.IgnoreMipmapLimit);
+        Assert.All(ranges, r => { Assert.Equal(2, r.FilterMode); Assert.Equal(1, r.WrapMode); });
+        // the pack, not the client, says where each range is: the first starts after the header and the placement
+        Assert.Equal(272L + 688976L, layout.TexArray.Offset);
+        Assert.Equal(layout.TexArray.Offset + layout.TexArray.Size, layout.NormalArray.Offset);
+        Assert.Equal(layout.NormalArray.Offset + layout.NormalArray.Size, layout.NormalTexture.Offset);
     }
 
     [Fact]
-    public void TheFilePinsAndTheRangesAgree()
+    public void ThePinnedConstantsOfStage1AreGone()
     {
-        Assert.Equal(11185040L, NativeGrassArt.StreamSize);
-        Assert.Equal(13940L, NativeGrassArt.AssetsSize);
-        Assert.Equal(NativeGrassArt.StreamSize, NativeGrassArt.NormalArrayOffset + NativeGrassArt.NormalArraySize + NativeGrassArt.StreamTailPadding);
-        Assert.Equal(699064L + 8L, NativeGrassArt.TexArrayOffset);          // the plain texture is padded to 8 bytes
-        Assert.Equal(NativeGrassArt.TexArrayOffset + NativeGrassArt.TexArraySize, NativeGrassArt.NormalArrayOffset);
-        Assert.Equal(GrassArtError.None, NativeGrassArt.CheckRanges());
-        Assert.Equal("EscapeFromTarkovArena_Data/sharedassets95.assets.resS", NativeGrassArt.StreamPath);
-        Assert.Equal("EscapeFromTarkovArena_Data/sharedassets95.assets", NativeGrassArt.AssetsPath);
-    }
-
-    [Theory]
-    [InlineData(13940L, 11185040L, "None")]
-    [InlineData(13941L, 11185040L, "AssetsSizeDiffers")]
-    [InlineData(-1L, 11185040L, "AssetsSizeDiffers")]
-    [InlineData(13940L, 11185039L, "StreamSizeDiffers")]
-    [InlineData(13940L, -1L, "StreamSizeDiffers")]
-    [InlineData(0L, 0L, "AssetsSizeDiffers")]
-    public void TheTwoFileSizesAreChecked(long assets, long stream, string expected)
-    {
-        Assert.Equal(Enum.Parse<GrassArtError>(expected), NativeGrassArt.CheckFileSizes(assets, stream));
+        // the offsets, sizes, file paths and file sizes of Arena's sharedassets95 left the client in stage 2 (the grass bundle states every range); a source pin in NativeGrassSourcePinTests
+        // keeps them out of the grass files, and this test keeps the public surface honest
+        var names = typeof(NativeGrassArt).GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static).Select(f => f.Name).ToArray();
+        foreach (string gone in new[] { "StreamPath", "AssetsPath", "AssetsSize", "StreamSize", "TexArrayOffset", "NormalArrayOffset", "NormalTextureOffset", "TexArraySize", "NormalArraySize", "StreamTailPadding", "Ranges", "TexArray", "NormalArray", "NormalTexture" })
+            Assert.DoesNotContain(gone, names);
     }
 
     [Fact]
-    public void ARangeWithTheWrongSizeOrAnOverlapIsCaughtByTheArithmeticCheck()
+    public void ARangeWithTheWrongSizeIsCaughtByTheArithmetic()
     {
-        // the same arithmetic the pinned check runs, on a made-up range
-        var shortRange = new GrassArtRange("x", 0, 1000, 1024, 1024, 5, 11, GrassBlockFormat.Dxt5, true, 101, "x", true, 2, 1, 1, true);
+        // the same arithmetic the pack reader runs, on a made-up range
+        var shortRange = new GrassArtRange("x", 0, 1000, 1024, 1024, 5, 11, GrassBlockFormat.Dxt5, true, 2, 1, 1, true);
         Assert.NotEqual(shortRange.Size, shortRange.ComputedSize);
-        var one = new GrassArtRange("x", 0, 1398128, 1024, 1024, 1, 11, GrassBlockFormat.Dxt5, false, 12, "DXT5", true, 2, 1, 1, false);
+        var one = new GrassArtRange("x", 0, 1398128, 1024, 1024, 1, 11, GrassBlockFormat.Dxt5, false, 2, 1, 1, false);
         Assert.Equal(one.Size, one.ComputedSize);
     }
 
@@ -150,47 +143,45 @@ public sealed class NativeGrassArtModelTests
     [Fact]
     public void AWrongLengthIsAShortRead()
     {
-        Assert.Equal(GrassArtError.ShortRead, NativeGrassArt.CheckBlocks(null, NativeGrassArt.NormalArray));
-        Assert.Equal(GrassArtError.ShortRead, NativeGrassArt.CheckBlocks(new byte[10], NativeGrassArt.NormalArray));
-        Assert.Equal(GrassArtError.ShortRead, NativeGrassArt.CheckBlocks(new byte[NativeGrassArt.NormalArraySize + 1], NativeGrassArt.NormalArray));
+        GrassArtRange r = NormalArray;
+        Assert.Equal(GrassArtError.ShortRead, NativeGrassArt.CheckBlocks(null, r));
+        Assert.Equal(GrassArtError.ShortRead, NativeGrassArt.CheckBlocks(new byte[10], r));
+        Assert.Equal(GrassArtError.ShortRead, NativeGrassArt.CheckBlocks(new byte[r.Size + 1], r));
     }
 
     [Fact]
     public void AWipedOrRepeatedByteRangeIsConstantData()
     {
-        var zero = new byte[NativeGrassArt.TexArraySize];
-        Assert.Equal(GrassArtError.ConstantData, NativeGrassArt.CheckBlocks(zero, NativeGrassArt.TexArray));
-        var ff = new byte[NativeGrassArt.NormalArraySize];
+        var zero = new byte[TexArray.Size];
+        Assert.Equal(GrassArtError.ConstantData, NativeGrassArt.CheckBlocks(zero, TexArray));
+        var ff = new byte[NormalArray.Size];
         Array.Fill(ff, (byte)0xFF);
-        Assert.Equal(GrassArtError.ConstantData, NativeGrassArt.CheckBlocks(ff, NativeGrassArt.NormalArray));
+        Assert.Equal(GrassArtError.ConstantData, NativeGrassArt.CheckBlocks(ff, NormalArray));
     }
 
     [Fact]
     public void RandomBytesAreAnIncoherentMipChain()
     {
-        var data = new byte[NativeGrassArt.TexArraySize];
+        var data = new byte[TexArray.Size];
         new Random(5).NextBytes(data);
-        Assert.Equal(GrassArtError.MipChainIncoherent, NativeGrassArt.CheckBlocks(data, NativeGrassArt.TexArray));
+        Assert.Equal(GrassArtError.MipChainIncoherent, NativeGrassArt.CheckBlocks(data, TexArray));
     }
 
     [Fact]
-    public void ARangeWhoseSecondSliceIsShiftedByABlockIsIncoherent()
+    public void ARangeWhoseCoarseMipsAreScrambledIsIncoherent()
     {
-        // build a coherent range from the placeholder, then shift slice 1's data by 3 blocks (48 bytes) inside the buffer
-        GrassArtRange r = NativeGrassArt.TexArray;
+        // build a coherent range from the placeholder, then scramble the coarse mips of slice 1
+        GrassArtRange r = TexArray;
         byte[] data = Placeholder(r);
         Assert.Equal(GrassArtError.None, NativeGrassArt.CheckBlocks(data, r));
-        long at = r.ElementOffset(1, 0);
         var copy = (byte[])data.Clone();
         var rng = new Random(9);
-        // a shift in a placeholder (a solid colour per slice) changes nothing a coherence check can see, so scramble the coarse mips of slice 1 instead
         for (int mip = 2; mip <= 7; mip++)
         {
             long m = r.ElementOffset(1, mip);
             for (long k = 0; k < r.MipBytes(mip); k++) copy[m + k] = (byte)rng.Next(256);
         }
         Assert.Equal(GrassArtError.MipChainIncoherent, NativeGrassArt.CheckBlocks(copy, r));
-        Assert.True(at > 0);
     }
 
     [Theory]
@@ -199,8 +190,22 @@ public sealed class NativeGrassArtModelTests
     [InlineData(2)]
     public void ThePlaceholderOfEveryRangePassesTheStructureCheck(int range)
     {
-        GrassArtRange r = NativeGrassArt.Ranges[range];
+        GrassArtRange r = GrassTestPack.RealLayout().Ranges[range];
         Assert.Equal(GrassArtError.None, NativeGrassArt.CheckBlocks(Placeholder(r), r));
+    }
+
+    [Fact]
+    public void ATextureWithFewerThanFourMipsIsCheckedAtItsLastMipAndNeverReadsOutOfRange()
+    {
+        // any chain the pack format admits must be checkable: three mips, two mips, one mip
+        foreach (int mips in new[] { 1, 2, 3 })
+        {
+            GrassArtRange r = GrassTestPack.SizedRange(16, 16, 2, mips, GrassBlockFormat.Dxt5);
+            var data = new byte[r.Size];
+            NativeGrassArt.Placeholder.Fill(data, r);
+            Assert.Equal(GrassArtError.None, NativeGrassArt.CheckBlocks(data, r));
+            Assert.Equal(GrassArtError.ConstantData, NativeGrassArt.CheckBlocks(new byte[data.Length], r));
+        }
     }
 
     [Fact]
@@ -229,7 +234,7 @@ public sealed class NativeGrassArtModelTests
     [Fact]
     public void TheCoherenceNumberOfASolidPlaceholderIsZero()
     {
-        GrassArtRange r = NativeGrassArt.TexArray;
+        GrassArtRange r = TexArray;
         byte[] data = Placeholder(r);
         for (int s = 0; s < 5; s++) Assert.Equal(0.0, NativeGrassArt.MipChainDifference(data, 0, r, s), 3);
     }
@@ -239,7 +244,7 @@ public sealed class NativeGrassArtModelTests
     [Fact]
     public void ThePlaceholderIsDeterministicAndFillsTheBufferItIsGiven()
     {
-        GrassArtRange r = NativeGrassArt.NormalArray;
+        GrassArtRange r = NormalArray;
         byte[] a = Placeholder(r);
         var b = new byte[r.Size];
         Array.Fill(b, (byte)0xAB);                                           // a dirty buffer is cleared first
@@ -252,7 +257,7 @@ public sealed class NativeGrassArtModelTests
     [Fact]
     public void ThePlaceholderAlbedoHasOneSolidColourPerSliceInEveryMip()
     {
-        GrassArtRange r = NativeGrassArt.TexArray;
+        GrassArtRange r = TexArray;
         byte[] data = Placeholder(r);
         var rgb = new float[3];
         for (int s = 0; s < 5; s++)
@@ -273,7 +278,7 @@ public sealed class NativeGrassArtModelTests
     [Fact]
     public void ThePlaceholderCutOutShowsSlicePlusOneBladesInMipZero()
     {
-        GrassArtRange r = NativeGrassArt.TexArray;
+        GrassArtRange r = TexArray;
         byte[] data = Placeholder(r);
         int bw = r.BlocksAcross(0), bh = r.BlocksDown(0);
         for (int s = 0; s < 5; s++)
@@ -316,7 +321,7 @@ public sealed class NativeGrassArtModelTests
     [Fact]
     public void ThePlaceholderNormalsAreFlat()
     {
-        GrassArtRange r = NativeGrassArt.NormalArray;
+        GrassArtRange r = NormalArray;
         byte[] data = Placeholder(r);
         var rgb = new float[3];
         for (int s = 0; s < 5; s++)
@@ -336,16 +341,28 @@ public sealed class NativeGrassArtModelTests
     public void ThePlaceholderContainsNoByteOfArena()
     {
         // it is generated from the arithmetic above: the same range filled twice is identical and uses only the few block patterns the generator writes
-        GrassArtRange r = NativeGrassArt.TexArray;
-        byte[] data = Placeholder(r);
+        byte[] data = Placeholder(TexArray);
         var distinct = new HashSet<byte>(data);
         Assert.True(distinct.Count <= 12, "distinct byte values " + distinct.Count);
     }
 
     [Fact]
+    public void ThePlaceholderServesAnySliceCountOfAPack()
+    {
+        // the colours repeat after five slices: a pack with more slices than the five of Arena's art still gets art
+        GrassArtRange r = GrassTestPack.SizedRange(64, 64, 7, 6, GrassBlockFormat.Dxt5);
+        var data = new byte[r.Size];
+        NativeGrassArt.Placeholder.Fill(data, r);
+        var rgb = new float[3];
+        NativeGrassArt.BlockMean(data, (int)r.ElementOffset(5, 0), GrassBlockFormat.Dxt5, rgb);
+        Assert.Equal(NativeGrassArt.Placeholder.SliceColors[0][0], rgb[0], 0);
+    }
+
+    [Fact]
     public void TheDescriptionNamesTheRangeAndNoContent()
     {
-        Assert.Equal("GrassTexArray 1024x1024x5 mips=11 RGBA_DXT5_UNorm @699072+6990640", NativeGrassArt.Describe(NativeGrassArt.TexArray));
-        Assert.Equal("Grass_new_1_N 1024x1024 mips=11 DXT1 @0+699064", NativeGrassArt.Describe(NativeGrassArt.NormalTexture));
+        GrassPackLayout layout = GrassTestPack.RealLayout();
+        Assert.Equal("GrassTexArray 1024x1024x5 mips=11 DXT5 @" + (272L + 688976L) + "+6990640", NativeGrassArt.Describe(layout.TexArray));
+        Assert.Equal("Grass_new_1_N 1024x1024 mips=11 DXT1 @" + (272L + 688976L + 6990640L + 3495320L) + "+699064", NativeGrassArt.Describe(layout.NormalTexture));
     }
 }

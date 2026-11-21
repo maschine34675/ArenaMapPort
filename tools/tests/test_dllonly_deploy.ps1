@@ -265,6 +265,25 @@ try {
     $result = Invoke-Deploy $f -Normal
     Require ($result.Code -eq 0 -and $result.Output -match 'DRY RUN') "A complete map was refused: $($result.Output)"
     $cases++
+
+    # 2026-11-21: a map whose sidecar says has_native_grass also needs its additional grass bundle (bundles/<map_key>_grass.bundle); a map
+    # without the flag does not, and the other sidecars of a stem (bots, exits ...) are never read as a descriptor.
+    Write-File (Join-Path $f.Repo 'tools/maps/fake.json') '{"key": "arena_fake", "has_native_grass": true}'
+    Write-File (Join-Path $f.Repo 'tools/maps/fake.bots.json') '{"key": "arena_fake_other", "has_native_grass": true}'
+    foreach ($confirmed in @($false, $true)) {
+        $result = if ($confirmed) { Invoke-Deploy $f -Confirm -Normal } else { Invoke-Deploy $f -Normal }
+        Require ($result.Code -ne 0 -and $result.Output -match 'arena_fake \(missing bundles/arena_fake_grass\.bundle\)' -and $result.Output -notmatch 'missing keys' -and $result.Output -notmatch 'missing bundles/arena_fake_scenes') "A grass map without its grass bundle was not refused (confirm=$confirmed): $($result.Output)"
+    }
+    $dllOnly = Invoke-Deploy $f -Confirm
+    Require ($dllOnly.Code -eq 0) "-DllOnly was blocked by the missing grass bundle: $($dllOnly.Output)"
+    Write-File (Join-Path $f.Repo "dist/$clientRoot/bundles/arena_fake_grass.bundle") 'bundle'
+    $result = Invoke-Deploy $f -Normal
+    Require ($result.Code -eq 0 -and $result.Output -match 'DRY RUN') "A grass map with its grass bundle was refused: $($result.Output)"
+    Write-File (Join-Path $f.Repo 'tools/maps/fake.json') '{"key": "arena_fake", "has_native_grass": false}'
+    Remove-Item -LiteralPath (Join-Path $f.Repo "dist/$clientRoot/bundles/arena_fake_grass.bundle")
+    $result = Invoke-Deploy $f -Normal
+    Require ($result.Code -eq 0 -and $result.Output -match 'DRY RUN') "A map without the grass flag was refused for a grass bundle: $($result.Output)"
+    $cases++
     Write-Output "DLL_ONLY_DEPLOY_TESTS_PASSED ($cases cases)"
 } finally {
     if (Test-Path -LiteralPath $rootFull) {

@@ -13,6 +13,7 @@
     "Arena_Bowl_TeamFight_DesignStuff"
   ],
   "uses_server_time": true,
+  "has_native_grass": true,
   "infiltration_name": "ArenaBowl",
   "locale_name": "Arena: Bowl",
   "locale_description": "The Bowl from EFT Arena: the sunken field of an old sports arena with its stands, converted for death-fighting. Containers, barricades and a grounded Mi-26 fill the field between two gated team pockets at the east and west ends; the layer-29 border cubes of Arena bound the play space.",

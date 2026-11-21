@@ -24,6 +24,7 @@
     0.20075999200344086
   ],
   "uses_server_time": true,
+  "has_native_grass": true,
   "opened_barriers": [
     "DOORS/Metal_gate_1",
     "DOORS/Construction_Cradle_02"

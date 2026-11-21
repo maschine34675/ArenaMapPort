@@ -35,11 +35,12 @@
     <!-- Native sea water (docs/progress/bay5-water.md, iceberg-release.md "native sea water"): the Unity-free rules of NativeWaterRepairs (one switch row per map with
          HasNativeWater, the package directory, the identity rule of water.json, the texture file name rule). NativeWaterRepairs.cs (WaterSSR types) stays out; NativeWaterTests reads it as text. -->
     <Compile Include="..\ArenaMapPort.Client\NativeWaterModel.cs" Link="Client\NativeWaterModel.cs" />
-    <!-- Native grass probe (PLAN-YARD item 23, shape E): the Unity-free model (placement parser, per-map table, state machine), the art facts (pinned ranges, mip arithmetic, structure checks, placeholder art)
-         and the values (colour lists, season rule, prototype, material, meshes). NativeGrassArtSource.cs (the worker side: file reads through IArenaFiles, no Unity, no log) is linked too; NativeGrassRepairs.cs (the Unity glue) stays out and NativeGrassSourcePinTests reads it as text. -->
+    <!-- Native grass (PLAN-YARD item 23; the grass bundle of stage 2): the Unity-free model (keys, placement parser, state machine), the pack reader (AMGP header, constants), the art facts (mip arithmetic, structure checks, placeholder art)
+         and the values (colour lists, season rule, prototype, material, meshes). NativeGrassArtSource.cs (the worker side: the pack through IGrassPackFiles and the AMPB stream, no Unity, no log) is linked too; NativeGrassRepairs.cs (the Unity glue) stays out and NativeGrassSourcePinTests reads it as text. -->
     <Compile Include="..\ArenaMapPort.Client\NativeGrassModel.cs" Link="Client\NativeGrassModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\NativeGrassArtModel.cs" Link="Client\NativeGrassArtModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\NativeGrassColorModel.cs" Link="Client\NativeGrassColorModel.cs" />
+    <Compile Include="..\ArenaMapPort.Client\NativeGrassPackModel.cs" Link="Client\NativeGrassPackModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\NativeGrassArtSource.cs" Link="Client\NativeGrassArtSource.cs" />
     <Compile Include="..\ArenaMapPort.Client\DoorPoseModel.cs" Link="Client\DoorPoseModel.cs" />
     <!-- Level border walls (PLAN-YARD item 10 part 2): the Unity-free rules of LevelBorderBoxRepairs (names, layer, usable rows, world bounds, the idempotent pass). -->

@@ -44,7 +44,7 @@ namespace ArenaMapPort.Client
             // The score monitors (docs/progress/score-monitors.md): one flag read per frame while nothing is claimed and no owned raid is loaded. Placed before the
             // gate poll and the notices on purpose: MapNoticeWiringTests pins the notices' tick as the last statement of this method.
             ScoreMonitorView.Tick();
-            // Native grass probe (docs/progress/yard-release.md item 23; developer key, default Off): one static read per frame while nothing is wanted or built. Before the notices' tick, which stays last.
+            // Native grass (docs/progress/native-grass.md; Map (<key>)/Grass, default on, Bowl, Iceberg and Yard): one static read per frame while nothing is wanted or built. Before the notices' tick, which stays last.
             NativeGrassRepairs.Tick();
             // One flag read per frame; armed only while the Arena check outlives startup, disarmed after its one log line.
             ArenaInstallationGate.PollOutcome();
@@ -200,7 +200,7 @@ namespace ArenaMapPort.Client
             NativeDecalRepairs.Install();
             SeaPlaceholderRepairs.Install();
             NativeWaterRepairs.Install();
-            NativeGrassRepairs.Install(); // developer-only grass probe keys (Map (arena_yard)/NativeGrass*, default Off) and its scene events; the build runs from Plugin.LateUpdate
+            NativeGrassRepairs.Install(); // native grass of Bowl, Iceberg and Yard (Map (<key>)/Grass, default ON, none public) and its scene events; the build runs from Plugin.LateUpdate
             NativeSpatialAudio.Install(_harmony);
             PrecipitationAudio.Install(); // missing native rain beds, owned independently of local scenery ambience
             RoomReverb.Install();
@@ -267,6 +267,11 @@ namespace ArenaMapPort.Client
                 LogExpectedFile(Path.Combine(bundlesDir, map.ScenesBundleFileName));
                 LogExpectedFile(Path.Combine(bundlesDir, map.NavMeshBundleFileName));
                 LogExpectedFile(Path.Combine(pluginDir, ShaderRebind.SidecarFileName(map)));
+                if (map.HasNativeGrass)
+                {
+                    // the grass bundle of a grass map: the same Warning as the map's own files, but the map stays available without it (no grass on that map; the grass glue logs Debug only for a missing file)
+                    LogExpectedFile(Path.Combine(bundlesDir, map.GrassBundleFileName));
+                }
             }
         }
 

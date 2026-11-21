@@ -4,13 +4,12 @@ using System.Globalization;
 
 namespace ArenaMapPort.Client
 {
-    // The Unity-free facts of the grass art (PLAN-YARD item 23, shape E): where the three textures lie inside Arena's sharedassets95.assets.resS, how a DXT mip chain is laid out, the checks
-    // that need no hash, and the BSG-free placeholder art of the same shape. The glue (NativeGrassArtSource.cs) reads the ranges on a worker thread; nothing here touches a file or Unity.
+    // The Unity-free facts of the grass art (PLAN-YARD item 23; the data comes from the map's staged grass bundle since stage 2, 2026-11-21): how a DXT mip chain is laid out, the facts a range
+    // carries (taken from the pack's header, see NativeGrassPackModel.cs: no offset, size or format is pinned in the client any more), the structure checks that need no hash, and the BSG-free
+    // placeholder art of the same shape. The worker (NativeGrassArtSource.cs) reads the ranges from the pack; nothing here touches a file or Unity.
     //
-    // Source of every number: UnityPy on the installed Arena 0.6.2.0.48473 (work/tmp/yard-grass/reports/G2-arena-data.md section 5, re-read on 2026-11-21 by
-    // tools/tests/test_grass_art_ranges.py, which parses the constants below out of this file and compares them with what UnityPy reads). The six const lines per range are written one per
-    // line in plain decimal so that test can read them. The three textures are Arena's Texture2DArray GrassTexArray, Texture2DArray GrassNormalArray and Texture2D Grass_new_1_N; the arrays
-    // are byte-identical in EFT's own sharedassets211 except one band of slice 3 (G2 section 9), but EFT's are not loaded on a ported raid, hence the read from Arena.
+    // The three textures are Arena's Texture2DArray GrassTexArray (the albedo with alpha cut-out), Texture2DArray GrassNormalArray and Texture2D Grass_new_1_N. The same art serves every map
+    // that has Arena grass (Bowl, Iceberg, Yard use one prefab, one prototype and one set of textures: work/tmp/yard-grass/reports/G2 section 7); each map's pack carries its own copy.
 
     internal enum GrassBlockFormat
     {
@@ -20,31 +19,23 @@ namespace ArenaMapPort.Client
         Dxt5 = 1,
     }
 
-    /// <summary>Why the art file or a range was refused (codes only, never file content).</summary>
+    /// <summary>Why a range's bytes were refused (codes only, never file content).</summary>
     internal enum GrassArtError
     {
         None = 0,
-        /// <summary>sharedassets95.assets has another size than the pinned one (the 0.6.2 hotfix rewrote it once; a third size means another Arena build).</summary>
-        AssetsSizeDiffers,
-        /// <summary>sharedassets95.assets.resS has another size than the pinned one.</summary>
-        StreamSizeDiffers,
         /// <summary>A read returned fewer or more bytes than the range's size.</summary>
         ShortRead,
-        /// <summary>A range lies outside the file, or two ranges overlap.</summary>
-        RangeOutsideFile,
-        /// <summary>A range's size is not slices x the sum of its mip chain (the model's own arithmetic).</summary>
-        RangeArithmetic,
         /// <summary>The mip data is one repeated byte (a zero-filled or wiped file).</summary>
         ConstantData,
         /// <summary>A coarse mip does not average into the next one: the offsets or the order are wrong.</summary>
         MipChainIncoherent,
     }
 
-    /// <summary>One texture inside the stream: where it is, how big, and the facts a Texture2DArray / Texture2D must be created with.</summary>
+    /// <summary>One texture inside the pack: where it is, how big, and the facts a Texture2DArray / Texture2D must be created with (all from the pack's header).</summary>
     internal sealed class GrassArtRange
     {
-        internal GrassArtRange(string name, long offset, long size, int width, int height, int slices, int mips, GrassBlockFormat format, bool isArray, int formatId,
-            string formatName, bool linear, int filterMode, int wrapMode, int aniso, bool ignoreMipmapLimit)
+        internal GrassArtRange(string name, long offset, long size, int width, int height, int slices, int mips, GrassBlockFormat format, bool isArray,
+            int filterMode, int wrapMode, int aniso, bool ignoreMipmapLimit)
         {
             Name = name;
             Offset = offset;
@@ -55,9 +46,6 @@ namespace ArenaMapPort.Client
             MipCount = mips;
             Format = format;
             IsArray = isArray;
-            FormatId = formatId;
-            FormatName = formatName;
-            Linear = linear;
             FilterMode = filterMode;
             WrapMode = wrapMode;
             Aniso = aniso;
@@ -65,7 +53,7 @@ namespace ArenaMapPort.Client
         }
 
         internal string Name { get; }
-        /// <summary>Byte offset inside sharedassets95.assets.resS.</summary>
+        /// <summary>Byte offset of the range's first byte inside the pack file (absolute, from the start of the file).</summary>
         internal long Offset { get; }
         /// <summary>Byte count: slices x the mip chain.</summary>
         internal long Size { get; }
@@ -76,17 +64,13 @@ namespace ArenaMapPort.Client
         internal int MipCount { get; }
         internal GrassBlockFormat Format { get; }
         internal bool IsArray { get; }
-        /// <summary>The serialized format number: a GraphicsFormat for the arrays (101 RGBA_DXT5_UNorm, 97 RGB_DXT1_UNorm), a TextureFormat for the Texture2D (10 = DXT1).</summary>
-        internal int FormatId { get; }
-        internal string FormatName { get; }
-        /// <summary>The serialized m_ColorSpace is 1 (the import's sRGB flag, as the unit pin reads it); the arrays carry a UNorm (not an _SRGB) GraphicsFormat and EFT's project is Gamma, so the glue creates them through UNorm formats and never reads this flag. Kept as recorded data only; not run.</summary>
-        internal bool Linear { get; }
-        /// <summary>UnityEngine.FilterMode as serialized: 2 = Trilinear.</summary>
+        internal string FormatName => Format == GrassBlockFormat.Dxt1 ? "DXT1" : "DXT5";
+        /// <summary>UnityEngine.FilterMode as Arena serialized it: 2 = Trilinear.</summary>
         internal int FilterMode { get; }
         /// <summary>UnityEngine.TextureWrapMode as serialized: 1 = Clamp.</summary>
         internal int WrapMode { get; }
         internal int Aniso { get; }
-        /// <summary>m_IgnoreMipmapLimit: true on both arrays (EFT's script textures set it too), false on the plain texture.</summary>
+        /// <summary>Both arrays carry it (EFT's script textures set it too), the plain texture does not.</summary>
         internal bool IgnoreMipmapLimit { get; }
 
         internal int BlockBytes => Format == GrassBlockFormat.Dxt1 ? 8 : 16;
@@ -132,58 +116,16 @@ namespace ArenaMapPort.Client
         /// </summary>
         internal long ElementOffset(int slice, int mip) => (long)slice * SliceBytes + MipOffsetInSlice(mip);
 
-        /// <summary>Offset of (slice, mip) inside sharedassets95.assets.resS.</summary>
+        /// <summary>Offset of (slice, mip) inside the pack file.</summary>
         internal long AbsoluteOffset(int slice, int mip) => Offset + ElementOffset(slice, mip);
 
         /// <summary>The whole range's size from the arithmetic: slices x the chain.</summary>
         internal long ComputedSize => Slices * SliceBytes;
     }
 
-    /// <summary>The pinned facts of Arena's grass art file and the checks that need no hash.</summary>
+    /// <summary>The checks that need no hash and the placeholder art; every fact of a range comes from the pack.</summary>
     internal static class NativeGrassArt
     {
-        /// <summary>Folder of the installation's data, the first part of every relative path ('/' separated, the spelling of IArenaFiles).</summary>
-        internal const string DataFolder = "EscapeFromTarkovArena_Data";
-        internal const string StreamPath = DataFolder + "/sharedassets95.assets.resS";
-        internal const string AssetsPath = DataFolder + "/sharedassets95.assets";
-
-        // File sizes on the measured builds. sharedassets95.assets (the serialized file with the texture headers) was rewritten by the 0.6.2 hotfix (dated 2026-11-01) and is 13,940 B
-        // there; the .resS stream (the texels, 2026-08-18) did not change and is also a key-source file of Bowl, so it cannot have changed on any build whose key file unlocks.
-        internal const long AssetsSize = 13940L;
-        internal const long StreamSize = 11185040L;
-
-        // Texture2D Grass_new_1_N (path id 4), the normal texture that the material's _NormalMap slot names.
-        internal const long NormalTextureOffset = 0L;
-        internal const long NormalTextureSize = 699064L;
-        internal const int NormalTextureWidth = 1024;
-        internal const int NormalTextureHeight = 1024;
-        internal const int NormalTextureMips = 11;
-        internal const int NormalTextureFormatId = 10;
-        internal const int NormalTextureColorSpace = 1;
-
-        // Texture2DArray GrassTexArray (path id 7), the albedo with alpha cut-out.
-        internal const long TexArrayOffset = 699072L;
-        internal const long TexArraySize = 6990640L;
-        internal const int TexArrayWidth = 1024;
-        internal const int TexArrayHeight = 1024;
-        internal const int TexArraySlices = 5;
-        internal const int TexArrayMips = 11;
-        internal const int TexArrayFormatId = 101;
-        internal const int TexArrayColorSpace = 1;
-
-        // Texture2DArray GrassNormalArray (path id 8).
-        internal const long NormalArrayOffset = 7689712L;
-        internal const long NormalArraySize = 3495320L;
-        internal const int NormalArrayWidth = 1024;
-        internal const int NormalArrayHeight = 1024;
-        internal const int NormalArraySlices = 5;
-        internal const int NormalArrayMips = 11;
-        internal const int NormalArrayFormatId = 97;
-        internal const int NormalArrayColorSpace = 1;
-
-        /// <summary>Bytes of padding at the end of the stream: 7,689,712 + 3,495,320 = 11,185,032, the file is 8 more.</summary>
-        internal const long StreamTailPadding = 8L;
-
         /// <summary>The coarse mips that the coherence check compares (mip k against mip k + 1): 2 to 7, i.e. 256 x 256 down to 16 x 16 pixels.</summary>
         internal const int CoherenceFirstMip = 2;
         internal const int CoherenceLastMip = 7;
@@ -191,55 +133,9 @@ namespace ArenaMapPort.Client
         /// <summary>
         /// The largest mean absolute colour difference (of 255) that a coherent chain may show between the average of four child blocks and their parent block, averaged over the checked mips.
         /// Measured on the real albedo array: 0.84 to 1.07 per slice (0.4 to 1.5 per mip); a read shifted by 8 or 1000 bytes gives 17 to 27, by 32 bytes (one block row of mip 2) 2.3, a start inside another slice 42, random bytes 49.
-        /// A flat normal array cannot tell a shifted read from the right one: its protection is the two size pins and the range arithmetic.
+        /// A flat normal array cannot tell a shifted read from the right one: its protection is the pack's size arithmetic (and, in a release, the container's chunk hashes).
         /// </summary>
         internal const double MaxMeanBlockDifference = 2.0;
-
-        internal static readonly GrassArtRange NormalTexture = new GrassArtRange("Grass_new_1_N", NormalTextureOffset, NormalTextureSize, NormalTextureWidth, NormalTextureHeight, 1,
-            NormalTextureMips, GrassBlockFormat.Dxt1, isArray: false, formatId: NormalTextureFormatId, formatName: "DXT1", linear: true, filterMode: 2, wrapMode: 1, aniso: 16, ignoreMipmapLimit: false);
-
-        internal static readonly GrassArtRange TexArray = new GrassArtRange("GrassTexArray", TexArrayOffset, TexArraySize, TexArrayWidth, TexArrayHeight, TexArraySlices,
-            TexArrayMips, GrassBlockFormat.Dxt5, isArray: true, formatId: TexArrayFormatId, formatName: "RGBA_DXT5_UNorm", linear: true, filterMode: 2, wrapMode: 1, aniso: 1, ignoreMipmapLimit: true);
-
-        internal static readonly GrassArtRange NormalArray = new GrassArtRange("GrassNormalArray", NormalArrayOffset, NormalArraySize, NormalArrayWidth, NormalArrayHeight, NormalArraySlices,
-            NormalArrayMips, GrassBlockFormat.Dxt1, isArray: true, formatId: NormalArrayFormatId, formatName: "RGB_DXT1_UNorm", linear: true, filterMode: 2, wrapMode: 1, aniso: 1, ignoreMipmapLimit: true);
-
-        /// <summary>The three ranges in file order.</summary>
-        internal static readonly GrassArtRange[] Ranges = { NormalTexture, TexArray, NormalArray };
-
-        /// <summary>Checks the sizes of the two files (taken from <c>IArenaFiles.Length</c>; -1 = missing).</summary>
-        internal static GrassArtError CheckFileSizes(long assetsLength, long streamLength)
-        {
-            if (assetsLength != AssetsSize)
-            {
-                return GrassArtError.AssetsSizeDiffers;
-            }
-            if (streamLength != StreamSize)
-            {
-                return GrassArtError.StreamSizeDiffers;
-            }
-            return GrassArtError.None;
-        }
-
-        /// <summary>The model's own arithmetic: every range's size equals slices x its mip chain, the ranges lie inside the stream and do not overlap.</summary>
-        internal static GrassArtError CheckRanges()
-        {
-            long previousEnd = 0;
-            for (int i = 0; i < Ranges.Length; i++)
-            {
-                GrassArtRange r = Ranges[i];
-                if (r.ComputedSize != r.Size)
-                {
-                    return GrassArtError.RangeArithmetic;
-                }
-                if (r.Offset < previousEnd || r.Offset + r.Size > StreamSize)
-                {
-                    return GrassArtError.RangeOutsideFile;
-                }
-                previousEnd = r.Offset + r.Size;
-            }
-            return GrassArtError.None;
-        }
 
         /// <summary>
         /// Structure check of one range's bytes (exactly <see cref="GrassArtRange.Size"/> long): the length, not one repeated byte, and per slice the mip-chain coherence. No hash, no
@@ -253,8 +149,9 @@ namespace ArenaMapPort.Client
             }
             for (int slice = 0; slice < range.Slices; slice++)
             {
-                long at = range.ElementOffset(slice, 3);
-                if (IsConstant(data, (int)at, (int)range.MipBytes(3)))
+                int probeMip = Math.Min(3, range.MipCount - 1);
+                long at = range.ElementOffset(slice, probeMip);
+                if (IsConstant(data, (int)at, (int)range.MipBytes(probeMip)))
                 {
                     return GrassArtError.ConstantData;
                 }
@@ -375,7 +272,7 @@ namespace ArenaMapPort.Client
         }
 
         /// <summary>
-        /// The BSG-free placeholder art of the same shape (key NativeGrassArt = Placeholder; no Arena byte is read). It is generated here as compressed blocks: the albedo array holds
+        /// The BSG-free placeholder art of the same shape (key GrassArt = Placeholder; no art byte is read from the pack). It is generated here as compressed blocks: the albedo array holds
         /// one solid colour per slice (0 red, 1 green, 2 blue, 3 yellow, 4 magenta) with a cut-out of slice + 1 vertical blades (alpha 255 inside a blade, 0 outside; DXT5 alpha blocks that are
         /// all opaque or all clear, decided at the block centre, so no block mixes), so that the slice order of the pcl is visible on the host: each clump shows its slice number in the number of
         /// blades and (before the dry/healthy tint of the colour buffers multiplies it) in its hue. The two normal textures are flat (0.5, 0.5, 1). Mips whose grid is 4 blocks or fewer

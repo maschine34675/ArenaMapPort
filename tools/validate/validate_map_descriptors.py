@@ -591,6 +591,29 @@ def native_water_errors(map_json: dict, registry_args: dict) -> list[str]:
     return errors
 
 
+def native_grass_errors(map_json: dict, registry_args: dict) -> list[str]:
+    """has_native_grass (NativeGrassRepairs, docs/progress/native-grass.md; shipped as the additional bundle bundles/<key>_grass.bundle since stage 2 of
+    the grass work, 2026-11-21): the map has Arena grass and a staged grass bundle. The sidecar flag, the descriptor's HasNativeGrass and
+    NATIVE_GRASS_MAP_KEYS (the list validate_distribution, validate_port and the packer read) must agree, and a grass map must list exactly one
+    Grass scene (a name ending in _Grass) among its all_scene_names: that scene is where Arena's grass holder lives, the descriptor names it by listing it."""
+    errors = []
+    flag = map_json.get("has_native_grass")
+    if flag is not None and type(flag) is not bool:
+        errors.append("has_native_grass must be a boolean (omit it for the default false)")
+        return errors
+    mirrored = cs_bool(registry_args, "HasNativeGrass") or False
+    listed = map_json.get("key") in NATIVE_GRASS_MAP_KEYS
+    if bool(flag) != mirrored:
+        errors.append(f"has_native_grass mismatch — sidecar {bool(flag)!r}, ArenaMapDescriptor HasNativeGrass {mirrored!r}")
+    if bool(flag) != listed:
+        errors.append(f"has_native_grass is {bool(flag)!r} but NATIVE_GRASS_MAP_KEYS {'lists' if listed else 'does not list'} {map_json.get('key')!r}")
+    if flag:
+        grass_scenes = [name for name in map_json.get("all_scene_names", []) if isinstance(name, str) and name.endswith("_Grass")]
+        if len(grass_scenes) != 1:
+            errors.append(f"has_native_grass needs exactly one scene named *_Grass in all_scene_names, found {grass_scenes!r}")
+    return errors
+
+
 DOOR_POSE_KEYS = ("barrier", "part", "node", "clip", "source", "seconds", "ease", "curve", "at", "closed", "open")
 DOOR_SWITCH_KEY = "switch"   # optional (AirPit's passport lamps): {"closed": bool, "open": bool}, a SetActive row
 DOOR_SIDECAR_SCHEMA = 2
@@ -1164,6 +1187,7 @@ def check_map_against_registry_entry(
     check_field(errors, where, "emission_floor", map_json.get("emission_floor", 0), resolve(registry_args.get("EmissionFloor", 0), ref_scope))
     errors.extend(f"{where}: {error}" for error in puddle_errors(map_json))
     errors.extend(f"{where}: {error}" for error in native_water_errors(map_json, registry_args))
+    errors.extend(f"{where}: {error}" for error in native_grass_errors(map_json, registry_args))
     check_field(errors, where, "puddle_water_material_names", map_json.get("puddle_water_material_names", []),
                 resolve(registry_args.get("PuddleWaterMaterialNames", []), ref_scope))
     check_field(errors, where, "puddle_extra_surfaces", map_json.get("puddle_extra_surfaces", []),
@@ -1260,6 +1284,12 @@ CROWDLESS_MAP_KEYS = ("arena_iceberg",)
 # makes every sidecar's has_native_water and every descriptor's HasNativeWater equal to membership here. Bay5's harbor (2026-09-28) and Iceberg's sea
 # (2026-10-31); Equator, AirPit and Bowl have no sea mesh. Adding a map is a decision with an export (extract_water.py --map), a csproj row and a host look.
 NATIVE_WATER_MAP_KEYS = ("arena_bay5", "arena_iceberg")
+# Maps with Arena grass that ships as the additional grass bundle bundles/<key>_grass.bundle (the project's grass pack, AMPB-encrypted with the map's
+# own key; user decision 2026-11-21 "das gras als zusaetzliches bundle ausliefern, standardmaessig an. auf alle maps anwenden"). The ONE list
+# validate_distribution (GRASS_MAP_KEYS: a grass bundle exists for exactly these maps), validate_port (the staged copy against work/build/grass),
+# the packer (the file of the map's part) and the grass pack tool agree on; native_grass_errors makes every sidecar's has_native_grass and every
+# descriptor's HasNativeGrass equal to membership here. Equator, Bay5, AirPit and Chop Shop have no Arena grass. Registry order.
+NATIVE_GRASS_MAP_KEYS = ("arena_bowl", "arena_iceberg", "arena_yard")
 
 
 def registry_membership_errors(text: str, entries: dict) -> list[str]:

@@ -851,12 +851,27 @@ foreach ($m in $Mappings) {
 # map's files at every start, raises an incomplete-install notice. This check reads dist/ only, in the dry run too. -DllOnly,
 # the DynamicMaps mode and the migrations never get here. Park the unfinished map's files or finish its build (build_all, then a client
 # Release build without DllOnly) before a whole-dist deploy.
+#
+# The additional grass bundle (2026-11-21, on by default): a map whose sidecar tools/maps/<stem>.json says "has_native_grass": true (Bowl, Iceberg, Yard; the one
+# list is validate_map_descriptors.NATIVE_GRASS_MAP_KEYS, which holds every sidecar equal to it) also needs bundles/<map_key>_grass.bundle, or the deploy would
+# install a map without its grass. The sidecars are read from this script's own repo; no sidecar folder means no grass map.
+$grassMapKeys = @()
+$sidecarRoot = Join-Path $RepoRoot 'tools/maps'
+if (Test-Path -LiteralPath $sidecarRoot -PathType Container) {
+    foreach ($sidecar in (Get-ChildItem -LiteralPath $sidecarRoot -Filter '*.json' -File)) {
+        if ($sidecar.BaseName.Contains('.')) { continue }    # <stem>.bots.json, .exits.json ... are not the map's descriptor
+        try { $sidecarDocument = Get-Content -LiteralPath $sidecar.FullName -Raw -Encoding utf8 | ConvertFrom-Json } catch { continue }
+        if ($sidecarDocument.key -and $sidecarDocument.has_native_grass -eq $true) { $grassMapKeys += [string]$sidecarDocument.key }
+    }
+}
 $stagedDb = Join-Path $Mappings[1].SrcRoot 'db'
 if (Test-Path -LiteralPath $stagedDb -PathType Container) {
     $incompleteMaps = @()
     foreach ($mapDir in (Get-ChildItem -LiteralPath $stagedDb -Directory)) {
         $mapKey = $mapDir.Name
-        foreach ($relativeFile in @("bundles/${mapKey}_scenes.bundle", "bundles/${mapKey}_navmesh.bundle", "bundles/${mapKey}_preset.bundle", "keys/${mapKey}.json")) {
+        $requiredClientFiles = @("bundles/${mapKey}_scenes.bundle", "bundles/${mapKey}_navmesh.bundle", "bundles/${mapKey}_preset.bundle", "keys/${mapKey}.json")
+        if ($grassMapKeys -contains $mapKey) { $requiredClientFiles += "bundles/${mapKey}_grass.bundle" }
+        foreach ($relativeFile in $requiredClientFiles) {
             if (-not (Test-Path -LiteralPath (Join-Path $Mappings[0].SrcRoot $relativeFile) -PathType Leaf)) {
                 $incompleteMaps += "$mapKey (missing $relativeFile)"
             }

@@ -2,37 +2,41 @@
 using System;
 using System.Globalization;
 using System.Text;
-using ArenaMapPort.Shared;
 
 namespace ArenaMapPort.Client
 {
-    // The Unity-free core of the native grass probe (PLAN-YARD item 23, shape E, work/tmp/yard-grass/handoff/design-final.md). Three parts:
-    //   1. the per-map table (stage 1: Yard only, not the descriptor, see NativeGrassTable),
-    //   2. the placement file as data (NativeGrassPlacement.Parse: Arena's ArenaGrassPrefabs_<Name>.pcl -> a plan of plain arrays),
+    // The Unity-free core of the native grass (PLAN-YARD items 22 and 23; shipped on every map with Arena grass since stage 2, 2026-11-21; design: work/tmp/yard-grass/handoff/design-final.md).
+    // Three parts:
+    //   1. the keys (a map's own section, default ON, none public),
+    //   2. the placement records as data (NativeGrassPlacement.Parse: Arena's ArenaGrassPrefabs_<Name>.pcl, the payload of the grass pack -> a plan of plain arrays),
     //   3. the state machine the glue ticks (NativeGrassState).
-    // No UnityEngine type, no log call, no file access: the glue (NativeGrassRepairs, NativeGrassArtSource) owns those. Linked into the server tests.
+    // Which maps have grass is the descriptor's HasNativeGrass (ArenaMapDescriptor, mirrored in tools/maps/<stem>.json has_native_grass), their Grass scene its GrassSceneName and their bundle its
+    // GrassBundleFileName; nothing per map lives here. No UnityEngine type, no log call, no file access: the glue (NativeGrassRepairs, NativeGrassArtSource) owns those. Linked into the server tests.
 
-    /// <summary>The developer keys of the grass probe (section "Map (&lt;map key&gt;)", none public: nothing of them is in CompactConfiguration.IsPublic or MapConfigVisibility.IsPlayerOption).</summary>
+    /// <summary>The keys of the native grass (section "Map (&lt;map key&gt;)" of every map with HasNativeGrass; none public: nothing of them is in CompactConfiguration.IsPublic or MapConfigVisibility.IsPlayerOption).</summary>
     internal static class NativeGrassKeys
     {
-        /// <summary>The section of a map's developer keys, the one every per-map repair uses (LevelBorderBoxRepairs, EmissionCapRepairs).</summary>
+        /// <summary>The section of a map's keys, the one every per-map repair uses (LevelBorderBoxRepairs, EmissionCapRepairs).</summary>
         internal static string SectionOf(string mapKey) => "Map (" + mapKey + ")";
 
-        /// <summary>Off|On, default Off, live. Off tears the build down, On builds (never in the frame of a teardown).</summary>
-        internal const string Mode = "NativeGrass";
-        internal const string ModeDefault = "Off";
+        /// <summary>bool, default TRUE, live: false tears the build down, true builds (never in the frame of a teardown). The stage-1 probe key NativeGrass (Off|On, default Off) was never released and is not bound any more.</summary>
+        internal const string Grass = "Grass";
+        internal const bool GrassDefault = true;
 
-        /// <summary>bool, default true, live: false sets IsActive = false on both managers (no compute, no draw; buffers, HiZ and motion-vector targets stay), true sets it back. No teardown: the A/B that separates instance cost from fixed cost.</summary>
-        internal const string Drawing = "NativeGrassDrawing";
+        /// <summary>Developer A/B, bool, default true, live: false sets IsActive = false on both managers (no compute, no draw; buffers, HiZ and motion-vector targets stay), true sets it back. No teardown: the A/B that separates instance cost from fixed cost.</summary>
+        internal const string Drawing = "GrassDrawing";
         internal const bool DrawingDefault = true;
 
-        /// <summary>Arena|Placeholder, default Arena. Placeholder = the BSG-free art of NativeGrassArt.Placeholder (a solid colour and a cut-out pattern per slice). Changing it while built is a rebuild (the glue folds it into the build signature).</summary>
-        internal const string ArtSource = "NativeGrassArt";
-        internal const string ArtSourceDefault = "Arena";
+        /// <summary>Developer A/B, Pack|Placeholder, default Pack. Placeholder = the BSG-free art of NativeGrassArt.Placeholder (a solid colour and a cut-out pattern per slice; the placement still comes from the pack). A change rebuilds.</summary>
+        internal const string ArtSource = "GrassArt";
+        internal const string ArtSourceDefault = "Pack";
 
-        /// <summary>SetPixelData|CopyTexture, default SetPixelData: how the compressed mips reach the Texture2DArray. Changing it while built is a rebuild.</summary>
-        internal const string UploadPath = "NativeGrassUpload";
+        /// <summary>Developer A/B, SetPixelData|CopyTexture, default SetPixelData: how the compressed mips reach the Texture2DArray. A change rebuilds.</summary>
+        internal const string UploadPath = "GrassUpload";
         internal const string UploadPathDefault = "SetPixelData";
+
+        /// <summary>The stage-1 key names of the unreleased probe: never bound again (a new key instead of a changed default; an orphan line in a developer's .cfg is harmless).</summary>
+        internal static readonly string[] RetiredStage1Keys = { "NativeGrass", "NativeGrassDrawing", "NativeGrassArt", "NativeGrassUpload" };
     }
 
     /// <summary>How the art reaches the GPU: the two ways the design names (design-final.md section 4).</summary>
@@ -42,90 +46,6 @@ namespace ArenaMapPort.Client
         SetPixelData = 0,
         /// <summary>A temporary Texture2D per mip that Graphics.CopyTexture copies into (slice, mip), as EFT's decal code does.</summary>
         CopyTexture = 1,
-    }
-
-    /// <summary>
-    /// One map's grass row. Stage 1 keeps it here, in the Unity-free model, instead of in ArenaMapDescriptor and a tools/maps sidecar (lead decision 2026-11-21: that move is
-    /// stage 2 and only if grass ships). Numbers and names only; nothing BSG-derived but file names that Arena's own folders show.
-    /// </summary>
-    internal sealed class NativeGrassMapRow
-    {
-        internal NativeGrassMapRow(string mapKey, string grassSceneName, string placementRelativePath, long expectedBytes, int minCount, int maxCount, int sliceCount,
-            float minX, float maxX, float minY, float maxY, float minZ, float maxZ, float minScale, float maxScale)
-        {
-            MapKey = mapKey;
-            GrassSceneName = grassSceneName;
-            PlacementRelativePath = placementRelativePath;
-            ExpectedBytes = expectedBytes;
-            MinCount = minCount;
-            MaxCount = maxCount;
-            SliceCount = sliceCount;
-            MinX = minX; MaxX = maxX; MinY = minY; MaxY = maxY; MinZ = minZ; MaxZ = maxZ;
-            MinScale = minScale;
-            MaxScale = maxScale;
-        }
-
-        internal string MapKey { get; }
-        /// <summary>The map's own Grass scene (empty in the port: three GameObjects); the holder lives in it, never DontDestroyOnLoad.</summary>
-        internal string GrassSceneName { get; }
-        /// <summary>Below the Arena installation root, '/' separated: the spelling of IArenaFiles / DirectoryArenaFiles.</summary>
-        internal string PlacementRelativePath { get; }
-        /// <summary>The size of the file on the measured Arena builds. A SANITY value: the record count comes from the length, the count range decides.</summary>
-        internal long ExpectedBytes { get; }
-        internal int MinCount { get; }
-        internal int MaxCount { get; }
-        /// <summary>How many texture slices the map's grass uses (the length of Arena's colour lists); a record's slice index must be below it.</summary>
-        internal int SliceCount { get; }
-        /// <summary>The box every record's position has to lie in (the measured extent plus a margin).</summary>
-        internal float MinX { get; }
-        internal float MaxX { get; }
-        internal float MinY { get; }
-        internal float MaxY { get; }
-        internal float MinZ { get; }
-        internal float MaxZ { get; }
-        /// <summary>The length of each of the matrix's three axis columns must lie in this range (Yard is uniform; Iceberg's later rows are not, so each axis is checked).</summary>
-        internal float MinScale { get; }
-        internal float MaxScale { get; }
-    }
-
-    /// <summary>The per-map rows of the probe. Yard only in stage 1.</summary>
-    internal static class NativeGrassTable
-    {
-        /// <summary>Arena's Yard grass scene (Arena_Yard_Grass, BuildSettings index 162): the map's descriptor lists it in AllSceneNames.</summary>
-        internal const string YardGrassScene = "Arena_Yard_Grass";
-
-        /// <summary>
-        /// Yard: ArenaGrassPrefabs_Yard.pcl is 688,976 B = 10,132 records (G2 section 7, measured 2026-11-21 on Arena 0.6.2.0.48473; byte-identical in EFT's StreamingAssets/Grass).
-        /// Measured extents x -66.95..9.23, y 5.90..6.30, z 17.39..117.81, axis scales 0.184..1.124; the box adds 3 m of margin in x and z and 1.5 m in y, the
-        /// count range about 20 percent, the scale range 0.1..2.0. Five slices (the five entries of Arena's colour lists; slice 0 holds none, slice 1 holds 8 clumps, slices 2 to 4 the other 10,124).
-        /// </summary>
-        internal static readonly NativeGrassMapRow Yard = new NativeGrassMapRow(
-            mapKey: ArenaMapRegistry.Yard.Key,
-            grassSceneName: YardGrassScene,
-            placementRelativePath: "EscapeFromTarkovArena_Data/StreamingAssets/Grass/ArenaGrassPrefabs_Yard.pcl",
-            expectedBytes: 688976L,
-            minCount: 8000,
-            maxCount: 12500,
-            sliceCount: 5,
-            minX: -70f, maxX: 13f,
-            minY: 4.5f, maxY: 7.5f,
-            minZ: 14f, maxZ: 121f,
-            minScale: 0.1f, maxScale: 2f);
-
-        internal static readonly NativeGrassMapRow[] Rows = { Yard };
-
-        /// <summary>The row of a map, or null when the map has no grass row (every other map in stage 1).</summary>
-        internal static NativeGrassMapRow ForMap(string mapKey)
-        {
-            for (int i = 0; i < Rows.Length; i++)
-            {
-                if (string.Equals(Rows[i].MapKey, mapKey, StringComparison.Ordinal))
-                {
-                    return Rows[i];
-                }
-            }
-            return null;
-        }
     }
 
     /// <summary>Why a placement file was refused. The first failing check wins, in this order.</summary>
@@ -138,19 +58,17 @@ namespace ArenaMapPort.Client
         Empty,
         /// <summary>The length is not a multiple of 68.</summary>
         LengthNotDivisible,
-        /// <summary>More records than <see cref="NativeGrassPlacement.AbsoluteMaxRecords"/>, whatever the map says.</summary>
+        /// <summary>More records than <see cref="NativeGrassPlacement.AbsoluteMaxRecords"/>.</summary>
         TooManyRecords,
-        /// <summary>The count is outside the map row's range.</summary>
-        CountOutOfRange,
         /// <summary>A matrix element is NaN or infinite (ErrorIndex = the record).</summary>
         NonFiniteMatrix,
         /// <summary>The matrix's fourth row is not (0, 0, 0, 1): it is no TRS matrix.</summary>
         NotAffine,
-        /// <summary>An axis scale is outside the row's range.</summary>
+        /// <summary>An axis scale is outside <see cref="NativeGrassPlacement.MinAxisScale"/> .. <see cref="NativeGrassPlacement.MaxAxisScale"/> (the generic sanity range of every map).</summary>
         ScaleOutOfRange,
-        /// <summary>The slice index is negative or not below the row's slice count.</summary>
+        /// <summary>The slice index is negative or not below the pack's slice count.</summary>
         SliceOutOfRange,
-        /// <summary>The position is outside the row's box.</summary>
+        /// <summary>A coordinate is farther than <see cref="NativeGrassPlacement.MaxAbsCoordinate"/> from the origin.</summary>
         OutsideBounds,
     }
 
@@ -174,7 +92,7 @@ namespace ArenaMapPort.Client
         internal int[] Slices { get; }
         /// <summary>16 floats per record, see the class comment.</summary>
         internal float[] Matrices { get; }
-        /// <summary>How many records use each slice (length = the row's slice count).</summary>
+        /// <summary>How many records use each slice (length = the pack's slice count).</summary>
         internal int[] SliceHistogram { get; }
         internal float MinX { get; set; }
         internal float MaxX { get; set; }
@@ -182,9 +100,11 @@ namespace ArenaMapPort.Client
         internal float MaxY { get; set; }
         internal float MinZ { get; set; }
         internal float MaxZ { get; set; }
-        /// <summary>The smallest and the largest axis scale over all records.</summary>
+        /// <summary>The smallest and the largest axis scale over all records (Iceberg's records are scaled non-uniformly: the three axes are measured on their own).</summary>
         internal float MinScale { get; set; }
         internal float MaxScale { get; set; }
+        /// <summary>The largest angle in degrees between a record's up axis (the second matrix column) and the world's up axis: 0 for yaw-only placement (Yard), up to 50 on Iceberg.</summary>
+        internal float MaxTiltDegrees { get; set; }
 
         /// <summary>The element of record <paramref name="record"/> at (row, column) of the matrix.</summary>
         internal float Element(int record, int row, int column) => Matrices[record * NativeGrassPlacement.FloatsPerMatrix + NativeGrassPlacement.ElementIndex(row, column)];
@@ -223,11 +143,14 @@ namespace ArenaMapPort.Client
     }
 
     /// <summary>
-    /// The placement file of Arena's grass (StreamingAssets/Grass/ArenaGrassPrefabs_&lt;Name&gt;.pcl) as data. Read from the decompile (GPUInstancer/GrassInitialization.cs, GrassPrefabData.cs,
-    /// GrassData.cs): no header; a record is GrassPrefabData { int arrayIndex; Matrix4x4 matrix; } = 4 + 64 = 68 bytes with no padding (all members 4-aligned), the count is the length
+    /// The placement file of Arena's grass (StreamingAssets/Grass/ArenaGrassPrefabs_&lt;Name&gt;.pcl, the first payload of the grass pack) as data. Read from the decompile (GPUInstancer/GrassInitialization.cs,
+    /// GrassPrefabData.cs, GrassData.cs): no header; a record is GrassPrefabData { int arrayIndex; Matrix4x4 matrix; } = 4 + 64 = 68 bytes with no padding (all members 4-aligned), the count is the length
     /// divided by 68, the file is little-endian. The Unity matrix is stored in memory order, which is column-major (m00, m10, m20, m30, m01, ...): the translation is floats 12, 13, 14 of the 16.
-    /// Proven offline against Arena's real Yard file (tools/tests/test_grass_art_ranges.py reads the same facts; NativeGrassRealDataTests): 10,132 records, every translation inside
-    /// x -66.95..9.23, y 5.90..6.30, z 17.39..117.81, every axis scale 0.184..1.124, the fourth row (0, 0, 0, 1) everywhere. The parse runs on a worker thread: it never touches Unity.
+    /// The checks are the ones that catch a BROKEN file on any map and nothing that pins a map's own measure (stage 1 pinned Yard's box and scale; the pack carries every map's own file, whose
+    /// byte count its header states): the length is a whole number of records and at least one, every float is finite, the fourth matrix row is (0, 0, 0, 1) (a TRS matrix; tilted and non-uniformly
+    /// scaled records, Iceberg's, are TRS too), the slice is below the slice count, every axis scale (the length of a matrix column) is a plausible size and no coordinate is absurd. Real files:
+    /// Yard 10,132 records yaw-only and uniform; Bowl 113,643 up to 2.6 degrees of tilt; Iceberg 15,410 up to 50 degrees and scale up to 2.24 on one axis only (NativeGrassPackRealDataTests,
+    /// tools/tests/test_grass_pack_real.py). The parse runs on a worker thread: it never touches Unity.
     /// </summary>
     internal static class NativeGrassPlacement
     {
@@ -237,16 +160,21 @@ namespace ArenaMapPort.Client
         internal const int AbsoluteMaxRecords = 500000;
         /// <summary>How far the fourth row may be from (0, 0, 0, 1).</summary>
         internal const float AffineTolerance = 1e-4f;
+        /// <summary>The plausible range of an axis scale (the length of a matrix column): Arena's grass measures 0.18 to 2.24; a column of zero length or of fifty metres is a broken matrix.</summary>
+        internal const float MinAxisScale = 0.01f;
+        internal const float MaxAxisScale = 50f;
+        /// <summary>No coordinate of a map lies this far from the origin (the largest Arena map is a few hundred metres across).</summary>
+        internal const float MaxAbsCoordinate = 20000f;
 
         /// <summary>The index of m{row}{column} in the 16 floats of a record (column-major).</summary>
         internal static int ElementIndex(int row, int column) => 4 * column + row;
 
-        /// <summary>Parses <paramref name="length"/> bytes of <paramref name="bytes"/>. Never throws for bad data: the result carries the error.</summary>
-        internal static GrassParseResult Parse(byte[] bytes, int length, NativeGrassMapRow row)
+        /// <summary>Parses <paramref name="length"/> bytes of <paramref name="bytes"/> into a plan for <paramref name="sliceCount"/> texture slices. Never throws for bad data: the result carries the error.</summary>
+        internal static GrassParseResult Parse(byte[] bytes, int length, int sliceCount)
         {
-            if (row == null)
+            if (sliceCount < 1)
             {
-                throw new ArgumentNullException(nameof(row));
+                throw new ArgumentOutOfRangeException(nameof(sliceCount));
             }
             if (bytes == null)
             {
@@ -269,15 +197,12 @@ namespace ArenaMapPort.Client
             {
                 return Fail(GrassPlacementError.TooManyRecords, -1);
             }
-            if (count < row.MinCount || count > row.MaxCount)
-            {
-                return Fail(GrassPlacementError.CountOutOfRange, -1);
-            }
 
-            var plan = new GrassPlan(count, row.SliceCount);
+            var plan = new GrassPlan(count, sliceCount);
             float minX = float.MaxValue, minY = float.MaxValue, minZ = float.MaxValue;
             float maxX = float.MinValue, maxY = float.MinValue, maxZ = float.MinValue;
             float minScale = float.MaxValue, maxScale = float.MinValue;
+            float minUpY = 1f; // the cosine of the largest tilt is the smallest normalised y of the up axis
             float[] matrices = plan.Matrices;
             for (int i = 0; i < count; i++)
             {
@@ -293,7 +218,7 @@ namespace ArenaMapPort.Client
                     }
                     matrices[m + k] = v;
                 }
-                if (slice < 0 || slice >= row.SliceCount)
+                if (slice < 0 || slice >= sliceCount)
                 {
                     return Fail(GrassPlacementError.SliceOutOfRange, i);
                 }
@@ -306,15 +231,20 @@ namespace ArenaMapPort.Client
                 {
                     float x = matrices[m + 4 * c], y = matrices[m + 4 * c + 1], z = matrices[m + 4 * c + 2];
                     float scale = (float)Math.Sqrt(x * x + y * y + z * z);
-                    if (!(scale >= row.MinScale && scale <= row.MaxScale))
+                    if (!(scale >= MinAxisScale && scale <= MaxAxisScale))
                     {
                         return Fail(GrassPlacementError.ScaleOutOfRange, i);
                     }
                     if (scale < minScale) minScale = scale;
                     if (scale > maxScale) maxScale = scale;
+                    if (c == 1)
+                    {
+                        float upY = y / scale;
+                        if (upY < minUpY) minUpY = upY;
+                    }
                 }
                 float px = matrices[m + 12], py = matrices[m + 13], pz = matrices[m + 14];
-                if (px < row.MinX || px > row.MaxX || py < row.MinY || py > row.MaxY || pz < row.MinZ || pz > row.MaxZ)
+                if (Math.Abs(px) > MaxAbsCoordinate || Math.Abs(py) > MaxAbsCoordinate || Math.Abs(pz) > MaxAbsCoordinate)
                 {
                     return Fail(GrassPlacementError.OutsideBounds, i);
                 }
@@ -332,6 +262,7 @@ namespace ArenaMapPort.Client
             plan.MinZ = minZ; plan.MaxZ = maxZ;
             plan.MinScale = minScale;
             plan.MaxScale = maxScale;
+            plan.MaxTiltDegrees = (float)(Math.Acos(Math.Max(-1.0, Math.Min(1.0, minUpY))) * 180.0 / Math.PI);
             return new GrassParseResult(plan, GrassPlacementError.None, -1);
         }
 
@@ -384,7 +315,7 @@ namespace ArenaMapPort.Client
     {
         None = 0,
         NotWanted,
-        NoMapRow,
+        NoGrassMap,
         NoRaid,
         ScenesNotLoaded,
         NoCamera,
@@ -392,6 +323,8 @@ namespace ArenaMapPort.Client
         GameStopping,
         FramesPending,
         InputsPending,
+        /// <summary>The map's pack was refused (missing, damaged, wrong map...): no build for this map in this session, and no failure latch for any other map.</summary>
+        InputsRefused,
         GapAfterTeardown,
         Latched,
     }
@@ -412,10 +345,10 @@ namespace ArenaMapPort.Client
     /// <summary>What the glue reads each tick: cheap reads only, no scene search. The glue keeps one instance and assigns the fields (it is a struct: no allocation).</summary>
     internal struct GrassTickInputs
     {
-        /// <summary>The developer key NativeGrass is On.</summary>
+        /// <summary>The map's key Grass is on and its pack was not refused earlier in this session.</summary>
         internal bool Wanted;
-        /// <summary>The map the raid runs has a row in <see cref="NativeGrassTable"/>.</summary>
-        internal bool HasMapRow;
+        /// <summary>The map the raid runs has native grass (the descriptor's HasNativeGrass).</summary>
+        internal bool HasGrassMap;
         /// <summary>An owned raid is on (the map's Scripts scene is loaded).</summary>
         internal bool InOwnedRaid;
         /// <summary>Every scene of the map (the Grass scene in particular) is loaded.</summary>
@@ -428,24 +361,26 @@ namespace ArenaMapPort.Client
         internal int CameraSerial;
         /// <summary>The raid's AbstractGame status is Stopping or Stopped.</summary>
         internal bool GameStopping;
-        /// <summary>The worker delivered the placement and the art, both verified.</summary>
+        /// <summary>The worker delivered the placement and the art from the pack, both verified.</summary>
         internal bool InputsReady;
-        /// <summary>The worker's definitive refusal (a reason code), or null. Not "pending": pending is InputsReady false.</summary>
+        /// <summary>The worker's definitive refusal (a reason code), or null. Not "pending": pending is InputsReady false. A refusal is the MAP's, never a session latch (see <see cref="GrassWait.InputsRefused"/>).</summary>
         internal string InputError;
         /// <summary>A number that changes when a key that needs a rebuild changes (art source, upload path): a built set with another signature is torn down and rebuilt.</summary>
         internal int BuildSignature;
     }
 
     /// <summary>
-    /// The state machine of the probe, a pure class the glue ticks once per LateUpdate (design-final.md section 2, G4 section 4). It decides; the glue acts and answers.
+    /// The state machine of the grass, a pure class the glue ticks once per LateUpdate (design-final.md section 2, G4 section 4). It decides; the glue acts and answers.
     ///
     /// Protocol: <c>Tick</c> returns Build, Teardown or None. After Build the glue builds in that same tick (inside one try/catch) and calls <see cref="BuildSucceeded"/>, or <see cref="Fail"/>
     /// with a reason (which also owes a teardown). After Teardown the glue tears down and calls <see cref="TeardownDone"/> in the same tick. A Build is never returned in the tick after a
     /// teardown was handed out nor in the one after that was answered: <see cref="TeardownDone"/> arms a one-tick gap (the design's one-frame gap before a rebuild), and a rebuild also
     /// needs <see cref="ReadyFramesRequired"/> ticks of ready cameras, which restart whenever the cameras are missing or replaced.
     ///
-    /// Failure is a sticky latch for the process: <see cref="Fail"/> sets it, the next Tick returns Teardown once (idempotent teardown of whatever was built), the first failure of the session
-    /// asks for ONE Warning (<see cref="TakeWarningDue"/>), later raids ask for a Debug notice (<see cref="TakeLatchedNoticeDue"/>) once per raid. Nothing here logs.
+    /// Two kinds of failure. An ENGINE-side failure (the build or the tick threw: EFT's GPUInstancer, a Unity call) is a sticky latch for the process: <see cref="Fail"/> sets it, the next Tick
+    /// returns Teardown once (idempotent teardown of whatever was built), the first failure of the session asks for ONE Warning (<see cref="TakeWarningDue"/>), later raids ask for a Debug notice
+    /// (<see cref="TakeLatchedNoticeDue"/>) once per raid. A refusal of a MAP's inputs (its pack is missing, damaged or for another map: <see cref="GrassTickInputs.InputError"/>) is not a latch:
+    /// the tick answers <see cref="GrassWait.InputsRefused"/> and the glue switches that one map's grass off (its own per-map record), so the other maps keep theirs. Nothing here logs.
     /// </summary>
     internal sealed class NativeGrassState
     {
@@ -488,8 +423,8 @@ namespace ArenaMapPort.Client
             _noticeShownThisRaid = false;
         }
 
-        /// <summary>True when the worker has work to do: the key is on, the map has a row and a raid is on. The glue starts its file worker only then (never while nothing is wanted).</summary>
-        internal static bool WantsInputs(in GrassTickInputs i) => i.Wanted && i.HasMapRow && i.InOwnedRaid;
+        /// <summary>True when the worker has work to do: the key is on, the map has grass and a raid is on. The glue starts its file worker only then (never while nothing is wanted).</summary>
+        internal static bool WantsInputs(in GrassTickInputs i) => i.Wanted && i.HasGrassMap && i.InOwnedRaid;
 
         internal GrassAction Tick(in GrassTickInputs i)
         {
@@ -533,7 +468,7 @@ namespace ArenaMapPort.Client
                         return GrassAction.Teardown;
                     }
                     WaitReason = GrassWait.Latched;
-                    if (i.Wanted && i.HasMapRow && i.InOwnedRaid && !_noticeShownThisRaid)
+                    if (i.Wanted && i.HasGrassMap && i.InOwnedRaid && !_noticeShownThisRaid)
                     {
                         _noticeShownThisRaid = true;
                         _noticeDue = true;
@@ -557,7 +492,7 @@ namespace ArenaMapPort.Client
                 return GrassAction.None;
             }
             WaitReason = wait;
-            Phase = (wait == GrassWait.NotWanted || wait == GrassWait.NoMapRow || wait == GrassWait.NoRaid) ? GrassPhase.Idle : GrassPhase.Waiting;
+            Phase = (wait == GrassWait.NotWanted || wait == GrassWait.NoGrassMap || wait == GrassWait.NoRaid) ? GrassPhase.Idle : GrassPhase.Waiting;
             return GrassAction.None;
         }
 
@@ -657,7 +592,7 @@ namespace ArenaMapPort.Client
         GrassTeardownReason BuiltTeardownReason(in GrassTickInputs i)
         {
             if (!i.Wanted) return GrassTeardownReason.KeyOff;
-            if (!i.InOwnedRaid || !i.HasMapRow) return GrassTeardownReason.RaidEnded;
+            if (!i.InOwnedRaid || !i.HasGrassMap) return GrassTeardownReason.RaidEnded;
             if (!i.ScenesLoaded) return GrassTeardownReason.ScenesUnloaded;
             if (!i.CameraReady || !i.OpticCameraReady) return GrassTeardownReason.CameraLost;
             if (i.CameraSerial != _builtSerial) return GrassTeardownReason.CameraReplaced;
@@ -673,12 +608,12 @@ namespace ArenaMapPort.Client
         GrassWait Ladder(in GrassTickInputs i)
         {
             if (!i.Wanted) return GrassWait.NotWanted;
-            if (!i.HasMapRow) return GrassWait.NoMapRow;
+            if (!i.HasGrassMap) return GrassWait.NoGrassMap;
             if (!i.InOwnedRaid) return GrassWait.NoRaid;
             if (i.InputError != null)
             {
-                Fail("inputs: " + i.InputError);
-                return GrassWait.Latched;
+                // the map's pack was refused: not an engine failure, so no session latch; the glue records it for this map and the next tick finds the map not wanted
+                return GrassWait.InputsRefused;
             }
             if (!i.ScenesLoaded) return GrassWait.ScenesNotLoaded;
             if (!i.CameraReady) return GrassWait.NoCamera;

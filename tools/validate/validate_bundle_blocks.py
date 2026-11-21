@@ -114,7 +114,8 @@ def main(argv=None) -> int:
     if args.bundles_dir is not None:
         if not args.bundles_dir.is_dir():
             ap.error(f"--bundles-dir not found: {args.bundles_dir}")
-        paths.extend(sorted(args.bundles_dir.glob("*.bundle")))
+        # The additional grass bundles (<key>_grass.bundle, 2026-11-21) hold the project's grass pack, not a UnityFS bundle: no block table to check.
+        paths.extend(p for p in sorted(args.bundles_dir.glob("*.bundle")) if not p.name.endswith("_grass.bundle"))
     if not paths:
         ap.error("no bundles given")
 

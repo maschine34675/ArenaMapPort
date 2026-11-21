@@ -21,7 +21,7 @@ public sealed class NativeGrassColorModelTests
         Assert.Equal(5, lists.Count);
         Assert.Equal(20, lists.Dry.Length);
         Assert.Equal(20, lists.Healthy.Length);
-        Assert.Equal(NativeGrassTable.Yard.SliceCount, lists.Count);       // index i of the lists is the texture slice i: five slices need five entries
+        Assert.Equal(GrassTestPack.RealLayout().SliceCount, lists.Count);       // index i of the lists is the texture slice i: five slices need five entries
     }
 
     [Fact]

@@ -9,6 +9,8 @@ from pathlib import Path
 import sys
 
 REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from validate_map_descriptors import NATIVE_GRASS_MAP_KEYS  # noqa: E402 -- the one list of the maps with a grass bundle
 
 
 def load(path):
@@ -128,7 +130,15 @@ def verify(stem, distribution=False, package=None):
         bundle_pairs = [(output / f'{key}_{kind}.bundle', plugin / 'bundles' / f'{key}_{kind}.bundle')
                         for kind in ('scenes', 'navmesh')]
         bundle_pairs.append((REPO / f'work/build/preset/{key}_preset.bundle', plugin / 'bundles' / f'{key}_preset.bundle'))
+        # A map with Arena grass also stages the additional grass bundle: the encryption of the plain grass pack that the pack tool wrote to
+        # work/build/grass/<key>_grass.bundle (the pack is not a Unity bundle and is never built by Unity); a map without grass must have none.
+        grass_target = plugin / 'bundles' / f'{key}_grass.bundle'
+        if key in NATIVE_GRASS_MAP_KEYS:
+            bundle_pairs.append((REPO / f'work/build/grass/{key}_grass.bundle', grass_target))
+        else:
+            require(not grass_target.exists(), f'Staged grass bundle for a map without Arena grass: {grass_target}')
         for source, target in bundle_pairs:
+            require(source.is_file(), f'Missing build output: {source}')
             require(target.is_file(), f'Staged artifact missing: {target}')
             try:
                 bundle_crypt.verify(key, source, target, key_store=REPO / 'work' / 'release-keys')

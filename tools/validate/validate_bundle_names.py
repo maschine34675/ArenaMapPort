@@ -246,6 +246,12 @@ def read_directory_names_checked(path: Path, key_store=None) -> list[str]:
             return names
 
 
+def is_grass_bundle(path: Path) -> bool:
+    """The additional grass bundle <map_key>_grass.bundle (2026-11-21): an AMPB container whose plaintext is the project's grass pack, not a
+    UnityFS bundle, so it has no CAB name to read and Unity never loads it as an AssetBundle. validate_distribution checks it as a pack."""
+    return Path(path).name.endswith("_grass.bundle")
+
+
 def check_unique_names(bundle_paths: list[Path], key_store=None) -> list[str]:
     """Returns a list of human-readable failure messages (empty == all internal names distinct
     across every given bundle). Checked across ALL kinds together (not just preset-vs-preset) --
@@ -254,6 +260,8 @@ def check_unique_names(bundle_paths: list[Path], key_store=None) -> list[str]:
     already loaded" failure, so it is not treated as structurally impossible here."""
     owners: dict[str, list[str]] = {}
     for p in bundle_paths:
+        if is_grass_bundle(p):
+            continue
         for name in read_directory_names_checked(p, key_store):
             owners.setdefault(name, []).append(p.name)
 
@@ -294,6 +302,7 @@ def main() -> None:
     for p in bundle_paths:
         if not p.is_file():
             die(f"bundle not found: {p}")
+    bundle_paths = [p for p in bundle_paths if not is_grass_bundle(p)]
     if not bundle_paths:
         die("no *.bundle files found to check")
 

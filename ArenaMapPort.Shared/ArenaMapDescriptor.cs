@@ -6,6 +6,7 @@
 // completely UNCHANGED by this file — every Equator field below is read directly off that
 // class's own consts/statics rather than re-declared as a second literal, so byte-for-byte
 // drift between the two is structurally impossible (not just guarded by a unit test).
+using System;
 using System.Collections.Generic;
 
 namespace ArenaMapPort.Shared
@@ -430,6 +431,32 @@ namespace ArenaMapPort.Shared
         // placeholder of its one empty-material Sea/Plane mesh with EFT's own deferred water renderer. Mirrors tools/maps/<stem>.json
         // has_native_water; the packages are the explicit WATER_MAP_KEYS of validate_distribution.py. Bay5 (the harbor) and Iceberg (the sea).
         public bool HasNativeWater { get; }
+        // Native grass (NativeGrassRepairs, docs/progress/native-grass.md; shipped as the additional bundle bundles/<key>_grass.bundle, 2026-11-21): the map has Arena
+        // grass (placement file and the shared art) packed into a staged grass bundle, which EFT's GPUInstancer renders at raid time. Mirrors tools/maps/<stem>.json
+        // has_native_grass; the maps are the explicit NATIVE_GRASS_MAP_KEYS of validate_map_descriptors.py (Bowl, Iceberg, Yard). The map's Grass scene is the one
+        // name ending in "_Grass" in AllSceneNames (validate_map_descriptors holds that there is exactly one).
+        public bool HasNativeGrass { get; }
+        /// <summary>The scene that holds the grass holder: the one entry of <see cref="AllSceneNames"/> ending in "_Grass"; null when the map has no native grass or lists none.</summary>
+        public string GrassSceneName
+        {
+            get
+            {
+                if (!HasNativeGrass || AllSceneNames == null)
+                {
+                    return null;
+                }
+                foreach (var name in AllSceneNames)
+                {
+                    if (name != null && name.EndsWith("_Grass", StringComparison.Ordinal))
+                    {
+                        return name;
+                    }
+                }
+                return null;
+            }
+        }
+        /// <summary>The staged grass bundle of a native-grass map: bundles/&lt;key&gt;_grass.bundle (the grass pack, an AMPB container in a release).</summary>
+        public string GrassBundleFileName => Key + "_grass.bundle";
         public string SunScene { get; }
         public string[] SunPaths { get; }
 #nullable enable
@@ -488,7 +515,8 @@ namespace ArenaMapPort.Shared
             float EmissionCap = 0f,
             bool HasNativeWater = false,
             float EmissionFloor = 0f,
-            ArenaBorderBox[]? LevelBorderBoxes = null)
+            ArenaBorderBox[]? LevelBorderBoxes = null,
+            bool HasNativeGrass = false)
 #nullable restore
         {
             this.Key = Key;
@@ -529,6 +557,7 @@ namespace ArenaMapPort.Shared
             this.FixedNightHour = FixedNightHour;
             this.UsesServerTime = UsesServerTime;
             this.HasNativeWater = HasNativeWater;
+            this.HasNativeGrass = HasNativeGrass;
             this.SunScene = SunScene ?? string.Empty;
             this.SunPaths = SunPaths ?? new string[0];
             this.PuddleWaterMaterialNames = PuddleWaterMaterialNames ?? new string[0];
@@ -1449,6 +1478,8 @@ namespace ArenaMapPort.Shared
             NavMeshBundleKey: "arena_bowl/arena_bowl_navmesh.bundle",
             ScriptsSceneName: "Arena_Bowl_Scripts",
             AllSceneNames: new[] { "Arena_Bowl_Scripts", "Arena_Bowl", "Arena_Bowl_Building", "Arena_Bowl_Grass", "Arena_Bowl_Light", "Arena_Bowl_DesignStuff", "Arena_Bowl_TeamFight", "Arena_Bowl_TeamFight_DesignStuff" },
+            // Arena's grass of this map (the placement file and the shared art, packed into bundles/arena_bowl_grass.bundle); mirrors tools/maps/<stem>.json has_native_grass.
+            HasNativeGrass: true,
             InfiltrationName: "ArenaBowl",
             LocaleName: "Arena: Bowl",
             LocaleDescription: "The Bowl from EFT Arena: the sunken field of an old sports arena with its stands, converted for death-fighting. Containers, barricades and a grounded Mi-26 fill the field between two gated team pockets at the east and west ends; the layer-29 border cubes of Arena bound the play space.",
@@ -1628,6 +1659,8 @@ namespace ArenaMapPort.Shared
             NavMeshBundleKey: "arena_yard/arena_yard_navmesh.bundle",
             ScriptsSceneName: "Arena_Yard_Scripts",
             AllSceneNames: new[] { "Arena_Yard_Scripts", "Arena_Yard", "Arena_Yard_Grass", "Arena_Yard_DesignStuff", "Arena_Yard_TeamFight", "Arena_Yard_TeamFight_DesignStuff", "Arena_Yard_Light" },
+            // Arena's grass of this map (the placement file and the shared art, packed into bundles/arena_yard_grass.bundle); mirrors tools/maps/<stem>.json has_native_grass.
+            HasNativeGrass: true,
             InfiltrationName: "ArenaYard",
             LocaleName: "Arena: Block",
             LocaleDescription: "The Block from EFT Arena: the yard between the apartment houses of a city block, with a fortified playground tower, parked vans and wrecked cars, turned into a death-fighting arena. A small sealed team pocket sits at each end, one behind a swing gate and one behind a rising facade gondola, with the open yard between them.",
@@ -1850,6 +1883,8 @@ namespace ArenaMapPort.Shared
             NavMeshBundleKey: "arena_iceberg/arena_iceberg_navmesh.bundle",
             ScriptsSceneName: "Arena_Iceberg_Scripts",
             AllSceneNames: new[] { "Arena_Iceberg_Scripts", "Arena_Sanatorium", "Arena_Sanatorium_Grass", "Arena_Sanatorium_Light", "Arena_Sanatorium_DesignStuff", "Arena_Sanatorium_CheckPoint", "Arena_Sanatorium_CheckPoint_DesignStuff" },
+            // Arena's grass of this map (the placement file and the shared art, packed into bundles/arena_iceberg_grass.bundle); mirrors tools/maps/<stem>.json has_native_grass.
+            HasNativeGrass: true,
             InfiltrationName: "ArenaIceberg",
             LocaleName: "Arena: Iceberg",
             LocaleDescription: "The Iceberg resort hotel from EFT Arena: a multi-storey hotel with a rotunda on a rocky canyon, with its lobby, atrium, pool hall and cafe inside and a street area around it. The CheckPoint layout is used: two team pockets behind sliding gates at the east and west ends, and three capture points, A, B and C, between them.",

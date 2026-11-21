@@ -98,6 +98,8 @@ def fake_dist_files(maps=MAPS):
         stem = key.removeprefix("arena_")
         for kind in ("scenes", "navmesh", "preset"):
             files[f"{PLUGIN}/bundles/{key}_{kind}.bundle"] = AMPB + rng.randbytes(4092)
+        if key in release.NATIVE_GRASS_MAP_KEYS:      # the additional grass bundle (2026-11-21): an AMPB container too
+            files[f"{PLUGIN}/bundles/{key}_grass.bundle"] = AMPB + random.Random(key + "grass").randbytes(4092)   # its own generator: the bytes below keep their values
         files[f"{PLUGIN}/keys/{key}.json"] = text(key + "keys")
         files[f"{PLUGIN}/acoustics/{key}/spatial-audio.json"] = text(key + "audio")
         files[f"{PLUGIN}/acoustics/{key}/source.audiobakedata"] = text(key + "bake")
@@ -2708,6 +2710,7 @@ class BowlPartTests(FakeRepoCase):
         names = {f.rel for f in parts[-1].files}
         self.assertEqual(names, {
             *(f"{PLUGIN}/bundles/arena_bowl_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")),
+            f"{PLUGIN}/bundles/arena_bowl_grass.bundle",
             f"{PLUGIN}/keys/arena_bowl.json",
             f"{PLUGIN}/acoustics/arena_bowl/spatial-audio.json", f"{PLUGIN}/acoustics/arena_bowl/source.audiobakedata",
             f"{PLUGIN}/acoustics/arena_bowl/room.assets_9.wav", f"{PLUGIN}/ai/bowl.ai.json",
@@ -2740,6 +2743,82 @@ class BowlPartTests(FakeRepoCase):
         (self.dist / PLUGIN / "loadscreens/arena_bowl_Alt_1.jpg").write_bytes(b"\xff\xd8\xff")
         with self.assertRaises(release.ClassificationError):
             self.partition()
+
+
+class GrassBundleTests(BowlPartTests):
+    """The additional grass bundle (2026-11-21, user decision): the maps in NATIVE_GRASS_MAP_KEYS (Bowl, Iceberg, Yard) ship bundles/<key>_grass.bundle,
+    an AMPB container in the map's own part; every other map has no rule for one. Bowl stands for the grass maps here (the fake dist stages it for
+    exactly the keys of the list); the setUp and the part test it inherits run first, then the grass rules."""
+
+    def test_the_grass_bundle_is_required_in_the_maps_part_and_the_three_maps_are_the_list(self):
+        self.assertEqual(release.NATIVE_GRASS_MAP_KEYS, ("arena_bowl", "arena_iceberg", "arena_yard"))
+        spec = release.load_spec(self.repo, maps=MAPS + (BOWL,))
+        required = release.required_files(spec)
+        self.assertIn(f"{PLUGIN}/bundles/arena_bowl_grass.bundle", required["bowl"])
+        for part in ("equator", "bay5", "airpit"):
+            self.assertNotIn(f"{PLUGIN}/bundles/arena_{part}_grass.bundle", required[part])
+            self.assertEqual([n for n in required[part] if "grass" in n], [])
+
+    def test_a_grass_bundle_of_a_map_without_arena_grass_is_unclassified(self):
+        for key in ("arena_equator", "arena_bay5", "arena_airpit", "arena_autoservice", "arena_airpit2"):
+            with self.subTest(key=key):
+                path = self.dist / PLUGIN / "bundles" / f"{key}_grass.bundle"
+                path.write_bytes(AMPB + b"x" * 64)
+                try:
+                    with self.assertRaises(release.ClassificationError):
+                        self.partition()
+                finally:
+                    path.unlink()
+
+    def test_the_grass_bundle_lands_in_its_maps_part_only(self):
+        parts = {p.id: {f.rel for f in p.files} for p in self.partition()}
+        self.assertIn(f"{PLUGIN}/bundles/arena_bowl_grass.bundle", parts["bowl"])
+        self.assertEqual([part for part, names in parts.items() if part != "bowl" and any("_grass.bundle" in n for n in names)], [])
+
+    def test_a_plaintext_grass_pack_in_dist_is_refused_like_a_plaintext_bundle(self):
+        name = f"{PLUGIN}/bundles/arena_bowl_grass.bundle"
+        path = self.dist / name
+        original = path.read_bytes()
+        for plaintext in (b"AMGP" + b"\x01\0\0\0" + b"x" * 200, b"UnityFS\0" + b"x" * 200, b"", b"AMP"):
+            with self.subTest(head=plaintext[:8]):
+                path.write_bytes(plaintext)
+                try:
+                    with self.assertRaises(release.PackagingError) as caught:
+                        self.partition()
+                    self.assertIn("plaintext bundle in dist", str(caught.exception))
+                    self.assertIn(name, str(caught.exception))
+                finally:
+                    path.write_bytes(original)
+
+    def test_the_finished_zip_check_knows_the_grass_bundle(self):
+        entry = re_name = f"{PLUGIN}/bundles/arena_bowl_grass.bundle"
+        self.assertIsNotNone(release.BUNDLE_ENTRY_RE.fullmatch(re_name))
+        self.assertIsNone(release.BUNDLE_ENTRY_RE.fullmatch(f"{PLUGIN}/bundles/arena_bowl_other.bundle"))
+        self.assertEqual(release.MAP_DATA_RE.fullmatch(entry).group(1), "arena_bowl")
+
+    def test_a_finished_map_part_or_single_zip_without_the_grass_bundle_is_refused(self):
+        from types import SimpleNamespace
+
+        def entries(*extra):
+            names = [f"{PLUGIN}/bundles/arena_bowl_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]
+            names += [f"{PLUGIN}/keys/arena_bowl.json", f"{SERVER}/db/arena_bowl/base.json", *extra]
+            return [{"path": name, "origin": "dist"} for name in names]
+
+        core = SimpleNamespace(id="core", zip_name="core.zip", manifest={"entries": []})
+        with_grass = SimpleNamespace(id="bowl", zip_name="bowl.zip", manifest={"entries": entries(f"{PLUGIN}/bundles/arena_bowl_grass.bundle")})
+        without = SimpleNamespace(id="bowl", zip_name="bowl.zip", manifest={"entries": entries()})
+        release.check_partition([core, with_grass])
+        with self.assertRaises(release.VerificationError) as caught:
+            release.check_partition([core, without])
+        self.assertIn("arena_bowl_grass.bundle", str(caught.exception))
+        single_ok = SimpleNamespace(zip_name="single.zip", manifest={"entries": [*with_grass.manifest["entries"],
+            *({"path": n, "origin": "generated"} for n in (release.README_NAME, release.CLIENT_NOTICES_NAME, release.SERVER_NOTICES_NAME))]})
+        release.check_single(single_ok, ["arena_bowl"])
+        single_bad = SimpleNamespace(zip_name="single.zip", manifest={"entries": [*without.manifest["entries"],
+            *({"path": n, "origin": "generated"} for n in (release.README_NAME, release.CLIENT_NOTICES_NAME, release.SERVER_NOTICES_NAME))]})
+        with self.assertRaises(release.VerificationError) as caught:
+            release.check_single(single_bad, ["arena_bowl"])
+        self.assertIn("arena_bowl_grass.bundle", str(caught.exception))
 
 
 class RealDistSmokeTests(unittest.TestCase):

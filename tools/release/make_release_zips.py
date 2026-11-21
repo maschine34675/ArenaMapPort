@@ -48,7 +48,9 @@ map must carry (bundles, key file, database entry, shader sidecar, AI sidecar, b
 manifest, spectator package, first loading screen); only flares and the overview map are optional per map, and a map listed in
 CROWDLESS_MAP_KEYS (Iceberg only since Autoservice got its crowd, 2026-11-11) has no spectator package at all (the rule and the required file are dropped for it, and a stray one is
 an unclassified file). Water is the mirror image: a map listed in NATIVE_WATER_MAP_KEYS (Bay5, Iceberg) must carry its package (water.json and the four
-texture mip chains) and any other map has no water rule at all, so a stray one is an unclassified file. Every ZIP carries
+texture mip chains) and any other map has no water rule at all, so a stray one is an unclassified file. The grass is the same shape: a map listed in
+NATIVE_GRASS_MAP_KEYS (Bowl, Iceberg, Yard) must carry bundles/<key>_grass.bundle (an AMPB container like its three other bundles, in the map's own part)
+and a grass bundle of any other map is an unclassified file. Every ZIP carries
 BepInEx/plugins/maschine-ArenaMapPort/parts/<id>.json, a schema-1 manifest naming ALL parts (one, in the single
 layout) plus this ZIP's own entries with size and SHA-256, so any ZIP says which others complete the install.
 The core part (or the single ZIP) adds README.txt and THIRD-PARTY-NOTICES.txt (client and server root); the
@@ -111,7 +113,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "validate"))
-from validate_map_descriptors import CROWDLESS_MAP_KEYS, NATIVE_WATER_MAP_KEYS, RELEASE_MAP_KEYS, RELEASE_MAP_NAMES  # noqa: E402
+from validate_map_descriptors import CROWDLESS_MAP_KEYS, NATIVE_GRASS_MAP_KEYS, NATIVE_WATER_MAP_KEYS, RELEASE_MAP_KEYS, RELEASE_MAP_NAMES  # noqa: E402
 
 # The four raw texture mip chains of a native water package (water/<key>/textures/<name>.bin), the names tools/extract/extract_water.py writes
 # (extract_water.TEXTURE_FIELDS without the underscore; test_native_water.py pins the equality). Not imported from there: the extractor drags in UnityPy.
@@ -150,7 +152,7 @@ SHA256_LINE_RE = re.compile(r"([0-9a-f]{64})  (\S+\.zip)")
 MANIFEST_PATH_RE = re.compile(re.escape(PLUGIN_ROOT) + r"/parts/([a-z0-9]+)\.json")
 
 AMPB_MAGIC = b"AMPB"  # the first four bytes of every distributed bundle (ArenaMapPort.Crypto, docs/PLAN-ENCRYPTION.md 0.5)
-BUNDLE_ENTRY_RE = re.compile(re.escape(f"{PLUGIN_ROOT}/bundles/") + r"arena_[a-z0-9]+_(?:scenes|navmesh|preset)\.bundle")
+BUNDLE_ENTRY_RE = re.compile(re.escape(f"{PLUGIN_ROOT}/bundles/") + r"arena_[a-z0-9]+_(?:scenes|navmesh|preset|grass)\.bundle")
 
 README_NAME = f"{PLUGIN_ROOT}/README.txt"
 CLIENT_NOTICES_NAME = f"{PLUGIN_ROOT}/THIRD-PARTY-NOTICES.txt"
@@ -374,6 +376,8 @@ def build_rules(spec: ReleaseSpec) -> list:
     for m in spec.maps:
         key = re.escape(m.key)
         add(m.stem, "bundle", re.escape(f"{PLUGIN_ROOT}/bundles/") + key + r"_(?:scenes|navmesh|preset)\.bundle")
+        if m.key in NATIVE_GRASS_MAP_KEYS:       # only the maps with Arena grass (Bowl, Iceberg, Yard) stage the additional grass bundle: one of any other map is unclassified
+            add(m.stem, "grass bundle", re.escape(f"{PLUGIN_ROOT}/bundles/{m.key}_grass.bundle"))
         add(m.stem, "key file", re.escape(f"{PLUGIN_ROOT}/keys/{m.key}.json"))
         add(m.stem, "acoustics", re.escape(f"{PLUGIN_ROOT}/acoustics/{m.key}/")
             + rf"(?:spatial-audio\.json|source\.audiobakedata|{LEAF}\.wav)")
@@ -417,6 +421,8 @@ def required_files(spec: ReleaseSpec) -> dict:
     required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME, *SELECTION_MAP_NAMES, MONITORS_MANIFEST_NAME, SPECTATOR_AUDIO_MANIFEST_NAME, SPECTATOR_BED_NAME, SPECTATOR_TEXTURES_MANIFEST_NAME]}
     for m in spec.maps:
         names = [f"{PLUGIN_ROOT}/bundles/{m.key}_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]
+        if m.key in NATIVE_GRASS_MAP_KEYS:       # the grass is an additional bundle of the map's own part, on by default: a part without it would ship a map without its grass
+            names.append(f"{PLUGIN_ROOT}/bundles/{m.key}_grass.bundle")
         names += [f"{SERVER_ROOT}/db/{m.key}/base.json",
                   f"{PLUGIN_ROOT}/keys/{m.key}.json",
                   f"{PLUGIN_ROOT}/{shader_sidecar_name(m.key)}",
@@ -459,7 +465,7 @@ def partition_dist(files, spec: ReleaseSpec, rules=None) -> list:
     buckets = {part_id: [] for part_id in ids}
     for f in files:
         rule = classify(f.rel, rules)
-        if rule.label == "bundle":
+        if rule.label in ("bundle", "grass bundle"):
             require_encrypted_bundle(f)
         buckets[rule.part].append(f)
     present = {f.rel for f in files}
@@ -1280,6 +1286,8 @@ def check_partition(parts) -> None:
     for part in parts[1:]:
         key = f"arena_{part.id}"
         required = [f"{PLUGIN_ROOT}/bundles/{key}_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]
+        if key in NATIVE_GRASS_MAP_KEYS:
+            required.append(f"{PLUGIN_ROOT}/bundles/{key}_grass.bundle")
         required.append(f"{PLUGIN_ROOT}/keys/{key}.json")
         required.append(f"{SERVER_ROOT}/db/{key}/base.json")
         missing = [name for name in required if name not in paths[part.id]]
@@ -1298,7 +1306,7 @@ def check_partition(parts) -> None:
                 raise VerificationError(f"{part.zip_name} carries files that belong to part '{other.id}': {foreign}")
 
 
-MAP_DATA_RE = re.compile(re.escape(f"{PLUGIN_ROOT}/bundles/") + r"(arena_[a-z0-9]+)_(?:scenes|navmesh|preset)\.bundle"
+MAP_DATA_RE = re.compile(re.escape(f"{PLUGIN_ROOT}/bundles/") + r"(arena_[a-z0-9]+)_(?:scenes|navmesh|preset|grass)\.bundle"
                          + "|" + re.escape(f"{SERVER_ROOT}/db/") + r"(arena_[a-z0-9]+)/base\.json"
                          + "|" + re.escape(f"{PLUGIN_ROOT}/keys/") + r"(arena_[a-z0-9]+)\.json")
 
@@ -1316,6 +1324,8 @@ def check_single(part, expected_keys=()) -> None:
         raise VerificationError(f"{part.zip_name}: single ZIP carries no map (no bundles, key files or db/<key>/base.json)")
     for key in sorted(found | set(expected_keys)):
         required = [f"{PLUGIN_ROOT}/bundles/{key}_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]
+        if key in NATIVE_GRASS_MAP_KEYS:
+            required.append(f"{PLUGIN_ROOT}/bundles/{key}_grass.bundle")
         required.append(f"{PLUGIN_ROOT}/keys/{key}.json")
         required.append(f"{SERVER_ROOT}/db/{key}/base.json")
         missing = [name for name in required if name not in entries]

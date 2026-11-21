@@ -741,6 +741,33 @@ class StageTests(FakeArenaCase):
         again = self.snapshot()
         self.assertEqual({k: v[0] for k, v in again.items()}, {k: v[0] for k, v in first.items()})
 
+    def test_the_grass_pack_of_a_map_is_staged_encrypted_like_its_bundles(self):
+        # 2026-11-21 (native grass, stage 2): <map key>_grass.bundle is the project's own pack (magic AMGP, not a Unity AssetBundle); the stage command encrypts it with the map's key
+        # like the three Unity bundles, and the tool does not look at what the plaintext is
+        grass = self.tmp / "build" / f"{self.MAP}_grass.bundle"
+        grass.write_bytes(b"AMGP" + random_bytes(77, 150_000))
+        bundles = [*self.bundles.values(), grass]
+        self.stage(bundles=bundles)
+        staged = self.plugin / "bundles" / grass.name
+        self.assertEqual(staged.read_bytes()[:4], b"AMPB")
+        self.assertEqual(sorted(p.name for p in (self.plugin / "bundles").iterdir()),
+                         sorted([b.name for b in bundles]))
+        out = self.tmp / "grass.decrypted"
+        self.tool("decrypt", "--in", staged, "--out", out, "--key-store", self.store)
+        self.assertEqual(out.read_bytes(), grass.read_bytes())
+        # deterministic like the others: the same inputs and key give the same bytes
+        first = {k: v[0] for k, v in self.snapshot().items()}
+        shutil.rmtree(self.plugin)
+        self.stage(create=False, bundles=bundles)
+        self.assertEqual({k: v[0] for k, v in self.snapshot().items()}, first)
+        # a grass pack of another map is not a bundle of this one, and no other suffix is accepted
+        stray = self.plain("arena_other_grass.bundle", 5000, folder=self.tmp / "strays")
+        self.expect_fail("stage", "--map-key", self.MAP, "--bundle", stray, "--out-dir", self.plugin, "--key-store", self.store, "--sources", self.sources,
+                         "--arena-unverified", self.arena, fragment="is not a bundle of 'arena_test'")
+        for name in (f"{self.MAP}_grass2.bundle", f"{self.MAP}_Grass.bundle", f"{self.MAP}_grass.bundle.bak", f"x{self.MAP}_grass.bundle"):
+            self.expect_fail("stage", "--map-key", self.MAP, "--bundle", self.plain(name, 5000, folder=self.tmp / "strays"), "--out-dir", self.plugin,
+                             "--key-store", self.store, "--sources", self.sources, "--arena-unverified", self.arena, fragment="is not a bundle of")
+
     def test_stage_refuses_what_is_not_a_bundle_of_the_map(self):
         stray = self.plain("arena_other_scenes.bundle", 5000)
         self.expect_fail("stage", "--map-key", self.MAP, "--bundle", stray, "--out-dir", self.plugin, "--key-store", self.store, "--sources", self.sources,
@@ -1124,6 +1151,26 @@ class BuildWiringTests(unittest.TestCase):
         self.assertIsNotNone(build_target)
         self.assertIn("tools\\bundle\\ArenaMapPort.BundleCrypt", text)
         self.assertIn("dotnet build", build_target.group(1))
+
+    def test_the_grass_packs_are_a_separate_hard_input_of_the_three_grass_maps_and_never_seen_by_the_unityfs_validator(self):
+        """Native grass, stage 2 (2026-11-21): the grass bundles of Bowl, Iceberg and Yard are staged by the same stage commands as the maps' own bundles but are
+        listed apart (validate_bundle_blocks.py reads UnityFS headers) and a missing pack stops a full build with the Error that names the extractor."""
+        from validate_map_descriptors import NATIVE_GRASS_MAP_KEYS
+        text = (REPO / "ArenaMapPort.Client/ArenaMapPort.Client.csproj").read_text(encoding="utf-8")
+        target = re.search(r'<Target Name="ArenaMapPortStageWpOutputs"(.*?)</Target>', text, re.S)
+        self.assertIsNotNone(target)
+        body = target.group(1)
+        self.assertEqual(len(re.findall(r"<ArenaMapPortGrassBundles Include=", body)), len(NATIVE_GRASS_MAP_KEYS))
+        for key in NATIVE_GRASS_MAP_KEYS:
+            with self.subTest(key=key):
+                self.assertEqual(len(re.findall(rf'<ArenaMapPortGrassBundles Include="\$\(ArenaMapPortGrassBuildDir\)\\{key}_grass\.bundle"><MapKey>{key}</MapKey>', body)), 1)
+                self.assertEqual(len(re.findall(rf"stage --map-key {key} [^\"]*@\(ArenaMapPortGrassBundles->WithMetadataValue\('MapKey','{key}'\)", body)), 1)
+        self.assertEqual(len(re.findall(r"@\(ArenaMapPortGrassBundles->WithMetadataValue", body)), len(NATIVE_GRASS_MAP_KEYS))
+        validator = [line for line in body.splitlines() if "validate_bundle_blocks.py" in line and "<Exec" in line]
+        self.assertEqual(len(validator), 1)
+        self.assertNotIn("Grass", validator[0])
+        self.assertIn("python tools/extract/extract_grass.py pack --map all", body)
+        self.assertIn("work\\build\\grass</ArenaMapPortGrassBuildDir>", body)
 
     def test_staging_creates_a_content_key_only_on_request(self):
         """Integration review (2026-10-19): a lost work/release-keys must never become a new content key by an ordinary build, because

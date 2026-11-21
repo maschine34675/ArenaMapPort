@@ -3,7 +3,7 @@ using System;
 
 namespace ArenaMapPort.Client
 {
-    // The Unity-free VALUES of the native grass probe in ONE place (PLAN-YARD item 23, lead decision 2026-11-21): the summer colour lists and the rule that no season of the game reaches the grass,
+    // The Unity-free VALUES of the native grass in ONE place (PLAN-YARD item 23, lead decision 2026-11-21): the summer colour lists and the rule that no season of the game reaches the grass,
     // and every number the glue sets on the shader's material, the prototype, the LOD group, the managers and the two meshes. Each block names its source so a reviewer can check it against the dumps
     // under work/tmp/yard-grass/: "G2" = reports/G2-arena-data.md (Arena's own serialized values, decoded with UnityPy and by hand from the raw MonoBehaviours, 2026-11-21; exact float32 values
     // printed by work/tmp/yard-grass/core/exact_values.py into core/exact_values.txt), "G1" = reports/G1-runtime.md (what EFT's GPUInstancer reads, from the decompile
@@ -25,7 +25,8 @@ namespace ArenaMapPort.Client
     }
 
     /// <summary>
-    /// The colours of the grass and the season rule. Yard is a summer map (user, 2026-11-08 "sommer reicht"), and the host runs whatever season the server reports (AutumnLate on 2026-11-21): EFT's own
+    /// The colours of the grass and the season rule. The three grass maps (Bowl, Iceberg, Yard) carry the same GrassInitialization colour lists (G2 section 7: the three scenes differ only in the placement file name;
+    /// tools/extract/extract_grass.py proves it for Bowl and Iceberg against the constants below and fails when a map differs, in which case the lists become per-map). Yard is a summer map (user, 2026-11-08 "sommer reicht"), and the host runs whatever season the server reports (AutumnLate on 2026-11-21): EFT's own
     /// GrassInitialization.SetSeasonsMaterials would pick the SeasonsColors list for Autumn, Spring and AutumnLate and the WinterColors list (white) for Winter and SpringEarly, and throws on anything else
     /// (Storm). The port never calls it and never forwards a season: the grass takes Arena's Summer lists (DryColor, HealthyColor) always, whatever <see cref="ForSeason"/> is asked.
     /// </summary>

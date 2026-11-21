@@ -8,7 +8,11 @@ key against the Arena installed on this machine (the build machine has it), and 
 starts with "UnityFS". The container is read through tools/bundle/bundle_crypt.py (the C# tool), not in Python.
 
 Every bundle's block table is also checked (tools/validate/validate_bundle_blocks.py, 2026-10-29): a data block with a
-compression flag and csize >= usize evidently reaches Unity's player as raw LZ4 bytes (the intermittent Equator noise)."""
+compression flag and csize >= usize evidently reaches Unity's player as raw LZ4 bytes (the intermittent Equator noise).
+
+Since the grass work (2026-11-21) the maps with Arena grass (NATIVE_GRASS_MAP_KEYS: Bowl, Iceberg, Yard) carry a fourth, additional file
+bundles/<key>_grass.bundle: an AMPB container whose plaintext is the project's grass pack ("AMGP"), not a Unity AssetBundle. It gets the container checks
+of the other bundles and a parse of the pack header (validate_grass_bundles), and none of the UnityFS ones (prefix, block table, CAB names)."""
 import json
 import hashlib
 from pathlib import Path
@@ -16,7 +20,9 @@ import re
 import subprocess
 import sys
 
-from validate_map_descriptors import map_descriptor_paths, CROWDLESS_MAP_KEYS, NATIVE_WATER_MAP_KEYS, RELEASE_MAP_KEYS, gate_row_resolves
+from validate_map_descriptors import (map_descriptor_paths, CROWDLESS_MAP_KEYS, NATIVE_GRASS_MAP_KEYS, NATIVE_WATER_MAP_KEYS, RELEASE_MAP_KEYS,
+                                      gate_row_resolves)
+import struct
 import validate_bundle_blocks
 
 REPO = Path(__file__).resolve().parents[2]
@@ -48,6 +54,98 @@ FLARE_MAP_KEYS = ('arena_equator', 'arena_bay5', 'arena_bowl', 'arena_autoservic
 # validate_map_descriptors.NATIVE_WATER_MAP_KEYS, which that validator holds equal to every sidecar's has_native_water and every descriptor's
 # HasNativeWater. Equator, AirPit and Bowl carry no water package, so a water directory for any other key is parked or stray output.
 WATER_MAP_KEYS = NATIVE_WATER_MAP_KEYS
+# The maps with Arena grass (Bowl, Iceberg, Yard; user decision 2026-11-21): each ships the additional bundle bundles/<key>_grass.bundle, an AMPB
+# container (the map's own content key) whose PLAINTEXT is the project's grass pack, not a Unity AssetBundle. The one list is
+# validate_map_descriptors.NATIVE_GRASS_MAP_KEYS (held equal to every sidecar's has_native_grass and every descriptor's HasNativeGrass); a map
+# without Arena grass must not carry a grass bundle.
+GRASS_MAP_KEYS = NATIVE_GRASS_MAP_KEYS
+GRASS_PACK_MAGIC = b'AMGP'    # the pack's first four bytes; tools/extract/grass_pack.py (the pack tool) is the writer, this validator reads the contract text
+GRASS_PACK_VERSION = 1
+GRASS_HEADER_SIZE = 272       # 16 fixed bytes + the 32-byte map key + 4 entries of 56 bytes
+GRASS_ENTRY_SIZE = 56
+GRASS_ENTRY_COUNT = 4
+GRASS_RECORD_SIZE = 68        # one placement record, the .pcl record size
+# kind -> (name, format): 1 placement records (format 0), 2 Arena's GrassTexArray (DXT5), 3 GrassNormalArray (DXT1), 4 Grass_new_1_N (DXT1)
+GRASS_KINDS = {1: ('placement', 0), 2: ('albedo array', 5), 3: ('normal array', 1), 4: ('normal texture', 1)}
+GRASS_BLOCK_BYTES = {1: 8, 5: 16}     # BC1 and BC3 bytes per 4 x 4 block
+# The clump count of each map's placement, recorded from Arena's .pcl files (size 68 x count: Bowl 7,727,724 B, Iceberg 1,047,880 B, Yard 688,976 B): a
+# pack of another map, or of a changed Arena file, fails by count. A deliberate change of Arena's data is re-pinned here with its record.
+GRASS_PLACEMENT_RECORDS = {'arena_bowl': 113643, 'arena_iceberg': 15410, 'arena_yard': 10132}
+
+
+def grass_bundle_name(key):
+    return f'{key}_grass.bundle'
+
+
+def grass_texture_bytes(block_bytes, width, height, slices, mips):
+    """Bytes of a block-compressed array, slice-major with the whole mip chain per slice (mips below one block padded to one block):
+    the arithmetic NativeGrassArtModel uses in the client."""
+    total = 0
+    for _ in range(mips):
+        total += max(1, (width + 3) // 4) * max(1, (height + 3) // 4) * block_bytes
+        width, height = max(1, width // 2), max(1, height // 2)
+    return total * slices
+
+
+def parse_grass_pack_header(head, map_key, plaintext_length):
+    """The grass pack's header (format version 1: docs/dist-manifest.md "Grass bundle"), checked against everything the reader checks that the
+    header alone can prove: magic, version, header size, entry count, the map key, the four kinds in order with their formats, the placement record
+    size and count, texture sizes equal to the arithmetic, payloads contiguous from the header and ending exactly at the plaintext length.
+    Returns {kind: {format, width, height, slices, mips, filter, wrap, aniso, offset, size}}; raises ValueError."""
+    if len(head) < GRASS_HEADER_SIZE:
+        raise ValueError(f'grass pack header is {len(head)} bytes, {GRASS_HEADER_SIZE} expected')
+    magic, version, header_size, entry_count, raw_key = struct.unpack_from('<4sIII32s', head, 0)
+    if magic != GRASS_PACK_MAGIC:
+        raise ValueError(f'grass pack magic is {magic!r}, not {GRASS_PACK_MAGIC!r}')
+    if version != GRASS_PACK_VERSION:
+        raise ValueError(f'grass pack version {version}, {GRASS_PACK_VERSION} expected')
+    if header_size != GRASS_HEADER_SIZE or entry_count != GRASS_ENTRY_COUNT:
+        raise ValueError(f'grass pack header size {header_size} / entry count {entry_count}, {GRASS_HEADER_SIZE} / {GRASS_ENTRY_COUNT} expected')
+    stored_key = raw_key.rstrip(b'\0')
+    if stored_key != map_key.encode('ascii'):
+        raise ValueError(f'grass pack is for map {stored_key!r}, not {map_key!r}')
+    entries = {}
+    expected_offset = GRASS_HEADER_SIZE
+    for index in range(GRASS_ENTRY_COUNT):
+        (kind, fmt, width, height, slices, mips, filter_mode, wrap_mode, aniso, reserved, offset, size) = struct.unpack_from(
+            '<10IQQ', head, 48 + index * GRASS_ENTRY_SIZE)
+        if kind != index + 1:
+            raise ValueError(f'grass pack entry {index} has kind {kind}, {index + 1} expected')
+        name, want_format = GRASS_KINDS[kind]
+        if fmt != want_format:
+            raise ValueError(f'grass pack {name} has format {fmt}, {want_format} expected')
+        if reserved != 0:
+            raise ValueError(f'grass pack {name} has a non-zero reserved word')
+        if kind == 1:
+            if (filter_mode, wrap_mode, aniso) != (0, 0, 0):
+                raise ValueError('grass pack placement must carry 0 for filter, wrap and aniso')
+            if width != GRASS_RECORD_SIZE or height < 1 or mips != 0 or slices < 1:
+                raise ValueError(f'grass pack placement has record size {width} (expected {GRASS_RECORD_SIZE}), {height} records, '
+                                 f'{slices} slices, mips {mips} (expected 0)')
+            if size != GRASS_RECORD_SIZE * height:
+                raise ValueError(f'grass pack placement is {size} bytes, {GRASS_RECORD_SIZE} x {height} expected')
+            if height != GRASS_PLACEMENT_RECORDS.get(map_key):
+                raise ValueError(f'grass pack placement holds {height} records, {GRASS_PLACEMENT_RECORDS.get(map_key)} expected for {map_key}')
+        else:
+            if width < 1 or height < 1 or slices < 1 or not 1 <= mips <= max(width, height).bit_length():
+                raise ValueError(f'grass pack {name} has an impossible shape {width} x {height}, {slices} slices, {mips} mips')
+            if kind == 4 and slices != 1:
+                raise ValueError(f'grass pack {name} has {slices} slices, 1 expected')
+            expected = grass_texture_bytes(GRASS_BLOCK_BYTES[fmt], width, height, slices, mips)
+            if size != expected:
+                raise ValueError(f'grass pack {name} is {size} bytes, its mip chain needs {expected}')
+        if offset != expected_offset:
+            raise ValueError(f'grass pack {name} starts at {offset}, {expected_offset} expected (payloads are contiguous from the header)')
+        expected_offset = offset + size
+        entries[kind] = {'format': fmt, 'width': width, 'height': height, 'slices': slices, 'mips': mips,
+                         'filter': filter_mode, 'wrap': wrap_mode, 'aniso': aniso, 'offset': offset, 'size': size}
+    if entries[1]['slices'] != entries[2]['slices']:
+        raise ValueError(f'grass pack placement names {entries[1]["slices"]} slices, its albedo array has {entries[2]["slices"]}')
+    if entries[3]['slices'] != entries[2]['slices']:
+        raise ValueError(f'grass pack normal array has {entries[3]["slices"]} slices, its albedo array {entries[2]["slices"]}')
+    if expected_offset != plaintext_length:
+        raise ValueError(f'grass pack ends at {expected_offset} but the plaintext is {plaintext_length} bytes')
+    return entries
 
 
 # Bundle contents are not otherwise inspected here (the build's roundtrip validators cover them), so the one stale
@@ -124,6 +222,47 @@ def validate_encrypted_bundles(bundles, keys, key_store=None):
             prefix = _tool_call(f'Bundle {name} cannot be read', lambda: bundle_crypt.read_range(path, 0, 8, key_store=key_store))
             if prefix != UNITYFS_MAGIC:
                 raise ValueError(f'Bundle {name} does not decrypt to a UnityFS bundle')
+
+
+def validate_grass_bundles(bundles, keys, key_store=None):
+    """The additional grass bundle of every map in GRASS_MAP_KEYS (and of no other) is an AMPB container like the map's three bundles (the magic, a
+    header that authenticates with the map's key and names this map, every chunk intact) whose plaintext is the project's grass pack, NOT a Unity
+    AssetBundle: it must start with the pack magic and its header must parse (parse_grass_pack_header, read through the tool's `read-range`). The art
+    ranges (kinds 2 to 4) are Arena's one shared set, so they must be identical across the grass maps. Block tables and CAB names do not apply to it."""
+    art = {}
+    for key in keys:
+        name = grass_bundle_name(key)
+        path = bundles/name
+        if key not in GRASS_MAP_KEYS:
+            if path.exists():
+                raise ValueError(f'Grass bundle for a map without Arena grass: {name}')
+            continue
+        if not path.is_file():
+            raise ValueError(f'Grass bundle missing: {name}')
+        with path.open('rb') as stream:
+            head = stream.read(4)
+        if head == GRASS_PACK_MAGIC:
+            raise ValueError(f'Plaintext grass pack in dist (not an AMPB container): {name}; run a full, non-DllOnly client build so dist/ is restaged encrypted')
+        if head != AMPB_MAGIC:
+            raise ValueError(f'Plaintext bundle in dist (not an AMPB container): {name}; run a full, non-DllOnly client build so dist/ is restaged encrypted')
+        info = _tool_call(f'Bundle {name} failed inspection', lambda: bundle_crypt.inspect(path, key_store=key_store, verify_chunks=True))
+        if info.get('map_key') != key:
+            raise ValueError(f'Bundle {name} belongs to map {info.get("map_key")!r}, not {key!r}')
+        if info.get('mac_verified') is not True or info.get('chunks') != 'verified':
+            raise ValueError(f'Bundle {name} was not verified (header MAC {info.get("mac_verified")!r}, chunks {info.get("chunks")!r})')
+        header = _tool_call(f'Bundle {name} cannot be read', lambda: bundle_crypt.read_range(path, 0, GRASS_HEADER_SIZE, key_store=key_store))
+        if header[:4] != GRASS_PACK_MAGIC:
+            raise ValueError(f'Bundle {name} does not decrypt to a grass pack (starts with {header[:4]!r}, {GRASS_PACK_MAGIC!r} expected)')
+        try:
+            entries = parse_grass_pack_header(header, key, info.get('plaintext_length'))
+        except ValueError as exc:
+            raise ValueError(f'Bundle {name} is not a valid grass pack: {exc}') from exc
+        art[key] = {kind: {field: value for field, value in row.items() if field != 'offset'} for kind, row in entries.items() if kind != 1}
+        art[key]['slices'] = entries[1]['slices']
+    reference = next(iter(art.values()), None)
+    for key, rows in art.items():
+        if rows != reference:
+            raise ValueError(f'Grass bundle {grass_bundle_name(key)} carries other art ranges than the other grass bundles (one shared Arena set): {rows} versus {reference}')
 
 
 def validate_block_tables(bundles, keys, key_store=None):
@@ -221,13 +360,17 @@ def validate_key_files(plugin, keys, key_store=None, arena_unverified=None):
 
 def validate_no_plaintext_unityfs(dist):
     """No file anywhere below dist/ may start with "UnityFS" + NUL (8 bytes read per file): a plaintext bundle under any
-    name or folder (a stray copy, a renamed one, a backup) is a release that gives the maps away."""
+    name or folder (a stray copy, a renamed one, a backup) is a release that gives the maps away. The same holds for the project's plaintext
+    grass pack (work/build/grass/<key>_grass.bundle, first four bytes "AMGP"): only its AMPB-encrypted form belongs in dist."""
     if not dist.is_dir():
         return
     for path in sorted(p for p in dist.rglob('*') if p.is_file()):
         with path.open('rb') as stream:
-            if stream.read(8) == UNITYFS_MAGIC:
-                raise ValueError(f'Plaintext UnityFS file in dist: {path.relative_to(dist).as_posix()}')
+            head = stream.read(8)
+        if head == UNITYFS_MAGIC:
+            raise ValueError(f'Plaintext UnityFS file in dist: {path.relative_to(dist).as_posix()}')
+        if head[:4] == GRASS_PACK_MAGIC:
+            raise ValueError(f'Plaintext grass pack in dist: {path.relative_to(dist).as_posix()}')
 
 
 def _files_under(root):
@@ -601,12 +744,15 @@ def validate():
     if {p.relative_to(plugin/'flares').as_posix() for p in (plugin/'flares').rglob('*') if p.is_file()} != expected_flare_files:
         raise ValueError('Unexpected or missing flare package files')
     validate_water(plugin)
-    expected_bundles = {f'{key}_{kind}.bundle' for key in keys for kind in ('scenes','navmesh','preset')}
+    expected_map_bundles = {f'{key}_{kind}.bundle' for key in keys for kind in ('scenes','navmesh','preset')}
+    expected_grass_bundles = {grass_bundle_name(key) for key in keys if key in GRASS_MAP_KEYS}
+    expected_bundles = expected_map_bundles | expected_grass_bundles
     actual_bundles = {p.relative_to(plugin/'bundles').as_posix() for p in (plugin/'bundles').rglob('*') if p.is_file()}
     if actual_bundles != expected_bundles:
         raise ValueError(f'Bundle set mismatch: missing={sorted(expected_bundles-actual_bundles)} unexpected={sorted(actual_bundles-expected_bundles)}')
     validate_not_spike_build(plugin/'bundles', key_store_dir())
     validate_encrypted_bundles(plugin/'bundles', keys, key_store_dir())
+    validate_grass_bundles(plugin/'bundles', keys, key_store_dir())
     validate_block_tables(plugin/'bundles', keys, key_store_dir())
     validate_key_files(plugin, keys, key_store_dir())
     validate_no_plaintext_unityfs(REPO/'dist')
@@ -643,7 +789,8 @@ def validate():
         with built.open('rb') as source_stream, staged.open('rb') as target_stream:
             if hashlib.file_digest(source_stream,'sha256').digest() != hashlib.file_digest(target_stream,'sha256').digest():
                 raise ValueError(f'Stale staged {name} DLL')
-    print(f'DISTRIBUTION_OK {len(keys)} maps {len(expected_bundles)} bundles {len(expected_sidecars)} sidecars encrypted')
+    print(f'DISTRIBUTION_OK {len(keys)} maps {len(expected_map_bundles)} bundles {len(expected_grass_bundles)} grass bundles '
+          f'{len(expected_sidecars)} sidecars encrypted')
 
 
 if __name__ == '__main__':

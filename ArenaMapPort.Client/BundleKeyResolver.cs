@@ -471,6 +471,24 @@ namespace ArenaMapPort.Client
             }
         }
 
+        /// <summary>
+        /// The cached key of <paramref name="mapKey"/>, or false: a cache hit only. It never calls the gate, never derives, never logs and never waits for the map lock, so it is safe on the tick of
+        /// a feature that must not block the game thread (the native grass). False means no key was derived yet or its derivation failed. The returned array is shared: never modify or clear it.
+        /// </summary>
+        internal bool TryPeekKey(string mapKey, out byte[] key)
+        {
+            key = null;
+            if (string.IsNullOrEmpty(mapKey))
+                return false;
+            KeyEntry cached;
+            lock (_sync)
+                _cache.TryGetValue(mapKey, out cached);
+            if (cached == null)
+                return false;
+            key = cached.Key;
+            return cached.Ok;
+        }
+
         /// <summary>One derivation: reads the key file, hashes the sample of each listed Arena file, logs D1 or the E-line. Never throws.</summary>
         KeyEntry Derive(string mapKey)
         {

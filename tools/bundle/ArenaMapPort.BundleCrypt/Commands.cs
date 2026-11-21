@@ -669,13 +669,13 @@ namespace ArenaMapPort.BundleCrypt
             if (bundles.Count == 0)
                 throw new UsageException("--bundle PLAIN is required (once per bundle)");
             string outDir = a.Require("out-dir");
-            Regex nameRule = new Regex("^" + Regex.Escape(mapKey) + "_(scenes|navmesh|preset)\\.bundle$", RegexOptions.CultureInvariant);
+            Regex nameRule = new Regex("^" + Regex.Escape(mapKey) + "_(scenes|navmesh|preset|grass)\\.bundle$", RegexOptions.CultureInvariant);
             HashSet<string> names = new HashSet<string>(StringComparer.Ordinal);
             foreach (string bundle in bundles)
             {
                 string name = Path.GetFileName(bundle);
                 if (!nameRule.IsMatch(name))
-                    throw new ToolFailure("'" + name + "' is not a bundle of '" + mapKey + "' (expected " + mapKey + "_scenes|navmesh|preset.bundle)");
+                    throw new ToolFailure("'" + name + "' is not a bundle of '" + mapKey + "' (expected " + mapKey + "_scenes|navmesh|preset|grass.bundle)");
                 if (!names.Add(name))
                     throw new UsageException("the bundle " + name + " is listed twice");
                 if (!File.Exists(bundle))

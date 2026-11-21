@@ -1,4 +1,5 @@
 #nullable disable
+using System.Diagnostics;
 using ArenaMapPort.Client;
 using ArenaMapPort.Crypto;
 using Xunit;
@@ -6,283 +7,447 @@ using Xunit;
 namespace ArenaMapPort.Server.Tests;
 
 /// <summary>
-/// The worker side of the native grass probe (NativeGrassArtSource.cs) on an injected file layer: the load never throws, every refusal is a reason CODE (never a path or content), the placeholder
-/// art needs no art file, Arena's art is checked by size and structure before the glue sees a byte, and a stopped worker answers "abandoned". Unit-tested only; the real files are in
-/// <see cref="NativeGrassRealDataTests"/> (the same parse and checks on the installed Arena).
+/// The worker side of the native grass (NativeGrassArtSource.cs, stage 2): the staged grass bundle is read through an injected file layer, as the plain pack (a development install) or as an AMPB container
+/// opened with the map's key through the real <see cref="Ampb"/> writer and <see cref="AmpbReadStream"/>. Every refusal is a reason code and nothing throws. The packs are synthetic
+/// (<see cref="GrassTestPack"/>); real packs are in <see cref="NativeGrassPackRealDataTests"/>. Unit-tested; nothing here is host-run.
 /// </summary>
 public sealed class NativeGrassArtSourceTests
 {
-    static readonly NativeGrassMapRow Row = NativeGrassTable.Yard;
+    const string Yard = "arena_yard";
+    const string Path = "plugin/bundles/arena_yard_grass.bundle";
 
-    /// <summary>An in-memory installation: path to bytes, with the lies a test needs (a file that reports another length, a throwing open).</summary>
-    sealed class FakeFiles : IArenaFiles
+    sealed class TrackedStream : MemoryStream
+    {
+        internal TrackedStream(byte[] bytes) : base(bytes, false) { }
+        internal bool Closed;
+        protected override void Dispose(bool disposing)
+        {
+            Closed = true;
+            base.Dispose(disposing);
+        }
+    }
+
+    sealed class FakeFiles : IGrassPackFiles
     {
         internal readonly Dictionary<string, byte[]> Files = new Dictionary<string, byte[]>();
-        internal readonly Dictionary<string, long> LengthOverride = new Dictionary<string, long>();
-        internal readonly HashSet<string> ZeroFilled = new HashSet<string>();
-        internal Exception OpenThrows;
-        internal Exception LengthThrows;
-        internal readonly List<string> Opened = new List<string>();
+        internal readonly List<TrackedStream> Opened = new List<TrackedStream>();
+        internal Exception Throws;
+        internal int Opens;
 
-        public long Length(string relativePath)
+        public Stream OpenRead(string path)
         {
-            if (LengthThrows != null) throw LengthThrows;
-            if (LengthOverride.TryGetValue(relativePath, out long forced)) return forced;
-            return Files.TryGetValue(relativePath, out byte[] data) ? data.Length : -1;
-        }
-
-        public Stream Open(string relativePath)
-        {
-            Opened.Add(relativePath);
-            if (OpenThrows != null) throw OpenThrows;
-            if (Files.TryGetValue(relativePath, out byte[] data)) return new MemoryStream(data, false);
-            if (ZeroFilled.Contains(relativePath)) return new ZeroStream(LengthOverride[relativePath]);
-            throw new FileNotFoundException(relativePath);
+            Interlocked.Increment(ref Opens);
+            if (Throws != null) throw Throws;
+            if (!Files.TryGetValue(path, out byte[] bytes)) return null;
+            var s = new TrackedStream(bytes);
+            lock (Opened) Opened.Add(s);
+            return s;
         }
     }
 
-    /// <summary>A read-only stream of zeros of a given length (an Arena file wiped to zero without allocating 11 MB).</summary>
-    sealed class ZeroStream : Stream
+    sealed class ThrowingStream : MemoryStream
     {
-        readonly long _length;
-        long _position;
-
-        internal ZeroStream(long length) { _length = length; }
-
-        public override bool CanRead => true;
-        public override bool CanSeek => true;
-        public override bool CanWrite => false;
-        public override long Length => _length;
-        public override long Position { get => _position; set => _position = value; }
-        public override void Flush() { }
-
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            int n = (int)Math.Max(0, Math.Min(count, _length - _position));
-            Array.Clear(buffer, offset, n);
-            _position += n;
-            return n;
-        }
-
-        public override long Seek(long offset, SeekOrigin origin)
-        {
-            _position = origin == SeekOrigin.Begin ? offset : origin == SeekOrigin.Current ? _position + offset : _length + offset;
-            return _position;
-        }
-
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        internal ThrowingStream(byte[] bytes) : base(bytes) { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new InvalidOperationException("C:\\Users\\player\\secret\\path.bundle");
     }
 
-    /// <summary>A valid placement file for the Yard row: identity rotation, scale 1, positions inside the box, the slice cycling 0..4.</summary>
-    static byte[] PlacementBytes(int count)
+    static readonly byte[] Key = Enumerable.Range(1, 32).Select(i => (byte)(i * 7)).ToArray();
+
+    static byte[] Encrypt(byte[] plain, string mapKey, byte[] key = null)
     {
-        var bytes = new byte[count * NativeGrassPlacement.RecordSize];
-        for (int i = 0; i < count; i++)
-        {
-            int at = i * NativeGrassPlacement.RecordSize;
-            BitConverter.GetBytes(i % Row.SliceCount).CopyTo(bytes, at);
-            float[] m = new float[16];
-            m[0] = 1f; m[5] = 1f; m[10] = 1f; m[15] = 1f;
-            m[12] = -60f + (i % 70);
-            m[13] = 6f;
-            m[14] = 20f + (i % 90);
-            for (int k = 0; k < 16; k++) BitConverter.GetBytes(m[k]).CopyTo(bytes, at + 4 + 4 * k);
-        }
-        return bytes;
+        using var source = new MemoryStream(plain);
+        using var dest = new MemoryStream();
+        Ampb.Encrypt(source, dest, mapKey, key ?? Key, CryptoProviders.Managed, 4096);
+        return dest.ToArray();
     }
 
-    static FakeFiles WithPlacement(int count = 9000)
+    static GrassPreparation Start(FakeFiles files, GrassKeyResolver keys = null, GrassArtKind kind = GrassArtKind.Pack, string mapKey = Yard)
+    {
+        keys ??= (string map, out byte[] key) => { key = Key; return true; };
+        return GrassPreparation.Start(mapKey, Path, files, keys, () => CryptoProviders.Managed, kind);
+    }
+
+    static GrassInputs Finish(GrassPreparation p)
+    {
+        var watch = Stopwatch.StartNew();
+        while (!p.IsCompleted)
+        {
+            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(60), "the worker did not finish");
+            Thread.Sleep(2);
+        }
+        return p.Result;
+    }
+
+    static FakeFiles With(byte[] file) { var f = new FakeFiles(); f.Files[Path] = file; return f; }
+
+    static readonly GrassKeyResolver NoKeyNeeded = (string map, out byte[] key) => throw new InvalidOperationException("the key must not be asked for a plain pack");
+
+    // ---- the plain pack -----------------------------------------------------------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void APlainPackLoadsWithoutAnyKey()
+    {
+        byte[] pack = GrassTestPack.Build(Yard, GrassTestPack.Placement(40));
+        var files = With(pack);
+        GrassInputs r = Finish(Start(files, NoKeyNeeded));
+        Assert.True(r.Ok, r.Error);
+        Assert.Equal("plain", r.Container);
+        Assert.Equal("Pack", r.ArtName);
+        Assert.Equal("pack=ok placement=ok blocks=3/3", r.Checks);
+        Assert.Equal(Yard, r.Layout.MapKey);
+        Assert.Equal(40, r.Plan.Count);
+        Assert.Equal("8/8/8/8/8", r.Plan.HistogramText());
+        Assert.Equal(40 * 68, r.PlacementLength);
+        // the buffers are the payloads byte for byte
+        Assert.Equal(Slice(pack, 3), r.NormalTexture);
+        Assert.Equal(Slice(pack, 1), r.TexArray);
+        Assert.Equal(Slice(pack, 2), r.NormalArray);
+        Assert.Equal(272L + 40 * 68 + r.TexArray.Length + r.NormalArray.Length + r.NormalTexture.Length, r.BytesRead);
+        Assert.True(r.OpenTicks >= 0 && r.PlacementTicks >= 0 && r.ArtTicks > 0);
+        Assert.All(files.Opened, s => Assert.True(s.Closed));            // the file is closed when the worker is done
+        Assert.Equal(1, files.Opens);
+    }
+
+    static byte[] Slice(byte[] pack, int entry)
+    {
+        (int offset, int size) = GrassTestPack.Payload(pack, entry);
+        var part = new byte[size];
+        Array.Copy(pack, offset, part, 0, size);
+        return part;
+    }
+
+    [Fact]
+    public void ADropOfTheArtLeavesThePlanAndTheLayout()
+    {
+        GrassInputs r = Finish(Start(With(GrassTestPack.Build(Yard)), NoKeyNeeded));
+        Assert.True(r.Ok);
+        r.DropArt();
+        Assert.Null(r.TexArray);
+        Assert.Null(r.NormalArray);
+        Assert.Null(r.NormalTexture);
+        Assert.NotNull(r.Plan);
+        Assert.NotNull(r.Layout);
+    }
+
+    [Fact]
+    public void APackOfBowlsSizeLoadsThroughTheWorker()
+    {
+        // 113,643 records (Bowl): the placement is one 7.7 MB payload and one parse
+        byte[] records = GrassTestPack.Placement(113643);
+        GrassInputs r = Finish(Start(With(GrassTestPack.Build(Yard, records)), NoKeyNeeded));
+        Assert.True(r.Ok, r.Error);
+        Assert.Equal(113643, r.Plan.Count);
+        Assert.Equal(113643, r.Plan.SliceHistogram.Sum());
+        Assert.Equal(113643L * 68, r.PlacementLength);
+    }
+
+    [Fact]
+    public void ATiltedNonUniformPlacementIsAcceptedThroughTheWholePath()
+    {
+        byte[] records = GrassTestPack.Placement(200, 5, (f, i) =>
+        {
+            if (i != 17) return;
+            float c = (float)Math.Cos(50 * Math.PI / 180.0), s = (float)Math.Sin(50 * Math.PI / 180.0);
+            float[] m = { 1f, 0f, 0f, 0f, 0f, c * 2.24f, s * 2.24f, 0f, 0f, -s, c, 0f, 5f, 3f, -80f, 1f };
+            for (int k = 0; k < 16; k++) BitConverter.GetBytes(m[k]).CopyTo(f, i * 68 + 4 + 4 * k);
+        });
+        GrassInputs r = Finish(Start(With(GrassTestPack.Build(Yard, records)), NoKeyNeeded));
+        Assert.True(r.Ok, r.Error);
+        Assert.Equal(50f, r.Plan.MaxTiltDegrees, 1);
+        Assert.Equal(2.24f, r.Plan.MaxScale, 3);
+    }
+
+    // ---- the container ------------------------------------------------------------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void AContainerIsOpenedWithTheMapsKeyAndTheCopyOfTheKeyIsNotTheSharedOne()
+    {
+        byte[] pack = GrassTestPack.Build(Yard, GrassTestPack.Placement(40));
+        byte[] container = Encrypt(pack, Yard);
+        Assert.Equal((byte)'A', container[0]);
+        byte[] shared = (byte[])Key.Clone();
+        int asked = 0;
+        string askedFor = null;
+        var files = With(container);
+        GrassInputs r = Finish(Start(files, (string map, out byte[] key) => { asked++; askedFor = map; key = shared; return true; }));
+        Assert.True(r.Ok, r.Error);
+        Assert.Equal("AMPB", r.Container);
+        Assert.Equal(1, asked);
+        Assert.Equal(Yard, askedFor);
+        Assert.Equal(Key, shared);                                          // the resolver's array is shared with every other bundle: the worker clears only its own copy
+        Assert.Equal(Slice(pack, 1), r.TexArray);
+        Assert.Equal(Slice(pack, 3), r.NormalTexture);
+        Assert.Equal(40, r.Plan.Count);
+        Assert.All(files.Opened, s => Assert.True(s.Closed));
+    }
+
+    [Fact]
+    public void LoadClearsTheCopyOfTheKeyWhateverHappens()
+    {
+        byte[] container = Encrypt(GrassTestPack.Build(Yard), Yard);
+        // success
+        byte[] copy = (byte[])Key.Clone();
+        GrassInputs ok = GrassPreparation.Load(null, Yard, new TrackedStream(container), true, copy, CryptoProviders.Managed, GrassArtKind.Pack);
+        Assert.True(ok.Ok, ok.Error);
+        Assert.All(copy, b => Assert.Equal(0, b));
+        // a wrong key fails in the stream's constructor: the copy is cleared there too
+        byte[] wrong = (byte[])Key.Clone();
+        wrong[0] ^= 0xFF;
+        byte[] wrongCopy = (byte[])wrong.Clone();
+        GrassInputs refused = GrassPreparation.Load(null, Yard, new TrackedStream(container), true, wrongCopy, CryptoProviders.Managed, GrassArtKind.Pack);
+        Assert.Equal("container:HeaderAuth", refused.Error);
+        Assert.All(wrongCopy, b => Assert.Equal(0, b));
+        // a pack the reader refuses
+        byte[] otherCopy = (byte[])Key.Clone();
+        byte[] bowlContainer = Encrypt(GrassTestPack.Build("arena_bowl"), Yard);          // a container of the yard that holds a bowl pack
+        GrassInputs mismatch = GrassPreparation.Load(null, Yard, new TrackedStream(bowlContainer), true, otherCopy, CryptoProviders.Managed, GrassArtKind.Pack);
+        Assert.Equal("pack-format:MapKeyMismatch", mismatch.Error);
+        Assert.All(otherCopy, b => Assert.Equal(0, b));
+    }
+
+    [Fact]
+    public void AContainerOfAnotherMapIsRefused()
+    {
+        byte[] container = Encrypt(GrassTestPack.Build("arena_bowl"), "arena_bowl");
+        GrassInputs r = Finish(Start(With(container)));                     // opened for the yard with the same key
+        Assert.Equal("container:WrongMap", r.Error);
+        Assert.False(r.Ok);
+        Assert.Null(r.TexArray);
+    }
+
+    [Fact]
+    public void AWrongKeyIsRefusedByTheHeaderCheck()
+    {
+        byte[] container = Encrypt(GrassTestPack.Build(Yard), Yard);
+        byte[] wrong = (byte[])Key.Clone();
+        wrong[31] ^= 1;
+        GrassInputs r = Finish(Start(With(container), (string map, out byte[] key) => { key = wrong; return true; }));
+        Assert.Equal("container:HeaderAuth", r.Error);
+    }
+
+    [Fact]
+    public void ADamagedPayloadChunkIsRefusedAndNothingIsHandedOver()
+    {
+        byte[] pack = GrassTestPack.Build(Yard, GrassTestPack.Placement(40));
+        byte[] container = Encrypt(pack, Yard);
+        AmpbHeader header = Ampb.Inspect(new MemoryStream(container)).Header;
+        // the last chunk lies in the art: the header and the placement read fine, the first art read raises the integrity error
+        long lastChunk = header.PayloadOffset + (long)(header.ChunkCount - 1) * header.ChunkSize;
+        container[lastChunk + 3] ^= 0x40;
+        GrassInputs r = Finish(Start(With(container)));
+        Assert.Equal("container:ChunkIntegrity", r.Error);
+        Assert.Null(r.TexArray);
+        Assert.Null(r.NormalArray);
+        Assert.Null(r.NormalTexture);
+        // the first chunk holds the pack header: the same code, from the first read
+        byte[] early = Encrypt(pack, Yard);
+        early[header.PayloadOffset + 5] ^= 0x01;
+        Assert.Equal("container:ChunkIntegrity", Finish(Start(With(early))).Error);
+    }
+
+    [Theory]
+    [InlineData(10)]       // version / flags
+    [InlineData(45)]       // map key
+    [InlineData(100)]      // the chunk table
+    public void ADamagedContainerHeaderIsRefusedWithAContainerCode(int at)
+    {
+        byte[] container = Encrypt(GrassTestPack.Build(Yard), Yard);
+        container[at] ^= 0x01;
+        GrassInputs r = Finish(Start(With(container)));
+        Assert.StartsWith("container:", r.Error);
+    }
+
+    [Fact]
+    public void ATruncatedContainerIsRefused()
+    {
+        byte[] container = Encrypt(GrassTestPack.Build(Yard), Yard);
+        var shorter = new byte[container.Length - 100];
+        Array.Copy(container, shorter, shorter.Length);
+        GrassInputs r = Finish(Start(With(shorter)));
+        Assert.StartsWith("container:", r.Error);
+    }
+
+    // ---- refusals before the worker -----------------------------------------------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void AMissingFileCompletesAtOnceAsPackMissingWithoutAnyKey()
     {
         var files = new FakeFiles();
-        files.Files[Row.PlacementRelativePath] = PlacementBytes(count);
-        return files;
+        GrassPreparation p = Start(files, NoKeyNeeded);
+        Assert.True(p.IsCompleted);                                         // no worker was needed
+        Assert.Equal("pack-missing", p.Result.Error);
+        Assert.False(p.Result.Ok);
+        Assert.Equal(1, files.Opens);
     }
 
-    // ---- the placeholder path: no art file at all ----------------------------------------------------------------------------------------------------------------------------
-
-    [Fact]
-    public void ThePlaceholderLoadReadsOnlyThePlacementAndFillsThreeBuffersOfTheExactSizes()
+    [Theory]
+    [InlineData(typeof(IOException))]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    public void AnUnreadableFileIsPackUnreadableWithTheExceptionTypeOnly(Type type)
     {
-        FakeFiles files = WithPlacement();
-        GrassInputs inputs = GrassPreparation.Load(null, Row, files, GrassArtKind.Placeholder);
-        Assert.True(inputs.Ok, inputs.Error);
-        Assert.Equal(9000, inputs.Plan.Count);
-        Assert.Equal("Placeholder", inputs.ArtName);
-        Assert.Equal(NativeGrassArt.NormalTexture.Size, inputs.NormalTexture.LongLength);
-        Assert.Equal(NativeGrassArt.TexArray.Size, inputs.TexArray.LongLength);
-        Assert.Equal(NativeGrassArt.NormalArray.Size, inputs.NormalArray.LongLength);
-        Assert.Equal(0L, inputs.BytesRead);
-        Assert.Equal(new[] { Row.PlacementRelativePath }, files.Opened);   // no Arena art file was opened
+        var files = new FakeFiles { Throws = (Exception)Activator.CreateInstance(type, "C:\\Users\\player\\secret\\arena_yard_grass.bundle") };
+        GrassPreparation p = Start(files, NoKeyNeeded);
+        Assert.True(p.IsCompleted);
+        Assert.Equal("pack-unreadable:" + type.Name, p.Result.Error);
+        Assert.DoesNotContain("secret", p.Result.Error);
     }
 
-    [Fact]
-    public void ThePlaceholderLoadIsTheSameWhateverTheArenaFilesLookLike()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void AKeyThatCannotBeRecoveredIsKeyUnavailableAndTheFileIsClosed(int how)
     {
-        FakeFiles files = WithPlacement();
-        files.LengthOverride[NativeGrassArt.StreamPath] = 5;   // would refuse Arena's art; the placeholder never looks
-        GrassInputs inputs = GrassPreparation.Load(null, Row, files, GrassArtKind.Placeholder);
-        Assert.True(inputs.Ok, inputs.Error);
-    }
-
-    // ---- the placement refusals ------------------------------------------------------------------------------------------------------------------------------------------------
-
-    [Fact]
-    public void AMissingPlacementFileIsACodeNotAnException()
-    {
-        GrassInputs inputs = GrassPreparation.Load(null, Row, new FakeFiles(), GrassArtKind.Placeholder);
-        Assert.Equal("placement:Missing", inputs.Error);
-        Assert.Null(inputs.Plan);
-    }
-
-    [Fact]
-    public void ARecordCountOutsideTheRowsRangeIsRefusedWithItsCode()
-    {
-        GrassInputs inputs = GrassPreparation.Load(null, Row, WithPlacement(Row.MinCount - 1), GrassArtKind.Placeholder);
-        Assert.Equal("placement:CountOutOfRange", inputs.Error);
-    }
-
-    [Fact]
-    public void ALengthThatIsNotAMultipleOfTheRecordSizeIsRefused()
-    {
-        FakeFiles files = WithPlacement();
-        files.Files[Row.PlacementRelativePath] = new byte[NativeGrassPlacement.RecordSize * 9000 + 3];
-        Assert.Equal("placement:LengthNotDivisible", GrassPreparation.Load(null, Row, files, GrassArtKind.Placeholder).Error);
-    }
-
-    [Fact]
-    public void ABadRecordCarriesItsIndexInTheCode()
-    {
-        FakeFiles files = WithPlacement();
-        byte[] bytes = files.Files[Row.PlacementRelativePath];
-        BitConverter.GetBytes(float.NaN).CopyTo(bytes, 12 * NativeGrassPlacement.RecordSize + 4 + 4 * 12);
-        Assert.Equal("placement:NonFiniteMatrix@12", GrassPreparation.Load(null, Row, files, GrassArtKind.Placeholder).Error);
-    }
-
-    [Fact]
-    public void AnEmptyPlacementFileIsRefusedBeforeAnyRead()
-    {
-        FakeFiles files = new FakeFiles();
-        files.Files[Row.PlacementRelativePath] = new byte[0];
-        Assert.Equal("placement:BadLength", GrassPreparation.Load(null, Row, files, GrassArtKind.Placeholder).Error);
-    }
-
-    // ---- Arena's art: sizes first, then the structure check ------------------------------------------------------------------------------------------------------------------
-
-    [Fact]
-    public void AnAssetsFileOfAnotherSizeRefusesArenasArtBeforeReadingIt()
-    {
-        FakeFiles files = WithPlacement();
-        files.Files[NativeGrassArt.AssetsPath] = new byte[100];
-        files.LengthOverride[NativeGrassArt.StreamPath] = NativeGrassArt.StreamSize;
-        Assert.Equal("art-size:AssetsSizeDiffers", GrassPreparation.Load(null, Row, files, GrassArtKind.Arena).Error);
-        Assert.DoesNotContain(NativeGrassArt.StreamPath, files.Opened);
-    }
-
-    [Fact]
-    public void AStreamOfAnotherSizeRefusesArenasArt()
-    {
-        FakeFiles files = WithPlacement();
-        files.LengthOverride[NativeGrassArt.AssetsPath] = NativeGrassArt.AssetsSize;
-        files.LengthOverride[NativeGrassArt.StreamPath] = NativeGrassArt.StreamSize + 8;
-        Assert.Equal("art-size:StreamSizeDiffers", GrassPreparation.Load(null, Row, files, GrassArtKind.Arena).Error);
-    }
-
-    [Fact]
-    public void AWipedStreamOfThePinnedSizeFailsTheStructureCheckOnTheFirstRange()
-    {
-        FakeFiles files = WithPlacement();
-        files.LengthOverride[NativeGrassArt.AssetsPath] = NativeGrassArt.AssetsSize;
-        files.LengthOverride[NativeGrassArt.StreamPath] = NativeGrassArt.StreamSize;
-        files.ZeroFilled.Add(NativeGrassArt.StreamPath);
-        GrassInputs inputs = GrassPreparation.Load(null, Row, files, GrassArtKind.Arena);
-        Assert.Equal("art-blocks:Grass_new_1_N:ConstantData", inputs.Error);
-        Assert.Null(inputs.TexArray);   // nothing past the failing range is handed over
-    }
-
-    // ---- failures never throw and never carry a path --------------------------------------------------------------------------------------------------------------------------
-
-    [Fact]
-    public void AnExceptionFromTheFileLayerBecomesAnIoCodeWithTheTypeOnly()
-    {
-        FakeFiles files = WithPlacement();
-        files.LengthThrows = new UnauthorizedAccessException(@"D:\secret\path");
-        GrassInputs inputs = GrassPreparation.Load(null, Row, files, GrassArtKind.Placeholder);
-        Assert.Equal("io:UnauthorizedAccessException", inputs.Error);
-        Assert.DoesNotContain("secret", inputs.Error);
-
-        files = WithPlacement();
-        files.OpenThrows = new IOException(@"D:\another\secret");
-        Assert.Equal("io:IOException", GrassPreparation.Load(null, Row, files, GrassArtKind.Placeholder).Error);
-    }
-
-    [Fact]
-    public void EveryErrorCodeIsAShortCodeWithoutSeparatorsOfAPath()
-    {
-        var codes = new List<string>
+        byte[] container = Encrypt(GrassTestPack.Build(Yard), Yard);
+        var files = With(container);
+        GrassKeyResolver resolver = how switch
         {
-            GrassPreparation.Load(null, Row, new FakeFiles(), GrassArtKind.Arena).Error,
-            GrassPreparation.Load(null, Row, WithPlacement(10), GrassArtKind.Arena).Error,
+            0 => (string map, out byte[] key) => { key = null; return false; },
+            1 => (string map, out byte[] key) => { key = Key; return false; },
+            _ => (string map, out byte[] key) => { key = new byte[0]; return true; },
         };
-        foreach (string code in codes)
-        {
-            Assert.NotNull(code);
-            Assert.DoesNotContain("\\", code);
-            Assert.DoesNotContain("/", code);
-            Assert.True(code.Length < 60, code);
-        }
-    }
-
-    // ---- the asynchronous side ---------------------------------------------------------------------------------------------------------------------------------------------------
-
-    [Fact]
-    public void TheWorkerFinishesAndHandsOverAReadyResult()
-    {
-        GrassPreparation prep = GrassPreparation.Start(Row, WithPlacement(), GrassArtKind.Placeholder);
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        while (!prep.IsCompleted && watch.ElapsedMilliseconds < 20000) Thread.Sleep(5);
-        Assert.True(prep.IsCompleted);
-        Assert.True(prep.Result.Ok, prep.Result.Error);
+        GrassPreparation p = Start(files, resolver);
+        Assert.True(p.IsCompleted);
+        Assert.Equal("key-unavailable", p.Result.Error);
+        Assert.All(files.Opened, s => Assert.True(s.Closed));
     }
 
     [Fact]
-    public void AnAbandonedWorkerAnswersAbandonedAfterThePlacement()
+    public void AResolverThatThrowsIsAPackUnreadableRefusalNotAnException()
     {
-        // Load only asks the owner whether it was abandoned: an owner that never ran a task is enough for the question
-        var owner = (GrassPreparation)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(GrassPreparation));
+        var files = With(Encrypt(GrassTestPack.Build(Yard), Yard));
+        GrassPreparation p = Start(files, (string map, out byte[] key) => throw new InvalidOperationException("boom"));
+        Assert.True(p.IsCompleted);
+        Assert.Equal("pack-unreadable:InvalidOperationException", p.Result.Error);
+        Assert.All(files.Opened, s => Assert.True(s.Closed));
+    }
+
+    // ---- the pack and its payloads ------------------------------------------------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void APackOfAnotherMapIsRefusedByItsHeader()
+    {
+        GrassInputs r = Finish(Start(With(GrassTestPack.Build("arena_bowl")), NoKeyNeeded));
+        Assert.Equal("pack-format:MapKeyMismatch", r.Error);
+    }
+
+    [Fact]
+    public void ANonPackFileIsRefusedAsBadMagic()
+    {
+        var unity = new byte[5000];
+        "UnityFS\0"u8.CopyTo(unity);
+        Assert.Equal("pack-format:BadMagic", Finish(Start(With(unity), NoKeyNeeded)).Error);
+        Assert.Equal("pack-format:TooShort", Finish(Start(With(new byte[10]), NoKeyNeeded)).Error);
+        Assert.Equal("pack-format:TooShort", Finish(Start(With(new byte[0]), NoKeyNeeded)).Error);
+    }
+
+    [Fact]
+    public void ATruncatedAndAnExtendedPlainPackAreRefused()
+    {
+        byte[] pack = GrassTestPack.Build(Yard);
+        var shorter = new byte[pack.Length - 1];
+        Array.Copy(pack, shorter, shorter.Length);
+        Assert.Equal("pack-format:FileLength", Finish(Start(With(shorter), NoKeyNeeded)).Error);
+        var longer = new byte[pack.Length + 1];
+        Array.Copy(pack, longer, pack.Length);
+        Assert.Equal("pack-format:FileLength", Finish(Start(With(longer), NoKeyNeeded)).Error);
+    }
+
+    [Fact]
+    public void ABrokenPlacementRecordIsNamedWithItsIndexAndNoContent()
+    {
+        byte[] records = GrassTestPack.Placement(40, 5, (f, i) => { if (i == 3) BitConverter.GetBytes(float.NaN).CopyTo(f, i * 68 + 4 + 4 * 12); });
+        GrassInputs r = Finish(Start(With(GrassTestPack.Build(Yard, records)), NoKeyNeeded));
+        Assert.Equal("placement:NonFiniteMatrix@3", r.Error);
+        Assert.Null(r.Plan);
+        byte[] slice = GrassTestPack.Placement(40, 5, (f, i) => { if (i == 9) BitConverter.GetBytes(5).CopyTo(f, i * 68); });
+        Assert.Equal("placement:SliceOutOfRange@9", Finish(Start(With(GrassTestPack.Build(Yard, slice)), NoKeyNeeded)).Error);
+    }
+
+    [Fact]
+    public void AWipedAlbedoIsConstantDataAndAScrambledOneIsIncoherent()
+    {
+        GrassTestPack.Shape shape = GrassTestPack.SmallShape;
+        byte[] wiped = new byte[GrassTestPack.SizedRange(shape.Width, shape.Height, 5, shape.Mips, GrassBlockFormat.Dxt5).Size];
+        Assert.Equal("art-blocks:GrassTexArray:ConstantData", Finish(Start(With(GrassTestPack.Build(Yard, albedo: wiped)), NoKeyNeeded)).Error);
+        GrassArtRange range = GrassTestPack.SizedRange(shape.Width, shape.Height, 5, shape.Mips, GrassBlockFormat.Dxt5);
+        byte[] scrambled = GrassTestPack.Art(shape, 5, GrassBlockFormat.Dxt5);
+        var rng = new Random(3);
+        for (int mip = 2; mip <= 5; mip++)
+            for (long k = 0; k < range.MipBytes(mip); k++) scrambled[range.ElementOffset(2, mip) + k] = (byte)rng.Next(256);
+        Assert.Equal("art-blocks:GrassTexArray:MipChainIncoherent", Finish(Start(With(GrassTestPack.Build(Yard, albedo: scrambled)), NoKeyNeeded)).Error);
+        // the normal array and the normal texture are checked too
+        byte[] wipedNormal = new byte[GrassTestPack.SizedRange(shape.Width, shape.Height, 5, shape.Mips, GrassBlockFormat.Dxt1).Size];
+        Assert.Equal("art-blocks:GrassNormalArray:ConstantData", Finish(Start(With(GrassTestPack.Build(Yard, normalArray: wipedNormal)), NoKeyNeeded)).Error);
+        byte[] wipedTexture = new byte[GrassTestPack.SizedRange(shape.Width, shape.Height, 1, shape.Mips, GrassBlockFormat.Dxt1).Size];
+        Assert.Equal("art-blocks:Grass_new_1_N:ConstantData", Finish(Start(With(GrassTestPack.Build(Yard, normalTexture: wipedTexture)), NoKeyNeeded)).Error);
+    }
+
+    // ---- the placeholder ----------------------------------------------------------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void ThePlaceholderReadsNoArtFromThePackAndStillTakesItsPlacementAndShapes()
+    {
+        GrassTestPack.Shape shape = GrassTestPack.SmallShape;
+        // the pack's art is wiped: with the pack's art the build would be refused, with the placeholder it is not read
+        byte[] wiped = new byte[GrassTestPack.SizedRange(shape.Width, shape.Height, 5, shape.Mips, GrassBlockFormat.Dxt5).Size];
+        byte[] pack = GrassTestPack.Build(Yard, GrassTestPack.Placement(40), albedo: wiped);
+        GrassInputs r = Finish(Start(With(pack), NoKeyNeeded, GrassArtKind.Placeholder));
+        Assert.True(r.Ok, r.Error);
+        Assert.Equal("Placeholder", r.ArtName);
+        Assert.Equal("pack=ok placement=ok art=generated", r.Checks);
+        Assert.Equal(272L + 40 * 68, r.BytesRead);                           // the header and the placement only
+        Assert.Equal(40, r.Plan.Count);
+        var expected = new byte[r.Layout.TexArray.Size];
+        NativeGrassArt.Placeholder.Fill(expected, r.Layout.TexArray);
+        Assert.Equal(expected, r.TexArray);
+        Assert.Equal(r.Layout.NormalTexture.Size, r.NormalTexture.Length);
+    }
+
+    // ---- the worker itself --------------------------------------------------------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void AnAbandonedPreparationStopsBetweenTwoReads()
+    {
+        GrassPreparation owner = Start(new FakeFiles());                    // any instance: Load only reads Abandoned
         owner.Abandon();
         Assert.True(owner.Abandoned);
-        GrassInputs inputs = GrassPreparation.Load(owner, Row, WithPlacement(), GrassArtKind.Placeholder);
-        Assert.Equal("worker:abandoned", inputs.Error);
+        GrassInputs r = GrassPreparation.Load(owner, Yard, new TrackedStream(GrassTestPack.Build(Yard)), false, null, null, GrassArtKind.Pack);
+        Assert.Equal("worker:abandoned", r.Error);
+        Assert.Null(r.TexArray);
     }
 
     [Fact]
-    public void DropArtReleasesTheThreeBuffersButKeepsThePlan()
+    public void ALoadNeverThrowsAndNamesOnlyTheExceptionType()
     {
-        GrassInputs inputs = GrassPreparation.Load(null, Row, WithPlacement(), GrassArtKind.Placeholder);
-        inputs.DropArt();
-        Assert.Null(inputs.TexArray);
-        Assert.Null(inputs.NormalArray);
-        Assert.Null(inputs.NormalTexture);
-        Assert.NotNull(inputs.Plan);
+        var stream = new ThrowingStream(GrassTestPack.Build(Yard));
+        GrassInputs r = GrassPreparation.Load(null, Yard, stream, false, null, null, GrassArtKind.Pack);
+        Assert.Equal("io:InvalidOperationException", r.Error);
+        Assert.DoesNotContain("secret", r.Error);
+        Assert.Null(r.TexArray);
     }
 
     [Fact]
-    public void TheArenaSourceReadsExactlyTheRangeAtItsOffset()
+    public async Task ManyPreparationsRunTogetherWithoutSharingAnything()
     {
-        // a small fake stream with a marker at a known offset: Read(range) returns exactly Size bytes from Offset (the offsets are the model's, the read is positional)
-        FakeFiles files = new FakeFiles();
-        var stream = new byte[NativeGrassArt.StreamSize];
-        stream[NativeGrassArt.NormalTexture.Offset] = 0xA5;
-        stream[NativeGrassArt.NormalTexture.Offset + NativeGrassArt.NormalTexture.Size - 1] = 0x5A;
-        files.Files[NativeGrassArt.StreamPath] = stream;
-        files.Files[NativeGrassArt.AssetsPath] = new byte[NativeGrassArt.AssetsSize];
-        var source = new ArenaFilesArtSource(files);
-        Assert.Equal(GrassArtError.None, source.CheckFiles());
-        Assert.Equal(GrassArtError.None, source.Read(NativeGrassArt.NormalTexture, out byte[] data));
-        Assert.Equal((int)NativeGrassArt.NormalTexture.Size, data.Length);
-        Assert.Equal(0xA5, data[0]);
-        Assert.Equal(0x5A, data[^1]);
-        Assert.Equal(NativeGrassArt.NormalTexture.Size, source.BytesRead);
+        byte[] pack = GrassTestPack.Build(Yard, GrassTestPack.Placement(300));
+        byte[] container = Encrypt(pack, Yard);
+        var tasks = Enumerable.Range(0, 8).Select(i => Task.Run(() =>
+        {
+            var files = With(i % 2 == 0 ? pack : container);
+            return Finish(Start(files, i % 2 == 0 ? NoKeyNeeded : null));
+        })).ToArray();
+        GrassInputs[] results = await Task.WhenAll(tasks);
+        Assert.All(results, x => { Assert.True(x.Ok, x.Error); Assert.Equal(300, x.Plan.Count); });
+    }
+
+    [Fact]
+    public void ResultIsNullWhileAnUnfinishedWorkerRunsAndTheMillisecondsConvert()
+    {
+        Assert.Equal(1000.0, GrassInputs.Ms(Stopwatch.Frequency), 3);
+        Assert.Equal(0.0, GrassInputs.Ms(0), 3);
+        // a faulted or cancelled task cannot happen (the body catches everything); a finished one answers
+        GrassPreparation p = Start(new FakeFiles());
+        Assert.NotNull(p.Result);
     }
 }

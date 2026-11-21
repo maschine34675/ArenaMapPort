@@ -1,5 +1,34 @@
 # Current distribution contract: Equator, Bay5, AirPit, Bowl, Iceberg and Chop Shop (0.6.0, published 2026-11-14; encrypted bundles; the 0.5.0 five-map and 0.4.0 four-map contracts below are kept as history)
 
+2026-11-21 (the grass bundle, user decision "das gras als zusaetzliches bundle ausliefern, standardmaessig an. auf alle maps anwenden"; PENDING: no pack is built, nothing is staged, nothing is released; record
+[progress/native-grass.md](progress/native-grass.md)): each map with Arena grass (`validate_map_descriptors.NATIVE_GRASS_MAP_KEYS` = `arena_bowl`, `arena_iceberg`, `arena_yard`, in registry order; the
+sidecar flag `has_native_grass` and the C# `ArenaMapDescriptor.HasNativeGrass` are held equal to the list by `native_grass_errors`; Equator, Bay5, Air Pit and Chop Shop have no Arena grass)
+ships ONE more bundle file, `bundles/<map_key>_grass.bundle`, beside its three others. It is an **AMPB container** (AES-256-CTR, 1 MiB chunks) encrypted with the map's OWN content key
+by the same staging step (`ArenaMapPort.BundleCrypt stage` takes any number of `--bundle` arguments and accepts the name `<map_key>_grass.bundle`), so it needs no key file of its own and opens only
+with the player's Arena files like the others. Its PLAINTEXT is **not a Unity AssetBundle**: it is the project's own grass pack (format AMGP version 1, `tools/extract/grass_pack.py`), built without Unity
+from the installed Arena by `python tools/extract/extract_grass.py pack --map all` into the ignored `work/build/grass/<map_key>_grass.bundle`. The plaintext pack never ships: only its AMPB form goes into
+`dist/`, and `validate_distribution.py` refuses a file that starts with `AMGP` anywhere below `dist/` (like a plaintext `UnityFS` file). Pack layout (little-endian; the contract between the writer and the
+client's reader): `"AMGP"`, uint32 version 1, uint32 header size 272, uint32 entry count 4, the map key as 32 ASCII bytes zero-padded, then four 56-byte entries in the fixed order of kinds 1 placement records
+(Arena's `.pcl` file byte for byte, record size 68), 2 albedo array (DXT5), 3 normal array (DXT1), 4 normal texture (DXT1), each with kind, format, width, height, slices, mips, filter, wrap, aniso, a reserved
+zero word and its absolute offset and size; the payloads follow the header contiguously (a texture payload is slice-major with the whole mip chain per slice, mips below one 4 x 4 block padded to one block).
+Each pack carries its map's placement and its own copy of the shared art (about 11.2 MB; the three maps use one prefab and one set of textures). Placement counts (size 68 x count): Bowl 113,643 clumps
+(7,727,724 B), Iceberg 15,410 (1,047,880 B), Yard 10,132 (688,976 B), pinned as `validate_distribution.GRASS_PLACEMENT_RECORDS`.
+
+Checks. `validate_distribution.py` requires `bundles/<map_key>_grass.bundle` for exactly the three maps (the bundle-set check reports a missing or an unexpected one), requires the AMPB magic (a plain pack
+or a plaintext UnityFS bundle is refused by name), the authenticating header of the map's key and the right `map_key`, every chunk intact (`inspect --verify-chunks`), a plaintext whose first 272 bytes
+(`read-range`) parse as the pack header (`parse_grass_pack_header`: magic, version, header size, entry count, the map key, kinds in order, formats 0/5/1/1, record size 68 and the pinned count, texture sizes
+equal to the mip-chain arithmetic, slice counts consistent, payloads contiguous and ending exactly at the plaintext length) and the same art ranges in all three packs. A grass bundle gets NO UnityFS
+prefix check, NO block-table check (`validate_block_tables` only visits `scenes|navmesh|preset`; `validate_bundle_blocks.py --bundles-dir` skips `*_grass.bundle`) and NO CAB-name read
+(`validate_bundle_names.py` skips it); the map's three bundles keep all of those. The success line reads `DISTRIBUTION_OK 7 maps 21 bundles 3 grass bundles 7 sidecars encrypted` (the 21 are the map bundles,
+the 3 the grass bundles; the bundle-set check counts 24 files). `validate_port.py --map <stem> --distribution` compares the staged grass bundle with `work/build/grass/<map_key>_grass.bundle` through the tool's
+`verify` (ENC must be exactly the encryption of PLAIN) for a grass map and refuses a staged grass bundle of any other map. `tools/deploy-to-spt.ps1` also requires the grass bundle of a map whose sidecar says
+`has_native_grass` before a whole-dist deploy (the half-staged-map guard); `-DllOnly` and the other modes are unchanged. The packer (`make_release_zips.py`) has the rule label "grass bundle" for the three maps
+only (a grass bundle of any other map is an unclassified file), requires the file in the map's part, refuses a non-AMPB one and checks it in finished ZIPs (`check_partition`, `check_single`).
+
+Counts once the packs are staged (computed, not run): the Bowl part 26 -> **27**, the Iceberg part 27 -> **28**, the Yard part 21 -> **22**, every other part unchanged (core 242, Equator 24, Bay5 30, Air Pit 22,
+Chop Shop 27), dist 419 -> **422** files. The Yard section below counted 21 files for its part before the grass bundle; the grass bundle is the 22nd. Until the staging build runs after the pack tool,
+`validate_distribution.py` fails with "Bundle set mismatch: missing=['arena_bowl_grass.bundle', ...]" and `make_release_zips.py --plan` stops with "incomplete dist: part 'bowl' lacks" the grass bundle.
+
 2026-11-21 (Yard joined the release lists, PENDING: NOT built, NOT staged as bundles, NOT keyed, NOT released; PLAN-YARD item 15, record
 [progress/yard-release.md](progress/yard-release.md)): `ArenaMapRegistry.All`, `RELEASE_MAP_KEYS`, the csproj rows and the packer now expect a **seventh** map,
 `arena_yard` (Arena's `Arena_Yard`, called "Block" in Arena's locale and in the port's name "Arena: Block"; the packer's prose name is "Block"). The published
