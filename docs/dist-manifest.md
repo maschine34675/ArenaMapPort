@@ -1,6 +1,6 @@
-# Current distribution contract: Equator, Bay5, AirPit, Bowl, Iceberg and Chop Shop (0.6.0, published 2026-11-14; encrypted bundles; the 0.5.0 five-map and 0.4.0 four-map contracts below are kept as history)
+# Current distribution contract: Equator, Bay5, AirPit, Bowl, Iceberg, Chop Shop and Block (0.7.0, prepared 2026-11-21, NOT published; encrypted bundles; the 0.6.0 six-map, 0.5.0 five-map and 0.4.0 four-map contracts below are kept as history; the 0.7.0 contract is the last section)
 
-2026-11-21 (the grass bundle, user decision "das gras als zusaetzliches bundle ausliefern, standardmaessig an. auf alle maps anwenden"; PENDING: no pack is built, nothing is staged, nothing is released; record
+2026-11-21 (the grass bundle, user decision "das gras als zusaetzliches bundle ausliefern, standardmaessig an. auf alle maps anwenden"; state when this paragraph was written: no pack built, nothing staged, nothing released; SUPERSEDED the same day, the three packs are built and staged and dist holds 422 files, see "Release 0.7.0 contract" at the end; record
 [progress/native-grass.md](progress/native-grass.md)): each map with Arena grass (`validate_map_descriptors.NATIVE_GRASS_MAP_KEYS` = `arena_bowl`, `arena_iceberg`, `arena_yard`, in registry order; the
 sidecar flag `has_native_grass` and the C# `ArenaMapDescriptor.HasNativeGrass` are held equal to the list by `native_grass_errors`; Equator, Bay5, Air Pit and Chop Shop have no Arena grass)
 ships ONE more bundle file, `bundles/<map_key>_grass.bundle`, beside its three others. It is an **AMPB container** (AES-256-CTR, 1 MiB chunks) encrypted with the map's OWN content key
@@ -25,11 +25,11 @@ the 3 the grass bundles; the bundle-set check counts 24 files). `validate_port.p
 `has_native_grass` before a whole-dist deploy (the half-staged-map guard); `-DllOnly` and the other modes are unchanged. The packer (`make_release_zips.py`) has the rule label "grass bundle" for the three maps
 only (a grass bundle of any other map is an unclassified file), requires the file in the map's part, refuses a non-AMPB one and checks it in finished ZIPs (`check_partition`, `check_single`).
 
-Counts once the packs are staged (computed, not run): the Bowl part 26 -> **27**, the Iceberg part 27 -> **28**, the Yard part 21 -> **22**, every other part unchanged (core 242, Equator 24, Bay5 30, Air Pit 22,
-Chop Shop 27), dist 419 -> **422** files. The Yard section below counted 21 files for its part before the grass bundle; the grass bundle is the 22nd. Until the staging build runs after the pack tool,
+Counts once the packs are staged (computed then; SUPERSEDED, they were staged and `--plan` reads exactly these figures, see "Release 0.7.0 contract"): the Bowl part 26 -> **27**, the Iceberg part 27 -> **28**, the Yard part 21 -> **22**, every other part unchanged (core 242, Equator 24, Bay5 30, Air Pit 22,
+Chop Shop 27), dist 419 -> **422** files. The Yard section below counted 21 files for its part before the grass bundle; the grass bundle is the 22nd. (Historical, before the staging build ran:) until the staging build runs after the pack tool,
 `validate_distribution.py` fails with "Bundle set mismatch: missing=['arena_bowl_grass.bundle', ...]" and `make_release_zips.py --plan` stops with "incomplete dist: part 'bowl' lacks" the grass bundle.
 
-2026-11-21 (Yard joined the release lists, PENDING: NOT built, NOT staged as bundles, NOT keyed, NOT released; PLAN-YARD item 15, record
+2026-11-21 (Yard joined the release lists; state on the promotion day: NOT built, NOT staged as bundles, NOT keyed, NOT released; SUPERSEDED the same day, Yard is built, keyed and staged, see "Release 0.7.0 contract" at the end; PLAN-YARD item 15, record
 [progress/yard-release.md](progress/yard-release.md)): `ArenaMapRegistry.All`, `RELEASE_MAP_KEYS`, the csproj rows and the packer now expect a **seventh** map,
 `arena_yard` (Arena's `Arena_Yard`, called "Block" in Arena's locale and in the port's name "Arena: Block"; the packer's prose name is "Block"). The published
 0.6.0 contract below stays the published one. Once its bundles exist (U1, item 16) and are staged with its content key (item 17), the files of the Yard part are:
@@ -44,7 +44,7 @@ crowdless entry (it has a crowd: `CROWDLESS_MAP_KEYS` stays Iceberg only). The c
 `validate_distribution.py` also checks the staged acoustics files against the stage-2 key-source files (the same byte-copy check as for the spectator audio; the first map with a
 second room tone made the check worth adding; measured on 2026-11-20: no room-tone WAV of any map is a copy of one).
 
-State on the day of the promotion (a DllOnly client build and a server build from this tree, nothing built by Unity): dist holds **408 files**, the 10 Yard files that need no
+(Historical, superseded by the 422-file contract at the end.) State on the day of the promotion (a DllOnly client build and a server build from this tree, nothing built by Unity): dist holds **408 files**, the 10 Yard files that need no
 bundle (`acoustics/arena_yard/` 4, `ai/yard.ai.json`, `gate-sounds/arena_yard/` 3, `spectators/arena_yard/spectator.json.gz`, `db/arena_yard/base.json`); the 11 missing ones are the
 three bundles, the key file, the shader sidecar, the banner and the five loading screens (the last two come from `extract_banners.py` and `extract_loadscreens.py`, whose output for
 Yard waits under `work/extract/yard-identity`, and from item 16/17). With them dist reads **419 files** (estimate: 408 plus 11, not run). `make_release_zips.py --plan` stops with "incomplete dist: part 'yard' lacks" the
@@ -52,7 +52,7 @@ seven named files (it requires the first loading screen only), and `validate_dis
 is in and then fails on the missing bundles until U1 and the first stage exist. `tools/deploy-to-spt.ps1` refuses the whole-dist deploy while the server mod holds `db/arena_yard` and
 the client plugin lacks the map's bundles and key file (Iceberg rule 6); nothing deploys before item 17.
 
-2026-11-13: the six-map 0.6.0 contract is the last section, "Release 0.6.0 contract". The two paragraphs below (2026-11-11) describe the state of the promotion day, when Chop Shop was pending; that state is superseded (its bundles, key and shader sidecar exist and are staged, `--plan` reads 396 files).
+2026-11-13: the six-map 0.6.0 contract is the section "Release 0.6.0 contract" (the 0.7.0 seven-map contract at the very end supersedes it for the next release). The two paragraphs below (2026-11-11) describe the state of the promotion day, when Chop Shop was pending; that state is superseded (its bundles, key and shader sidecar exist and are staged, `--plan` reads 396 files).
 
 2026-11-11 (Autoservice joined the release lists, PENDING: NOT built, NOT staged as bundles, NOT released; PLAN-AUTOSERVICE item 12, record
 [progress/autoservice-release.md](progress/autoservice-release.md)): `ArenaMapRegistry.All`, `RELEASE_MAP_KEYS`, the csproj rows and the packer now expect a
@@ -63,7 +63,7 @@ first staging creates the content key with `-p:ArenaMapPortCreateReleaseKeys=tru
 (`spatial-audio.json`, `source.audiobakedata`, `sharedassets112.assets_29.wav`: 3), `gate-sounds/arena_autoservice/` (`gate-sounds.json` and four WAVs: 5),
 `flares/arena_autoservice/` (`flares.json` and two raw textures: 3, eight active gas-lamp flares), `ai/autoservice.ai.json` (1), `loadscreens/arena_autoservice_1..5.jpg`
 (5), `material-shaders.arena_autoservice.json` (1), `db/arena_autoservice/base.json` (1) and `banners/arena_autoservice.jpg` (1). It has no water and no DynamicMaps overview (Phase C "not yet" lists: it is in none of
-`OVERVIEW_MAP_NAMES` and `WATER_MAP_KEYS`, and in `FLARE_MAP_KEYS`). **Its crowd (phase C, 2026-11-11, commit of branch `phase-c/crowd`; the earlier "crowdless" reading of
+`OVERVIEW_MAP_NAMES` and `WATER_MAP_KEYS`, and in `FLARE_MAP_KEYS`; the overview was added on 2026-11-14, see "Chop Shop overview addition" and "Release 0.7.0 contract": `OVERVIEW_MAP_NAMES` lists AutoService now). **Its crowd (phase C, 2026-11-11, commit of branch `phase-c/crowd`; the earlier "crowdless" reading of
 this paragraph is superseded):** Autoservice is the fifth crowd map (`extract_spectator.MAP_SCENES`, its 30 fans from `Arena_AutoService_TeamFight_DesignStuff`), so its part gains
 `spectators/arena_autoservice/spectator.json.gz` (24 plus 1 = 25 files) and the shared set grows from 123 to 135 PNGs (two cubemaps with ids of their own, 12 duplicate-content files, 249,714 B), which
 moves 12 files into the core part (230 plus 12 = 242). `CROWDLESS_MAP_KEYS` is Iceberg only. The four older graphs keep their content: only their `texture_manifest_sha256`
@@ -75,7 +75,7 @@ list above that need no bundle; the five missing ones are the three bundles, the
 maps 18 bundles 6 sidecars encrypted` only after U1 and the first stage. `tools/deploy-to-spt.ps1` refuses the whole-dist deploy while the server mod holds
 `db/arena_autoservice` and the client plugin lacks the map's bundles and key file (Iceberg rule 6); nothing deploys before item 14.
 
-The current contract is the six-map one of release 0.6.0 (published 2026-11-14, see the last section, "Release 0.6.0 contract"); the five-map one of release 0.5.0 (2026-11-07, section "Release 0.5.0 contract") is history. Every table and count between here and that section describes an earlier stage; the 256-file layout of 0.4.0 (published 2026-10-30) is history.
+The published contract is the six-map one of release 0.6.0 (published 2026-11-14, see "Release 0.6.0 contract"; the prepared, unpublished seven-map one of 0.7.0 is the last section); the five-map one of release 0.5.0 (2026-11-07, section "Release 0.5.0 contract") is history. Every table and count between here and that section describes an earlier stage; the 256-file layout of 0.4.0 (published 2026-10-30) is history.
 
 2026-10-31 (Iceberg overview): the current unpublished five-map staging adds
 `dynamicmaps/ArenaMapPort_Iceberg/ArenaMapPort_Iceberg.jsonc` and `Layers/Ground.svg`
@@ -648,7 +648,7 @@ Nothing is cut, scanned, uploaded, tagged or pushed. The ZIP size, its SHA-256, 
   core 242, equator 24, bay5 30, airpit 22, bowl 26, iceberg 27, autoservice 25 (396); the single ZIP has no parts and records everything in `BepInEx/plugins/maschine-ArenaMapPort/parts/full.json`.
 - **Maps.** Six: Equator, Bay5, Air Pit, Bowl, Iceberg and Chop Shop (`arena_autoservice`, display name "AutoService" in the registry, "Chop Shop" in every player text and in the generated README.txt through `PROSE_NAMES`). 18 bundles, 6 key files, 6 shader sidecars.
   Chop Shop's 25 files are listed in the 2026-11-11 paragraph at the top (bundles 3, key, acoustics 3, gate sounds 5, flares 3, AI sidecar, loading screens 5, shader sidecar, `db/arena_autoservice/base.json`, banner, and its crowd graph
-  `spectators/arena_autoservice/spectator.json.gz`). It has a flare package and a crowd, and no water and no DynamicMaps overview (`OVERVIEW_MAP_NAMES` and `NATIVE_WATER_MAP_KEYS` do not list it). Per map: crowd on five (`CROWDLESS_MAP_KEYS` is Iceberg only),
+  `spectators/arena_autoservice/spectator.json.gz`). It has a flare package and a crowd, and no water and, in the 0.6.0 ZIP, no DynamicMaps overview (0.6.0 history: `OVERVIEW_MAP_NAMES` did not list it then; since 2026-11-14 it does, see "Chop Shop overview addition"; `NATIVE_WATER_MAP_KEYS` does not list it). Per map: crowd on five (`CROWDLESS_MAP_KEYS` is Iceberg only),
   flares on Equator, Bay5, Bowl and Chop Shop, overview on five (not Chop Shop), native water on Bay5 and Iceberg.
 - **Spectators.** 135 shared PNGs (123 in 0.5.0; 12 new files, 249,714 B) and five crowd graphs; the four older graphs differ from their 0.5.0 bytes only in `texture_manifest_sha256`, so the graphs and the shared manifest ship together (a part of them
   extracted over 0.5.0 would be refused by the runtime hash check). `spectator-audio/` still holds 91 files; the six roar beds were re-exported 6 dB louder (-26 dBFS RMS) on 2026-11-07 after the 0.5.0 cut and are new bytes.
@@ -678,3 +678,38 @@ overview; native water remains Bay5/Iceberg only. The runtime allowlist, client
 staging and distribution validator require these files. The release packer's
 existing AutoService path rule assigns them to Chop Shop. Generated previews and
 receipts remain local. The published 396-file 0.6.0 ZIP is unchanged.
+
+## Release 0.7.0 contract - 2026-11-21 (seven maps, one whole ZIP; prepared, NOT published)
+
+Version 0.7.0 is the lead's choice by the project's pattern (a new map is a minor version, as 0.3.0 Bowl, 0.5.0 Iceberg and 0.6.0 Chop Shop); the user named no number ("version erhoehen und release-texte aktualisieren", 2026-11-21) and can still change it.
+The form is that of 0.6.0: ONE whole ZIP on Pixeldrain plus its one-line `.sha256`, a GitHub release with the notes and the checksum file as its only asset, tag `v0.7.0` on the publication commit. The cut is
+`python tools/release/make_release_zips.py --single --out work/releases/0.7.0/pixeldrain-<commit> --extract-check <empty scratch dir>` from a clean tree; the version comes from the two csproj files.
+Nothing is cut, scanned, uploaded, tagged or pushed. The ZIP size, its SHA-256, the build commit, the links and the VirusTotal lines are not known here; they come from the cut and are entered in [releases/v0.7.0.md](releases/v0.7.0.md) then.
+
+- **Files.** `make_release_zips.py --plan` and `--single --plan` on the staged dist of 2026-11-21 (HEAD `1ad18c3`; the plan then still labelled the files 0.6.0 and both staged DLLs carry 0.6.0 until the client and server are rebuilt at 0.7.0):
+  **422 files** (+4 generated entries in the single ZIP), raw 7,867,157,355 B (7,502.7 MiB), estimated single ZIP **7,833,724,745 B** (7,470.8 MiB, about 7.3 GiB; 0.6.0 was 396 files and 6,348,672,857 B, 5.91 GiB; the estimate of
+  0.6.0 undershot its real ZIP by 21,222 B, so the final figure comes at the cut). The multi-part plan (the packer's default mode, not the release form) reads core 242, equator 24, bay5 30, airpit 22, bowl 27, iceberg 28, autoservice 27, yard 22 (= 422;
+  its per-part estimates sum to 7,833,732,488 B). The single ZIP has no parts and records everything in `BepInEx/plugins/maschine-ArenaMapPort/parts/full.json`.
+- **Against 0.6.0 (+26 files).** Bowl +1 and Iceberg +1 (their grass bundles), Chop Shop +2 (the overview files `dynamicmaps/ArenaMapPort_AutoService/ArenaMapPort_AutoService.jsonc` and `Layers/Ground.svg`), Block +22 (a new part, its grass bundle included);
+  core 242, Equator 24, Bay5 30 and Air Pit 22 are unchanged in count.
+- **Maps.** Seven: Equator, Bay5, Air Pit, Bowl, Iceberg, Chop Shop and Block (`arena_yard`, display name "Yard" in the registry, "Block" in every player text and in the generated README.txt through `PROSE_NAMES`; player name "Arena: Block").
+  24 bundle files in `bundles/`: 21 map bundles (scenes, NavMesh, preset for seven maps) and 3 grass bundles (`validate_distribution.py`: `DISTRIBUTION_OK 7 maps 21 bundles 3 grass bundles 7 sidecars encrypted`), 7 key files, 7 shader sidecars, 6 DynamicMaps overview packs (Block has none).
+  Per map: crowd on six (`CROWDLESS_MAP_KEYS` is Iceberg only), flares on Equator, Bay5, Bowl and Chop Shop (`FLARE_MAP_KEYS`; Air Pit, Iceberg and Block have none), overview on six (not Block), native water on Bay5 and Iceberg (`NATIVE_WATER_MAP_KEYS`), native grass on Bowl, Iceberg and Block
+  (`NATIVE_GRASS_MAP_KEYS`).
+- **Block's 22 files.** `bundles/arena_yard_{scenes,navmesh,preset,grass}.bundle` (4; scenes 1,428,190,220 B, NavMesh 130,752 B, preset 7,003 B, grass 11,874,752 B, all encrypted), `keys/arena_yard.json` (1), `acoustics/arena_yard/` (4: graph, bake and two room-tone WAVs), `gate-sounds/arena_yard/` (3),
+  `spectators/arena_yard/spectator.json.gz` (1), `ai/yard.ai.json` (1), `loadscreens/arena_yard_1..5.jpg` (5), `material-shaders.arena_yard.json` (1), `db/arena_yard/base.json` (1) and `banners/arena_yard.jpg` (1). Plan for the Block part: raw 1,456,865,763 B, estimated 1,453,841,977 B.
+  The two paragraphs of the same day above that call Yard pending (408 and 419 files, "21 files") are the state of the promotion day and are superseded by this list.
+- **Grass bundles.** Bowl 18,913,724 B, Iceberg 12,233,656 B, Block 11,874,752 B (encrypted; the plain packs, 18,913,020 / 12,233,176 / 11,874,272 B, exist only under `work/build/grass/`). AMPB containers encrypted with each map's OWN content key: no new wrap, the three key files
+  are not changed by them. The format and checks are described in the first paragraph at the top; the packer's rule label "grass bundle" exists for these three maps only. Developer keys of the grass (four per grass map) are not named in any player text.
+- **Spectators.** The shared set stays at 135 PNGs and `spectator-audio/` at 91 files: Block adds one crowd graph (27 fans) and no texture, and the six older graphs keep their 0.6.0 content (measured by scratch staging; not compared byte for byte with the published ZIP). Six crowd graphs in all.
+- **Keys.** Seven key files, `keys/<map_key>.json`, schema 2: the five older maps carry wraps for 0.6.1.0.48206 and 0.6.2.0.48473, Chop Shop and Block one wrap each, for 0.6.2.0.48473. `KEYS_BUILT_FOR` (pinned equal to `tools/bundle/key-sources.json`) stays 0.6.1.0.48206.
+  `verify-keys` is recorded OK for Block on 0.6.2.0.48473 (build machine) and 0.6.1.0.48206 (test host); NOT checked for Block on 0.6.2.0.48598, 0.6.2.0.48767 or 0.6.0.0.47752 (the second PC was not reachable); the six older maps were checked for 0.6.0 on 0.6.1.0.48206, 0.6.2.0.48473,
+  0.6.2.0.48598 and 0.6.2.0.48767, and the four maps of 0.4.0 on 0.6.0.0.47752. The generated README.txt states exactly these checks; the lead re-runs `verify-keys` on every Arena build at hand at the cut and changes the sentence (`ENCRYPTION_TEXT`) and its pins when a check is added.
+  Block's content key was created on 2026-11-21 at its first stage; the off-VM backup of `work/release-keys` is confirmed by the user the same day. A key never leaves that folder.
+- **Server and client data that changed since 0.6.0.** `db/arena_yard/base.json` and the server's six-entry official-text pack (the 0.6.0 server cannot be mixed with this ZIP), both DLLs (Block's registration; the rain repair; the grass renderer and its AMPB reader; the ambience-default revision 4), Chop Shop's overview files.
+- **Generated README.txt.** Single-ZIP wording; `Included locations` names Block (through `PROSE_NAMES`); the crowd sentence lists six maps; the audio paragraph says that Block was looked at and listened to by the author as a whole on 2026-11-21 (the quoted sentence names no single item) and that its mix is the author's by ear;
+  new paragraphs on the grass (a fourth encrypted file, on by default, measured cost about 0.13 to 0.27 ms per frame, not seen by the author, extract the whole ZIP) and on the rain on the screen (host-run on Block and Equator only, not seen by the author); the gate paragraph adds Block's two gates; the DynamicMaps sentence says Block has none and
+  that 1.2.1 is the tested version and 1.3 is not promised; the encryption paragraph states seven maps, the fourth grass bundle and the checks above. It names no developer key and no setting for grass or rain. The generated text says nothing about ArenaMode's support of Block beyond "up to ArenaMode, no match run from this project".
+- **Not part of this contract.** No new public F12 setting (`CompactConfiguration.IsPublic` and `MapConfigVisibility.IsPlayerOption` unchanged: four public keys); the developer keys `Map (arena_yard)/LevelBorderWalls`, `Lighting (arena_yard)/RoofDistantShadows`, `MaterialFixes/YardShaderStandins`, the grass keys and
+  `Lighting (<key>)/RainUnderRoofCheck` are developer-only; SPT 4.1.6 / EFT 0.16.9.5 unchanged; the Arena installation check, the map notices and the mode-plugin contracts (`ScoreMonitors`, `SpectatorCrowd`, `SpawnGates.GatesOpen`) unchanged. Not checked by the packer or here: the sizes of the final cut,
+  the full Python suite on the exact tree, the DLL versions (`DLL_VERSIONS_OK` stays red until the client and server are rebuilt at 0.7.0), the host run of all seven maps.

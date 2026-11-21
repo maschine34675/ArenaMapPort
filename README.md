@@ -1,6 +1,6 @@
 # ArenaMapPort
 
-**Equator, Bay5, Air Pit, Bowl, Iceberg and Chop Shop from Escape from Tarkov: Arena, rebuilt for SPT.**
+**Equator, Bay5, Air Pit, Bowl, Iceberg, Chop Shop and Block from Escape from Tarkov: Arena, rebuilt for SPT.**
 
 The release includes the map assets, client plugin and server component. It is
 designed for use with **ArenaMode**, installed separately; ArenaMapPort itself
@@ -16,15 +16,45 @@ does not add Arena match rules.
 | Equator Night | Fixed 00:00 start, rain, neon lights, colored chemlights, haze and reflective floors. A natural appearance is available in settings. |
 | Bay5 | Two normal server-time choices, a progressing day/night cycle and dynamic weather. |
 | Air Pit | An abandoned terminal hangar: the furnished main hall with its four shops, the passport hall and the apron. Two normal server-time choices, a progressing day/night cycle and dynamic weather, like Bay5. Two gates serve as extractions. |
-| Bowl | An open-air stadium arena: the sunken stadium field with a crashed Mi-26 in the middle, a gated team pocket at the east and at the west end, containers and guard towers. The spectator stands are scenery and no grass is ported. Two normal server-time choices, a progressing day/night cycle and dynamic weather, like Bay5. Two gates serve as extractions. |
-| Iceberg | The Iceberg resort hotel on a rocky canyon: a multi-storey hotel with a rotunda, with its lobby, atrium, pool hall and cafe inside and a street area around it. It uses Arena's CheckPoint layout: two team pockets behind sliding gates at the east and west ends and three capture points (A, B and C) between them. The sea below the canyon uses the same native water as Bay5's harbor. It uses the server's time of day and weather, as on Bay5; raids were run at noon and in the evening, clear. The east and west gates serve as extractions. There is no spectator crowd and no grass is ported. |
-| Chop Shop | A garage hall with a walled street yard, in Arena's TeamFight layout: a team pocket at the east end and one at the west end, one capture point and four moving gates. It uses the server's time of day and weather, as on Bay5 (summer set only: no winter or snow look). Arena's own spectator crowd fills its stands. The east and west gates serve as extractions. A DynamicMaps overview is included; there is no native water. |
+| Bowl | An open-air stadium arena: the sunken stadium field with a crashed Mi-26 in the middle, a gated team pocket at the east and at the west end, containers and guard towers. The spectator stands are scenery. Arena's own grass grows at the walls and lawns (since 0.7.0). Two normal server-time choices, a progressing day/night cycle and dynamic weather, like Bay5. Two gates serve as extractions. |
+| Iceberg | The Iceberg resort hotel on a rocky canyon: a multi-storey hotel with a rotunda, with its lobby, atrium, pool hall and cafe inside and a street area around it. It uses Arena's CheckPoint layout: two team pockets behind sliding gates at the east and west ends and three capture points (A, B and C) between them. The sea below the canyon uses the same native water as Bay5's harbor. It uses the server's time of day and weather, as on Bay5; raids were run at noon and in the evening, clear. The east and west gates serve as extractions. Arena's own grass grows along its walls and kerbs (since 0.7.0). There is no spectator crowd. |
+| Chop Shop | A garage hall with a walled street yard, in Arena's TeamFight layout: a team pocket at the east end and one at the west end, one capture point and four moving gates. It uses the server's time of day and weather, as on Bay5 (summer set only: no winter or snow look). Arena's own spectator crowd fills its stands. The east and west gates serve as extractions. A DynamicMaps overview is included (since 0.7.0); there is no native water. |
+| Block | A residential courtyard between apartment houses, in Arena's TeamFight layout (Arena's own name for it is "Block"; its internal name is `Arena_Yard`; shown in the game as "Arena: Block"): two sealed team pockets about 130 m apart, one behind a rising facade gondola at the south end and one behind two swinging gate leaves at the north end, and one capture point. It uses the server's time of day and weather, as on Bay5 (summer set only: no winter or snow look). Arena's own spectator crowd fills its balconies and stands. Arena's grass grows on the lawns of the courtyard. The south and north gates serve as extractions. There is no native water, no lamp flare and no DynamicMaps overview. |
 
-All six maps include imported geometry, materials, lighting, collision and bot
+All seven maps include imported geometry, materials, lighting, collision and bot
 navigation, with restored ambience, material sounds, room acoustics and decals.
 Equator and Bay5 also have restored dust. Equator, Bay5, Bowl and Chop Shop have original
-lamp flares; Air Pit and Iceberg do not. Bay5 includes its harbor background and
-water, and Iceberg its sea.
+lamp flares; Air Pit, Iceberg and Block do not. Bay5 includes its harbor background and
+water, and Iceberg its sea. Bowl, Iceberg and Block show Arena's own grass (below).
+
+Block is new in 0.7.0 (Arena's `Arena_Yard`). The author looked at the map and listened to
+it on 21 November 2026, night included, and approved it ("sieht gut aus, auch nachts, ist dann
+halt wie die anderen maps im außenbereich recht dunkel. hört sich gut an, ambient sounds können
+etwas lauter sein (gain auf 5, range auf 3)"): the statement covers the look and the sound as a
+whole and names no single item, and the ambient sound mix of Block (gain 5 dB, range 3) is the
+author's own by ear. Like the other maps outdoors, it is rather dark at night. Block's gate sounds, crowd calls and
+reactions were not listened to one by one. The map was raided on the test host with and without
+bots and with a gate hold and release; the author has not looked at its selection marker.
+
+Native grass is new in 0.7.0 on Bowl, Iceberg and Block (Equator, Bay5, Air Pit and Chop Shop have
+none in Arena). It shows Arena's own tufts with seed stalks along walls, kerbs and lawns and is on by default;
+there is no setting for it. It comes from a fourth encrypted file per map next to the map's three
+bundles (`bundles/<map>_grass.bundle`, 12 to 19 MB) and the grass code itself reads no file from your Arena folder; the file opens with the same map key as the map's other
+bundles, so the installed Arena is still required. The grass has no collision and no footstep or bullet effect, and it neither bends under
+a player nor moves in the wind. On the test host (1920 x 1080, the game's frame limiter lifted)
+it cost about 0.13 to 0.27 ms per frame; with the 120 fps limiter the frame rate stayed at the baseline.
+The author has not seen the grass; it was looked at on the test host only. If you replace only the DLLs
+of an older installation, the log warns about the missing grass file and no grass appears:
+extract the whole ZIP.
+
+Rain on the screen is new in 0.7.0 on every map. In rain, in the open and not under a roof, drops now
+run down the screen: until now the game's "camera under rain" answer was always no on a ported
+map. The repair answers it from the same depth picture the falling rain already uses, so that
+drops and streaks agree (under a roof or inside a hall there are no drops; under Equator's open
+roof lattice there are). It needs real rain and a camera that does not look steeply down, and
+there is no setting for it. The same answer also drives the water on glasses, the ripples on wet ground and
+the rain on wet props, which nobody has looked at. Checked on the test host on Block and Equator only; the
+author has not seen it.
 
 Chop Shop is new in 0.6.0 (Arena's `Arena_AutoService`, shown in the game as "Arena: Chop Shop").
 Its ambient sound mix is a computed start value; the author listened to the map on
@@ -41,9 +71,9 @@ chosen by the author by eye on his own PC and can be changed with DeveloperMode.
 The ambient sound mix of Iceberg is a first choice that has not been listened through
 yet.
 
-Since 0.6.0 every map has more Bot spawn rows for mode plugins (Chop Shop 16, Equator 16,
-Bay5 16, Iceberg 17, Air Pit 20, Bowl 21) and the two exits stand in the team start
-areas, marked by their green flares: in a plain raid you spawn a few metres from an
+Since 0.6.0 the six older maps have more Bot spawn rows for mode plugins (Chop Shop 16, Equator 16,
+Bay5 16, Iceberg 17, Air Pit 20, Bowl 21) and their two exits stand in the team start
+areas (Block has 18 Bot rows and 4 Player rows from the start, and its two exits stand in its two pockets), marked by their green flares: in a plain raid you spawn a few metres from an
 8-second exit (in the two ArenaMode Team Deathmatch runs on Bowl and Iceberg, ArenaMode
 hid the extraction and nobody extracted; bots never use exits). On Air Pit the north gate
 cannot be reached in a plain raid, because the passport gates stay shut until a mode plugin
@@ -51,7 +81,7 @@ opens them. On Iceberg, the first spawn at some start points can stand within 2 
 exit flare and look tinted green.
 
 Since 0.4.0 the original animated spectators fill the stands of Equator, Bay5,
-Air Pit and Bowl, and since 0.6.0 those of Chop Shop (five of the six maps; Iceberg has none), with spatial crowd
+Air Pit and Bowl, since 0.6.0 those of Chop Shop and since 0.7.0 those of Block (six of the seven maps; Iceberg has none), with spatial crowd
 calls from 13 original fan recordings (one call every 4 to 8 seconds) and a quiet
 crowd murmur from each group of spectators. Since 0.5.0 the murmur is Arena's own
 neutral in-match crowd bed (0.4.0 used its postmatch recording); playing it from the
@@ -62,27 +92,29 @@ all) while the stands add one of Arena's louder cheering or angry crowd recordin
 ArenaMode 0.4.0 and later uses the contract and drives the reactions from its match events; a plain raid without a mode sends no such event, so nothing reacts there. The author listened to the developer demo on
 7 November 2026 and found it good (he did not report on the angry recordings
 separately; the demo and the 70 clips ran on the four older crowd maps on 2 November, the roar layer only on Equator and Bowl, not on Bay5 and Air Pit; Iceberg has no crowd,
-and no single reaction on Chop Shop is recorded as heard apart from the author's statement about the map as a whole). The roar beds are exported 6 dB louder than in 0.5.0 (since 0.6.0; the developer
+and no single reaction on Chop Shop or Block is recorded as heard apart from the author's statements about those maps as a whole). The roar beds are exported 6 dB louder than in 0.5.0 (since 0.6.0; the developer
 volume key stays at 1.0); that level has not been listened to. The idle and cheering animations run independently
 of match events.
 Their textures are stored once for all maps (135 images, about 147 MB on disk). The crowds
 decode 135 shared images into about 0.54 GB of video memory per raid on each of the
-five crowd maps and add about two seconds to raid loading; the
-[0.6.0 release notes](docs/releases/v0.6.0.md) explain how to skip a map's crowd.
+six crowd maps (Block adds no image) and add about two seconds to raid loading; the
+[0.7.0 release notes](docs/releases/v0.7.0.md) explain how to skip a map's crowd.
 
 The gates and vehicles at the team spawn enclosures use Arena's own open positions
 and, where Arena has them, its motions (at half their time). They stand open from raid
 start, or a mode plugin such as ArenaMode holds them closed and opens them when the
 fight starts; Air Pit's passport control stays shut until a mode plugin opens it. A few doors that
 Arena itself never moves (three warehouse rollers on Bay5, the FCK shop's roller shutter on Equator)
-stay shut.
+stay shut. Block's two gates are a rising facade gondola at the south and two swinging leaves at the north;
+the gondola overshoots its open pose a little, as Arena's does.
 
 ## Compatibility
 
 - Tested with **SPT 4.1.6 / EFT 0.16.9.5-40743**. The server declares `~4.1.5`.
 - Install **both** the client and server components.
-- Chop Shop is registered as a location in SPT, but whether and when ArenaMode offers it in
-  its matches is up to ArenaMode. This project has run no ArenaMode match on Chop Shop.
+- Chop Shop and Block are registered as locations in SPT, but whether and when ArenaMode offers
+  them in its matches is up to ArenaMode. This project has run no ArenaMode match on Chop Shop
+  or Block.
 - Requires an installed **Escape from Tarkov: Arena**. Arena is sold separately from
   Escape from Tarkov and the maps are built from its files, so the server registers the
   maps and the client loads them only on a PC where Arena is installed with the
@@ -101,27 +133,32 @@ stay shut.
   verified installation both components log the reason at Info; the server does not
   register the Arena locations, so they are missing from the location selection (a message
   at the main menu then names the reason and what to do), and the
-  client does not load the map files. The map bundles in the release are encrypted with a key
+  client does not load the map files. The map bundles in the release (three per map, and a fourth, the grass
+  bundle, for Bowl, Iceberg and Block) are encrypted with a key
   that your PC derives from the Arena resource files each map is built from (the texture and
   mesh data of its scenes; a fixed sample of a few MB is read when the map is first used and
   never sent anywhere; the mod's `keys` folder lists the files by path and size only), so they
   work only next to your own Arena files; this is a requirement, not copy protection (anyone
   with Arena can decrypt them), and the art and audio files shipped beside the bundles are not
-  encrypted). The keys in this release are built for Arena 0.6.1.0.48206 (Chop Shop's key file for
-  0.6.2.0.48473), and the key files of all six maps were checked on 0.6.1.0.48206, 0.6.2.0.48473 and the
-  newer hotfixes 0.6.2.0.48598 and 0.6.2.0.48767; the four maps of 0.4.0 also open on
-  0.6.0.0.47752, whose resource files are the same, and Iceberg and Chop Shop were not checked
+  encrypted). The keys in this release are built for Arena 0.6.1.0.48206 (the key files of Chop Shop and Block for
+  0.6.2.0.48473), and the key files of the six older maps were checked on 0.6.1.0.48206, 0.6.2.0.48473 and, for 0.6.0, the
+  newer hotfixes 0.6.2.0.48598 and 0.6.2.0.48767 (these files are byte-identical to 0.6.0's); Block's key file was checked on 0.6.1.0.48206 and
+  0.6.2.0.48473 only; the four maps of 0.4.0 also open on
+  0.6.0.0.47752, whose resource files are the same; Iceberg, Chop Shop and Block were not checked
   there (your build is in the client log at startup, `Arena: found ...`); if an Arena update changes a map's resource files, that map
   will not load (the client log names the cause) until an updated ArenaMapPort package
   carries the key for your build; the other maps keep working.
 - **ArenaMode** is the intended gameplay companion and is installed separately.
   It is not required to load the maps.
-- **DynamicMaps** is optional; integration was tested with version **1.2.1**.
+- **DynamicMaps** is optional; integration was tested with version **1.2.1**. Newer versions
+  are not promised: with DynamicMaps 1.3 the client logs that the optional overview integration
+  is skipped, and the overview maps then do not appear.
 - **SAIN** is optional; location compatibility is handled when it is installed.
 - Fika compatibility has not been verified.
 
 The release ZIP contains the built maps. Players do not need to run the export
-tools or install Unity.
+tools or install Unity. It is larger than before, about 7.3 GiB (the planned size; the final
+figure is in the release notes), and nothing needs to be installed by hand besides it.
 
 ## Installation
 
@@ -141,7 +178,7 @@ When upgrading an older development package, move the former
 extracting, so only one client is installed. Keep your configuration files.
 The release's `.sha256` file lists the checksum of the ZIP. The ZIP's
 package README includes cleanup instructions for old DynamicMaps and development
-files; the [0.6.0 release notes](docs/releases/v0.6.0.md) cover the upgrade from 0.5.0 and 0.4.0; the
+files; the [0.7.0 release notes](docs/releases/v0.7.0.md) cover the upgrade from 0.6.0, 0.5.0 and 0.4.0; the
 [0.4.0 notes](docs/releases/v0.4.0.md) cover the retired debug helper.
 
 ## Settings
@@ -150,7 +187,7 @@ In the F12 configuration menu, enable **Appearance / NaturalEquatorNight** to
 use the natural appearance for your next Equator midnight raid. This disables
 the added neon lights, chemlights, smoke/haze, temporary PostFX and extra
 wet-floor reflections. Time, weather and original lamps remain unchanged.
-Equator Day, Bay5, Air Pit, Bowl, Iceberg and Chop Shop are unaffected.
+Equator Day, Bay5, Air Pit, Bowl, Iceberg, Chop Shop and Block are unaffected.
 
 Night PostFX are temporary and do not overwrite your saved game settings.
 The colored volumetric haze requires the game's **Volumetric Light** option.
@@ -171,7 +208,7 @@ and diagnostics. Normal installations keep a compact configuration file.
 Existing developer tuning is preserved in `com.maschine.ArenaMapPort.developer.cfg`
 and remains active when developer mode is off.
 
-Per-room gunshot reverb (**RoomShotAcoustics**) is on by default on all six
+Per-room gunshot reverb (**RoomShotAcoustics**) is on by default on all seven
 maps: shots ring differently in a big hall than in a small shop. Its room data is
 invented, because neither Escape from Tarkov nor Arena provides gunshot reverb
 values. Since 0.6.0 the reverb of the big halls (eight rooms, among them the main halls of
@@ -179,7 +216,7 @@ Equator and Air Pit) is weaker and much shorter: in the main halls of Equator an
 starts 8 to 10 dB lower at 1500 Hz and decays in about 2.5 s instead of about 6.5 s there
 (about 3 to 3.5 s instead of 9 to 14 s in the low end), measured on the test host; the author listened to it on 14 November 2026 and approved it. Shops and steel bodies are unchanged.
 It can be switched off per map under `Audio (arena_equator)`,
-`Audio (arena_bay5)`, `Audio (arena_airpit)`, `Audio (arena_bowl)`, `Audio (arena_iceberg)` or `Audio (arena_autoservice)` with
+`Audio (arena_bay5)`, `Audio (arena_airpit)`, `Audio (arena_bowl)`, `Audio (arena_iceberg)`, `Audio (arena_autoservice)` or `Audio (arena_yard)` with
 **General / DeveloperMode** enabled (enable it and restart EFT, the keys then appear in F12); switching it off
 restores the shipped gunshot acoustics.
 
@@ -187,7 +224,7 @@ restores the shipped gunshot acoustics.
 
 When the Arena maps are not available, ArenaMapPort shows a message at the main menu with the reason and what to do, and after a map
 fails to load it names the cause. The message is in English or German, following the game's language, and its last line carries a ref
-code such as `ArenaMapPort 0.6.0 - ref NO_ARENA`. Find the ref below and follow the fix. If you report a problem at
+code such as `ArenaMapPort 0.7.0 - ref NO_ARENA`. Find the ref below and follow the fix. If you report a problem at
 https://github.com/maschine34675/ArenaMapPort/issues, include the ref and the lines marked `[Arena]` from `BepInEx/LogOutput.log`.
 The setting **General / ShowMapNotices** hides the main-menu message, the "still checking" notice and the reminder in the location selection;
 it never turns the Arena check off, and the message that answers a failed raid start still appears. These notices cover installation
@@ -230,7 +267,7 @@ raid" (reinstall the complete client folder).
 
 ## DynamicMaps
 
-Overview maps for all six maps, including Chop Shop, are included. If DynamicMaps is
+Overview maps for six of the seven maps, Chop Shop's included (since 0.7.0), are included; Block has none. If DynamicMaps is
 installed, open inventory → **MAP** during a raid.
 
 ArenaMapPort loads these maps from its own directory; you do not need to copy
@@ -241,7 +278,7 @@ a separate upper-floor map.
 
 ## Scope
 
-The release contains **Equator, Bay5, Air Pit, Bowl, Iceberg and Chop Shop**. There is no loot or scav-raid
+The release contains **Equator, Bay5, Air Pit, Bowl, Iceberg, Chop Shop and Block**. There is no loot or scav-raid
 support, and these locations are not intended as ordinary quest/progression
 maps. Arena match rules and respawns come from ArenaMode, and the maps work only
 with an installed Escape from Tarkov: Arena (see Compatibility).
@@ -260,26 +297,42 @@ afterwards) with no ArenaMapPort warning, but fewer than the older four maps. It
 ambient sound mix, its gate sounds and the lamp limits of 4.6 and 1.8 are first
 choices (the lamp limits were set by the author by eye on his PC; the 0.6.0 values ran in an
 Iceberg raid on the test host on 14 November 2026, the log line of the one-time move
-from 4.8 and 1.9 was not captured). It has no spectators,
-no per-light flares and no ported grass, and it is a server-time map
-without a winter or snow look.
+from 4.8 and 1.9 was not captured). It has no spectators
+and no per-light flares, and it is a server-time map
+without a winter or snow look. Its grass (since 0.7.0) and the rain drops on the screen were looked at on the test host only (the rain drops
+on Block and Equator only); the author has not seen them.
 
 Chop Shop has had raids on the test host with and without bots, and the hideout opened
 afterwards, with no ArenaMapPort warning, but fewer than the older maps. The author
 listened to the map on 14 November 2026 and said everything fits (no single item named;
 the ambient mix stays a computed start value). Not listened to: the louder roar beds. Not checked: whether a player can climb the tribune decks above the hall,
 the rain-depth readback and a raid with ArenaMode from this project. It is a server-time map with a
-summer set only (no winter or snow look). The appended spawn rows and the exits in the
-team start areas ran in plain raids on all six maps and in two ArenaMode Team Deathmatch
+summer set only (no winter or snow look). Its grass and the rain drops on the screen
+(since 0.7.0) were not looked at by the author. The appended spawn rows and the exits in the
+team start areas ran in plain raids on all six older maps and in two ArenaMode Team Deathmatch
 runs (Bowl and Iceberg); not checked are a respawn onto an in-box marker, Team Deathmatch
 on Chop Shop, Air Pit and Bay5 with the new exits, any Domination, Deathmatch, Zombies or
 Tactical match with the new rows, and the flares seen from across a map.
+
+Block has had raids on the test host with and without bots, a gate hold and release, and PMC squads at the
+game's frame limit, with no ArenaMapPort warning, but fewer than the older maps. The author approved the
+look and the sound of the map as a whole (see above); not listened to one by one: the gate sounds, the crowd
+calls, the murmur, the reactions and the room acoustics. Not checked: the north gate leaves seen and heard
+from the north pocket, a long raid with every wave, a player touching one of the invisible border walls
+or a bullet against one, the area south of the south pocket, the look of its two tree stand-ins, the sun shadows of its houses at the lowest
+shadow quality and at hours other than 08:00, the banner, description and loading images on the test host, and the
+ambient mix's one-time move for a saved start value (unit-tested only). Nobody has played an ArenaMode match on it, and (no ArenaMode Team Deathmatch, Domination, Deathmatch, Tactical or Zombies match
+ran with its spawn rows). The grass of Bowl, Iceberg and Block was checked on the test host by day (about 0.13 to 0.27 ms
+per frame at 1080p with the frame limiter lifted, one sample per view); not checked: a missing or damaged grass file, a scope view, grass
+shadows off, the lowest texture quality, TAA off or DLSS/FSR, a respawn in ArenaMode, Bowl and Iceberg at night and
+in rain, GPU memory, and wind (none is implemented). The rain drops ran on Block and Equator only; not checked: glasses,
+ripples and wet props by eye, light rain, and the other maps in rain.
 
 EFT's own sound bundle has no impact sounds for the Books and CardBoard
 prop types, so 39 Equator props (shoes, books, blue cups, a road cone, pizza boxes
 and office folders) and any props of those types on other maps stay silent when they
 hit something. Fika compatibility is not included in the verified scope, and a
-plain raid without a mode sends the crowd no match event. The [0.6.0 release notes](docs/releases/v0.6.0.md)
+plain raid without a mode sends the crowd no match event. The [0.7.0 release notes](docs/releases/v0.7.0.md)
 describe the bounded native checks and what has not been checked yet.
 
 ## Development

@@ -787,6 +787,38 @@ class BuildTests(FakeRepoCase):
         self.assertNotIn("no noise fix is claimed", readme)
         self.assertNotIn("remains unresolved", readme)
 
+    def test_the_readme_of_0_7_0_names_block_the_grass_the_rain_and_what_was_not_checked(self):
+        # 0.7.0 (2026-11-21): the seventh map, the grass bundle, the rain on the screen. Nothing here names a developer key, and every
+        # "checked" statement carries its evidence level (the test host, the author's sentence, unit-tested only).
+        for single in (False, True):
+            parts = release.partition_single(self.scan(), self.spec) if single else self.partition()
+            readme = re.sub(r"\s+", " ", release.readme_text(self.spec, parts))
+            with self.subTest(single=single):
+                self.assertIn("The spectator crowds of Equator, Bay5, Air Pit, Bowl, Chop Shop and Block play their calls and murmur in a plain raid; Iceberg has no crowd", readme)
+                self.assertIn("Block's ambient mix (5 dB, offset 0.1, range 3) is the author's own, chosen by ear; the author looked at and listened to Block on 21 November 2026 and approved it as a whole, naming no single item", readme)
+                self.assertIn("its gate sounds, crowd calls and reactions were not listened to one by one", readme)
+                self.assertIn("Chop Shop and Block have no winter look", readme)
+                self.assertIn("whether and when ArenaMode offers it is up to ArenaMode, and no ArenaMode match was run on it from this project", readme)
+                self.assertNotIn("ArenaMode offers Block", readme)
+                self.assertIn("Block's two gates, a rising facade gondola at the south team area and two swinging leaves at the north one, follow the same rule; the north leaves have not been seen or heard from the north team area", readme)
+                self.assertIn("Grass: Bowl, Iceberg and Block show Arena's own grass, on by default, read from the map's grass bundle in bundles/", readme)
+                self.assertIn("It has no collision, makes no footstep or bullet effect and neither tramples nor sways in the wind", readme)
+                self.assertIn("about 0.13 to 0.27 ms per frame", readme)
+                self.assertIn("The author has not seen it, and nothing was checked with a missing or damaged grass bundle", readme)
+                self.assertIn("Extract the whole ZIP: with only the DLLs replaced a map has no grass", readme)
+                self.assertIn("(that fallback is unit-tested, not tried with a real missing file)", readme)
+                self.assertIn("Rain on the screen: in rain, in the open and not under a roof, drops now run down the screen on every map", readme)
+                self.assertIn("nobody has looked at those. Checked on the test host on Block and Equator only; the author has not seen it", readme)
+                self.assertIn("Block has no overview. Tested with DynamicMaps 1.2.1; with DynamicMaps 1.3 the client logs that its API differs from the verified 1.2.1 and skips the integration", readme)
+                # the player text names no developer key and no setting for grass or rain
+                for word in ("GrassDrawing", "GrassArt", "GrassUpload", "RainUnderRoofCheck", "NativeGrass", "LevelBorderWalls"):
+                    self.assertNotIn(word, readme)
+                self.assertNotIn("Map (arena_", readme)
+                self.assertLess(readme.index("Included locations:"), readme.index("Grass: Bowl"))
+                self.assertLess(readme.index("Grass: Bowl"), readme.index("Rain on the screen"))
+                self.assertLess(readme.index("Rain on the screen"), readme.index("Optional DynamicMaps integration"))
+                self.assertLess(readme.index("Optional DynamicMaps integration"), readme.index("Settings: F12"))
+
     def test_selection_artwork_is_byte_identical_and_core_only(self):
         result = self.build()
         contents = self.read_zips(result)
@@ -2659,12 +2691,18 @@ class RealRepoTests(unittest.TestCase):
         sources = json.loads((REPO / "tools/bundle/key-sources.json").read_text(encoding="utf-8"))
         self.assertEqual(release.KEYS_BUILT_FOR, sources["arena_build"])
         self.assertIn(f"built for Arena {release.KEYS_BUILT_FOR}", release.ENCRYPTION_TEXT)
-        # 0.6.0: six maps; the 0.6.0 check stays four maps; Chop Shop's wrap is 0.6.2 and its checks are named.
-        self.assertIn("for all six maps", release.ENCRYPTION_TEXT)
-        self.assertNotIn("all five maps", release.ENCRYPTION_TEXT)
-        self.assertIn("Iceberg and Chop Shop", release.ENCRYPTION_TEXT)
-        self.assertIn("0.6.2.0.48598", release.ENCRYPTION_TEXT)
-        self.assertIn("0.6.2.0.48767", release.ENCRYPTION_TEXT)
+        # 0.7.0: seven maps; the 0.6.0 check stays four maps; the wraps of Chop Shop and Block are 0.6.2 and the checks that were
+        # NOT made for Block are named; the grass bundle is a fourth encrypted file of three maps.
+        flat = re.sub(r"\s+", " ", release.ENCRYPTION_TEXT)
+        self.assertIn("for all seven maps on 0.6.1.0.48206 and 0.6.2.0.48473", flat)
+        self.assertNotIn("all six maps", flat)
+        self.assertNotIn("all five maps", flat)
+        self.assertIn("the key files of Chop Shop and Block for 0.6.2.0.48473", flat)
+        self.assertIn("the six older maps were also checked for 0.6.0 on the newer hotfixes 0.6.2.0.48598 and 0.6.2.0.48767 (Block was not checked there)", flat)
+        self.assertIn("(Iceberg, Chop Shop and Block were not checked there;", flat)
+        self.assertIn("Bowl, Iceberg and Block have a fourth one for their grass", flat)
+        self.assertIn("not copy protection", flat)
+        self.assertNotIn("protects", flat)
         spec = release.load_spec(REPO)
         for name in ("README.md", "FORGE.md", f"docs/releases/v{spec.version}.md"):
             text = (REPO / name).read_text(encoding="utf-8")
