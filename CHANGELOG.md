@@ -6,6 +6,101 @@ oldest version that is still downloadable.
 Dates are ISO dates (the newest entry may read "unreleased" while a version is prepared). Each entry links its full release note (download links, checksums, install and upgrade steps),
 and the settings text is in the [README](README.md).
 
+## 0.7.0 - unreleased
+
+Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
+
+### Added
+
+- **Block, the seventh map** (Arena's `Arena_Yard`, called Block in Arena's own texts, "Arena: Block"): the courtyard of a residential city
+  block with apartment houses, a fortified playground tower, parked vans and wrecked cars. Arena's TeamFight layout on about 87 x 174 m: two
+  team pockets about 130 m apart, each sealed until its gate opens (a rising facade gondola at the south pocket, two swinging leaves at the north
+  pocket; both stand open in a plain raid, a mode plugin can hold and release them), one capture point, Arena's own scenes, materials and
+  colliders, a newly baked NavMesh for bots, Arena's room acoustics (19 rooms) and ambient sounds (50 players, 145 clips), 104 invisible border
+  walls, two exits (one in each team pocket), 4 Player rows and 18 Bot rows, Arena's gate and door sounds (released by a mode plugin), the
+  ScoreMonitors rows (8 of 8 TV holders with a face), Arena's own spectator crowd (27 fans with calls, murmur and reactions), five loading screens,
+  a menu banner, an official description and a selection marker on the region map. Time of day and weather follow the server, as on Bay5. No loot
+  and no scav raids. **Block has no per-light flares, no native water, no winter or snow look and no ArenaMode entry from
+  this project** (whether and when ArenaMode offers it is ArenaMode's decision; no ArenaMode match was run on it). The author looked at and
+  listened to the map on 21 November 2026 and approved it as a whole ("sieht gut aus, auch nachts, ist dann halt wie die anderen maps im außenbereich recht dunkel. hört sich gut an, ambient sounds können etwas lauter sein (gain auf 5, range auf 3)"; the statement names no
+  single item), and chose its ambient mix by ear: 5 dB, offset 0.1, range 3.
+- **Arena's own grass on Bowl, Iceberg and Block, on by default** (113,643, 15,410 and 10,132 clumps), from a fourth encrypted bundle per map
+  (`arena_bowl_grass.bundle`, `arena_iceberg_grass.bundle`, `arena_yard_grass.bundle`) that opens with the map's own key. No collision, no footstep or bullet effect, no trampling and no wind motion; no player
+  setting. About 0.13 to 0.27 ms per frame at 1080p with the frame limiter lifted (one sample per view, test host). The texts that said no grass
+  is ported on Bowl and Iceberg no longer hold. **The author has not seen the grass.**
+- **Rain drops on the screen on every map, on by default.** The game's "camera under rain" flag was false for ever on a ported map; the repair
+  answers it from the rain-cover depth photo, so drops run down the screen in rain in the open and not under a roof. The same flag also drives
+  the water on glasses, the ripples on wet ground and the rain on wet props (not looked at). Host-run on Block and Equator; it changes the six
+  older maps in rain outdoors too. Developer key `Lighting (<key>)/RainUnderRoofCheck` (live, default on, needs `General/DeveloperMode`).
+  **The author has not seen the drops.**
+- **Chop Shop has a DynamicMaps overview** (one ground view with both exit markers; two files in the plugin's own `dynamicmaps` folder;
+  tested with DynamicMaps 1.2.1).
+- **Block has a DynamicMaps overview:** one north-up view of both team pockets and the connected raised routes, with both exit markers.
+  Its two files stay in ArenaMapPort's own `dynamicmaps/ArenaMapPort_Yard` folder. Tested on GPU-2 with DynamicMaps 1.3.0 using candidate
+  `8a1ec4e`: five marker positions and headings, including a raised route and the western edge; no MapPort or DynamicMaps warning.
+- **DynamicMaps 1.3.0 support:** the owned-map loader recognizes both 1.3.0 and 1.2.1 APIs, registers maps before preferences and retains
+  unchanged map instances so scans preserve the current view. The 1.2.1 adapter has offline checks for this update, not a fresh native raid.
+
+### Changed
+
+- **Block's ambient mix default is 5 dB, offset 0.1, range 3** (the author's, by ear; the computed start value was 3 / 0.1 / 2). A saved
+  untouched start mix moves once; any other saved mix stays (hidden revision key `Audio (arena_yard)/AmbientDefaultsRevision`, now at 4; every
+  other map only advances its stamp). The move is covered by unit tests; its in-game check was waived.
+- README, FORGE page and the generated package README name seven maps, grass, rain and the key checks.
+- The ZIP grows to about 7.3 GiB (424 distribution files expected after adding Block's two overview files to the initial 422-file plan;
+  the final build and cut determine the counts and size; 0.6.0: about 5.9 GiB, 396 files).
+
+### Changed (internal)
+
+- New checks and tools: `tools/tests/test_new_map_checklist.py` (lists every per-map table row a registered map lacks),
+  `tools/validate/normal_texture_preflight.py` with three reviewed normal-texture rules, `tools/extract/extract_level_borders.py` with
+  `LevelBorderBoxRepairs` and its Unity-free `LevelBorderBoxModel`, `tools/extract/extract_grass.py` and `grass_pack.py` (the project's grass pack
+  format AMGP v1, read by three readers) with `BundleKeyResolver.TryPeekKey`, the `navmesh_diff.py --split-edge` option, a floor census in
+  `extract_ai_anchors`, and the `silent_clips` state of the native contract (Arena's own silent clip, accepted only as pinned by id and name).
+- The door ease `outBack` (DOTween ease 27, with its default overshoot) joined every ease surface of the door poses; only that ease interpolates
+  unclamped.
+- `validate_bundle_roundtrip.py` resolves a MonoScript through its file id (a path id repeats between shared-asset files), with a test;
+  `validate_distribution.py` also checks that the staged acoustics files are no copy of a key-source file, and the half-staged-map guard of the
+  deploy script also requires a grass bundle where the map has one; `tools/build_remaining.ps1` refuses `yard`; a `.gitattributes` rule covers
+  `tools/maps/**/*.json`; the unused `tools/maps/AdditionalMapBuilds.props` is gone.
+- The version is 0.7.0 in both project files, `Plugin.PluginVersion` and `ModMetadata`.
+
+### Known limitations
+
+- Block: raids with and without bots and the hideout on the test host, no ArenaMapPort warning; the author's statement covers the map as a
+  whole and names no single item, so no sound of it (gate sounds, crowd, murmur, reactions, reverb) is recorded as heard on its own. Not
+  checked: the north gate's leaves seen and heard from the north pocket, a long raid with every wave, a player touching a border wall and
+  bullets against one, the band south of the play area, the banner, description and loading images on the test host, the 15 distant sun-shadow
+  rows at shadow quality Low and at other hours, a respawn that lands on an in-box marker, any ArenaMode match and any Team Deathmatch,
+  Domination, Deathmatch, Tactical or Zombies match with its rows. The selection marker is shown at a spot that does not cover another region's
+  label (read back on the test host); the author has not looked at it.
+- Grass: run on the test host on the three maps by day; not checked: a really missing or damaged grass bundle (unit tests only), a scope view,
+  grass shadows off, texture quality Low, TAA off or DLSS and FSR, a respawn in ArenaMode, Bowl and Iceberg at night and in rain, the graphics
+  memory, wind motion (none exists).
+- Rain drops: host-run on Block and Equator only; not checked: the other five maps, light rain, glasses, ripples and wet props by eye, the
+  outdoor season footstep layer outside the test host's season, a respawn in ArenaMode.
+- Block's DynamicMaps 1.3.0 acceptance belongs to candidate `8a1ec4e`; the combined 0.7.0 release build still requires its final checks.
+  No fresh native raid was run on the retained 1.2.1 adapter. Block's overview was not tested with ArenaMode or Domination.
+- Block's key file has one wrap (Arena 0.6.2.0.48473) and was checked on 0.6.2.0.48473 and 0.6.1.0.48206 only; the older maps' key files are
+  unchanged by the staging and were checked for 0.6.0 on four Arena builds.
+- Still open from 0.6.0: the roar beds at their louder level, Iceberg's ambient sounds, lamp loops and gate sounds and the gate and door sounds
+  of every map were not listened to; Chop Shop's tribune decks, rain-depth readback and equator shutter collider, the unchecked spawn-row and exit
+  items, Iceberg's sun shadows at Medium and High and in the evening, Equator's puddle cache, the missing Books and CardBoard impact sounds and
+  Fika compatibility are unchanged.
+- Spectator crowds exist on six of the seven maps (not Iceberg); lamp flares on Equator, Bay5, Bowl and Chop Shop; overviews on all seven;
+  native grass on Bowl, Iceberg and Block. No loot and no scav raids.
+
+### Compatibility
+
+- SPT 4.1.6 / EFT 0.16.9.5-40743; server range remains `~4.1.5`.
+- One ZIP on Pixeldrain, as for 0.3.0 to 0.6.0 (too large for a GitHub release asset; the GitHub release carries the notes, the links and the
+  checksum file). Close EFT and the SPT server and extract the whole ZIP over the installation; keep `BepInEx/config`. There is no DLL-only
+  package. From 0.6.0 the ZIP replaces both DLLs and the official map text pack, and adds Block's files, the grass bundles of Bowl and Iceberg and
+  the overview files for Chop Shop and Block; nothing has to be deleted. No manual configuration changes and no new player settings.
+- Requires an installed Escape from Tarkov: Arena (the check is a requirement, not copy protection). Both client and server must be
+  updated together: the 0.6.0 server does not know Block. The ArenaMode contracts (`SpectatorCrowd`, `ScoreMonitors`, the gate done signal) are
+  unchanged.
+
 ## 0.6.0 - 2026-11-14
 
 Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).

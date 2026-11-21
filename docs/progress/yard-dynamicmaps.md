@@ -124,9 +124,9 @@ behind the concurrent release is not rolled back or merged by this task.
   the actual selected MapDef. For the screenshots only, zoom and automatic player
   centering changed in memory; all nine In-Raid settings match their pre-test
   values after restoration, and no temporary value was saved.
-- Final state: MainMenu, no raid or control lease, godmode/ammo overrides/tracking
+- At native cleanup: MainMenu, no raid or control lease, godmode/ammo overrides/tracking
   off, no pending time/weather override. The tested DLL and map pair remain
-  installed. This branch is committed locally; no merge or publication.
+  installed at that point. This branch is committed locally; no publication.
 
 Evidence is retained under ignored `work/dynamicmaps-yard/evidence/native-points`
 (screenshots, complete reads and report), `geometry-review/native-evidence-review.json`
@@ -163,3 +163,20 @@ both hosts. A second complete `after-settled` snapshot retains this final state.
 protected map/config data and profile integrity are preserved, with the normal
 test raid's progression explicitly accounted for, not that every save byte stayed
 the same. Temporary map display settings were restored exactly in memory as well.
+
+## Concurrent release integration
+
+After the successful raid and its first final snapshot, the separate release
+session deployed `0.7.0+1ad18c3`, replacing the tested client on both installations.
+The settled snapshot identifies that later DLL; it does not contain the Block
+overview registration or the 1.3 loader. The successful raid belongs to the
+pinned `8a1ec4e` candidate, not this later binary. The Yard data pair remains
+installed, but the current 0.7.0 client does not load it after a restart.
+
+The release preparation was then committed as `ca26292` on `feature/yard`. This
+task merges that committed preparation into the isolated `feature/block-dynamicmaps`
+branch, preserving version 0.7.0, all grass/rain features and release descriptions.
+The two overlapping README sections are reconciled to describe seven owned
+overviews and the verified 1.3 adapter. The combined branch must be adopted by
+the release checkout and its client rebuilt/deployed before publishing it. No
+later deployment is silently overwritten by this task.

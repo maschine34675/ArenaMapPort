@@ -6,9 +6,11 @@ dist/ holds two install roots, `BepInEx/plugins/maschine-ArenaMapPort/...` (clie
 
 Two layouts, one classification, one verifier:
 
-  --single   (the release form the user chose for 0.3.0, 0.4.0 and 0.5.0, and the form of 0.6.0; about 3.4 GiB with the four encrypted maps of
+  --single   (the release form the user chose for 0.3.0, 0.4.0 and 0.5.0, and the form of 0.6.0 and 0.7.0; about 3.4 GiB with the four encrypted maps of
               0.3.0, about 3.6 GiB for 0.4.0 with the spectators, about 5.0 GiB for 0.5.0 with Iceberg and the crowd
-              reactions (359 files), about 5.9 GiB for 0.6.0 with Chop Shop (396 files); hosted on Pixeldrain, not GitHub)
+              reactions (359 files), about 5.9 GiB for 0.6.0 with Chop Shop (396 files), about 7.3 GiB planned for 0.7.0 with Block
+              and three grass bundles (422 files; the plan's figure, the real size comes at the cut); hosted on
+              Pixeldrain, not GitHub)
       maschine-ArenaMapPort-<version>.zip     EVERY dist file, the generated README.txt and
                                               THIRD-PARTY-NOTICES.txt entries, and the manifest
                                               BepInEx/plugins/maschine-ArenaMapPort/parts/full.json
@@ -81,7 +83,7 @@ Modes:
                               is detected from the .sha256 (one line naming <package>-<version>.zip = single).
                               Multi-part also checks the size gate and the partition invariant (each map's
                               bundles and database entry travel together in that map's part, nowhere else);
-                              single checks that the one archive carries the three bundles and db/<key>/base.json
+                              single checks that the one archive carries the bundles (three, four with grass) and db/<key>/base.json
                               of EVERY RELEASED map (RELEASE_MAP_KEYS, not just the maps it happens to mention,
                               so a ZIP that lost a whole map fails) plus the generated README and notices.
                               Cannot be combined with --single.
@@ -681,19 +683,23 @@ KEYS_BUILT_FOR = "0.6.1.0.48206"
 
 # The encrypted bundles (stage 2, docs/PLAN-ENCRYPTION.md, key source of section 6). The same four statements as README.md and
 # the release notes: encrypted with a key derived from the player's Arena files, not copy protection, art and audio stay
-# plaintext, and the build the keys are built for (the 0.6.2 build checked for all six maps, and the 0.6.0 build checked for the four
-# maps of 0.4.0 only: its resource files are identical there; no check of Iceberg or Chop Shop on 0.6.0 exists). Chop Shop's key
-# file carries a wrap for 0.6.2.0.48473 only. All six key files were checked on 0.6.1.0.48206, 0.6.2.0.48473, 0.6.2.0.48598 (2026-11-13)
-# and 0.6.2.0.48767 (2026-11-14).
+# plaintext, and the build the keys are built for. 0.7.0 (2026-11-21): seven maps; the grass bundle of Bowl, Iceberg and Block is a
+# fourth file encrypted with the map's own key (no new wrap); the key files of Chop Shop and Block carry a wrap for 0.6.2.0.48473 only;
+# the checks stated are the ones on record on 2026-11-21: all seven maps on 0.6.1.0.48206 and 0.6.2.0.48473, the six older maps (for
+# 0.6.0) also on 0.6.2.0.48598 (2026-11-13) and 0.6.2.0.48767 (2026-11-14), the four maps of 0.4.0 on 0.6.0.0.47752 (identical
+# resource files); Block is not checked on the last two nor on 0.6.0, Iceberg and Chop Shop not on 0.6.0. The lead re-runs verify-keys
+# on every Arena build at hand at the cut and changes this sentence (and its pins) when a check is added.
 ENCRYPTION_TEXT = (
-    "Encrypted bundles: the map bundles in bundles/ (scenes, materials, textures, NavMesh) are encrypted with a key\n"
+    "Encrypted bundles: the map bundles in bundles/ (scenes, materials, textures, NavMesh; Bowl, Iceberg and Block have\n"
+    "a fourth one for their grass) are encrypted with a key\n"
     "that your PC derives from the Arena resource files each map is built from (the texture and mesh data of its\n"
     "scenes; a fixed sample of a few MB is read when the map is first used and never sent anywhere; keys/<map>.json\n"
     "lists the files by path and size only). They work only next to your own Arena files. The keys in this release\n"
-    f"are built for Arena {KEYS_BUILT_FOR} (Chop Shop's key file for 0.6.2.0.48473) and were checked for all six maps on\n"
-    "0.6.1.0.48206, 0.6.2.0.48473 and the newer hotfixes 0.6.2.0.48598 and 0.6.2.0.48767; the four\n"
-    "maps of 0.4.0 were also checked against 0.6.0.0.47752, whose resource files are identical (Iceberg and Chop Shop\n"
-    "were not checked there; your build is in the client log at startup, \"Arena: found ...\"); if an Arena\n"
+    f"are built for Arena {KEYS_BUILT_FOR} (the key files of Chop Shop and Block for 0.6.2.0.48473) and were checked\n"
+    "for all seven maps on 0.6.1.0.48206 and 0.6.2.0.48473; the six older maps were also checked for 0.6.0 on the newer\n"
+    "hotfixes 0.6.2.0.48598 and 0.6.2.0.48767 (Block was not checked there); the four\n"
+    "maps of 0.4.0 were also checked against 0.6.0.0.47752, whose resource files are identical (Iceberg, Chop Shop\n"
+    "and Block were not checked there; your build is in the client log at startup, \"Arena: found ...\"); if an Arena\n"
     "update changes a map's resource files,\n"
     "that map does not load (the client log names the cause) until an updated ArenaMapPort package carries the key\n"
     "for your build, and the other maps keep working. This is a requirement, not copy protection: anyone who owns\n"
@@ -779,11 +785,12 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "ref and the lines marked [Arena] from BepInEx/LogOutput.log.\n\n"
             f"Included locations: {names}.\n"
             "These maps are intended for ArenaMode; no loot or scav raids are provided.\n"
-            "ArenaMode and other mods are not included.\n"
+            "ArenaMode and other mods are not included. Block is registered as a location in SPT like the others; whether and when\n"
+            "ArenaMode offers it is up to ArenaMode, and no ArenaMode match was run on it from this project.\n"
             "Known audio limits: the intermittent Equator static of 0.3.0 was fixed in 0.4.0 (a bundle block flagged\n"
             "as compressed but stored uncompressed; measured on the test host and confirmed by the author in play).\n"
             "A faint steady hiss and short clicks seen in one recording are not explained by it.\n"
-            "The spectator crowds of Equator, Bay5, Air Pit, Bowl and Chop Shop play their calls and murmur in a plain raid;\n"
+            "The spectator crowds of Equator, Bay5, Air Pit, Bowl, Chop Shop and Block play their calls and murmur in a plain raid;\n"
             "Iceberg has no crowd. The crowd reactions (70 original fan clips) and the roar beds that answer them\n"
             "sound only when a mode plugin such as ArenaMode asks for them through the SpectatorCrowd contract;\n"
             "ArenaMode 0.4.0 and later uses it and drives them from its match events, so a plain raid without a mode never plays them. The author listened to the\n"
@@ -792,7 +799,10 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "are exported 6 dB louder than in 0.5.0 (since 0.6.0); that level has not been listened to. The ambient mixes of Iceberg and\n"
             "Chop Shop use provisional start values (Chop Shop's was computed; the author listened to the map on 14 November 2026\n"
             "and said everything fits, naming no single item). The big-hall gunshot reverb is weaker and shorter since 0.6.0\n"
-            "(measured; the author listened to it on 14 November 2026 and approved it). Chop Shop has no winter look.\n"
+            "(measured; the author listened to it on 14 November 2026 and approved it). Block's ambient mix (5 dB, offset 0.1,\n"
+            "range 3) is the author's own, chosen by ear; the author looked at and listened to Block on 21 November 2026 and\n"
+            "approved it as a whole, naming no single item, so its gate sounds, crowd calls and reactions were not listened to\n"
+            "one by one. Chop Shop and Block have no winter look.\n"
             "The game's own sound bundle has no impact sounds for the Books and CardBoard prop types, so 39 Equator\n"
             "props (shoes, books, blue cups, a road cone, pizza boxes and office folders) stay silent when they hit\n"
             "something.\n"
@@ -803,10 +813,26 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "rollers on Bay5, the FCK shop's roller shutter on Equator) stay shut. The exits stand inside the team start\n"
             "areas, so a player in a plain raid spawns a few metres from one (an exit extracts you after 8 seconds if you\n"
             "stand in it; in the two ArenaMode Team Deathmatch runs on Bowl and Iceberg ArenaMode hid the extraction and nobody\n"
-            "extracted). Air Pit's north gate cannot be reached in a plain raid until a mode plugin opens the passport gates.\n\n"
-            "Optional DynamicMaps integration: overview maps for Equator, Bay5, Air Pit, Bowl, Iceberg,\n"
+            "extracted). Air Pit's north gate cannot be reached in a plain raid until a mode plugin opens the passport gates.\n"
+            "Block's two gates, a rising facade gondola at the south team area and two swinging leaves at the north one, follow\n"
+            "the same rule; the north leaves have not been seen or heard from the north team area.\n\n"
+            "Grass: Bowl, Iceberg and Block show Arena's own grass, on by default, read from the map's grass bundle in bundles/\n"
+            "(an encrypted file like the other bundles, opened with the map's own key; no other Arena file is read for the grass). It has no\n"
+            "collision, makes no footstep or bullet effect and neither tramples nor sways in the wind. Measured on the test host\n"
+            "(1920x1080, frame limiter lifted, one sample per view) it costs about 0.13 to 0.27 ms per frame; with the game's\n"
+            "120 fps limiter the frame figures stayed at the baseline. The author has not seen it, and nothing was checked with\n"
+            "a missing or damaged grass bundle, in a scope view, with grass shadows off, at low texture quality or without TAA.\n"
+            "Extract the whole ZIP: with only the DLLs replaced a map has no grass and the client log warns that the file is\n"
+            "missing (that fallback is unit-tested, not tried with a real missing file).\n\n"
+            "Rain on the screen: in rain, in the open and not under a roof, drops now run down the screen on every map (until\n"
+            "now the game's \"camera under rain\" flag was never true on a ported map; it is answered from the same depth\n"
+            "picture the falling rain uses, so under a roof or in a hall there are no drops). The same flag also drives the\n"
+            "water on glasses, the ripples on wet ground and the rain on wet props; nobody has looked at those. Checked on the\n"
+            "test host on Block and Equator only; the author has not seen it.\n\n"
+            "Optional DynamicMaps integration: overview maps for all seven maps, Equator, Bay5, Air Pit, Bowl, Iceberg,\n"
             "Chop Shop and Block live in this plugin's own dynamicmaps folder and are registered automatically when\n"
-            "DynamicMaps is installed.\n\n"
+            "DynamicMaps is installed. The loader supports 1.2.1 and 1.3.0. Block's overview was checked in-game with\n"
+            "DynamicMaps 1.3.0; the 1.2.1 adapter was checked offline against the actual DLL. No DynamicMaps files need changing.\n\n"
             "Settings: F12 exposes NaturalEquatorNight for a natural Equator midnight look on the next\n"
             "raid, ArenaInstallPath, the Arena installation folder (empty = automatic), and ShowMapNotices\n"
             "(on by default), the message at the main menu that names why the Arena maps are not available;\n"
@@ -1277,7 +1303,7 @@ def find_sha256_file(directory: Path, version: str | None) -> tuple:
 def check_partition(parts) -> None:
     """The invariant partition_dist establishes, re-asserted on the finished ZIPs (extract_check cannot see it:
     the union of the parts still equals dist when a file sits in the wrong part). Part 1 is the core; every map part
-    carries its three bundles, its key file and its database entry; nothing of map X's bundles, key file or db/ folder
+    carries its three bundles (four with grass), its key file and its database entry; nothing of map X's bundles, key file or db/ folder
     is in any other part."""
     ids = [p.id for p in parts]
     if len(set(ids)) != len(ids) or ids[0] != CORE_ID or CORE_ID in ids[1:]:
@@ -1313,7 +1339,7 @@ MAP_DATA_RE = re.compile(re.escape(f"{PLUGIN_ROOT}/bundles/") + r"(arena_[a-z0-9
 
 def check_single(part, expected_keys=()) -> None:
     """The partition invariant of the single layout: the one archive is the core AND every map, so every released
-    map (`expected_keys`, e.g. 'arena_equator') carries its three bundles, its key file and its database entry, and so
+    map (`expected_keys`, e.g. 'arena_equator') carries its three bundles (four with grass), its key file and its database entry, and so
     does every other map the archive mentions (recognised by any bundle, key file or db/<key>/base.json entry). At least one map must be
     present, and the generated README and notices must be there. The released map list is NOT recorded in the ZIP,
     so it has to come from the caller: deriving it from the archive's own entries would let a ZIP that lost a whole
