@@ -8,6 +8,8 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [native-grass.md](native-grass.md) — **2026-11-21**: Yard's native grass, stage 1 (PLAN-YARD items 22 and 23): a developer-gated probe (`Map (arena_yard)/NativeGrass`, default Off) that builds Arena's grass through EFT's own GPUInstancer runtime at raid start, the art read from the player's verified Arena files into memory only (shape E); build order, lifecycle contract, keys, log lines, review outcome, the limiter-bound baseline. Unit-tested; **host-run on GPU-2 the same day**: it draws with Arena's art, costs about 0.11 to 0.14 ms per frame at the densest view with the limiter lifted, and leaves the hideout, a second raid, another map and a vanilla Ground Zero raid clean; one raid-end rebuild corrected. The author has not seen it; shipping is the user's decision.
+
 - [autoservice-dynamicmaps.md](autoservice-dynamicmaps.md) — Chop Shop overview, source geometry and owned package integration (2026-11-14).
 
 - [spawn-rows-and-pocket-exits.md](spawn-rows-and-pocket-exits.md) — **2026-11-12**: 39 appended Bot spawn rows on the six maps (Chop Shop 16, Equator 16,

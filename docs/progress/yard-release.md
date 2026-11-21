@@ -632,3 +632,7 @@ The user asked for the rest of the feature check and waived the in-game test of 
 
 **2026-11-21 pointer (rain drops on the screen):** the `cameraUnderRain=False` of the Yard host line above was the deferred goal 3(c); the user's request "auch mal wegen den Regentropfen auf dem Bildschirm schauen"
 is implemented by `RainUnderRoofRepairs` (unit-tested, host check pending), see docs/progress/two-maps-item-6-raincover.md "2026-11-21 - rain drops on the screen".
+
+## 2026-11-21 - Items 22 and 23 (grass): the baseline, and a developer probe that draws Arena's grass
+
+The user's "dann gerne mit dem Gras weitermachen" (2026-11-21). Record: [native-grass.md](native-grass.md). In short: the baseline without grass is 120.0 fps on the game's limiter (mean 8.3 ms) and 201.9 / 178.3 fps with the limiter lifted; the design changed from the plan's option C to a client-built shape (no bundle, no `yard-native-v3`: the client builds the managers through EFT's own GPUInstancer runtime at raid start and reads the art and the placement from the player's verified Arena files into memory); stage 1 is a developer probe (`Map (arena_yard)/NativeGrass`, default Off) and ran on GPU-2 the same evening: Arena's grass stands on the lawn, costs about 0.11 to 0.14 ms per frame at the densest view, and leaves the hideout, a second raid, another map and a vanilla raid clean. Nothing changes for a player; whether grass ships is the user's decision.

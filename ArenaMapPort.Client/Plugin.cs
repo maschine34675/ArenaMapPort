@@ -44,6 +44,8 @@ namespace ArenaMapPort.Client
             // The score monitors (docs/progress/score-monitors.md): one flag read per frame while nothing is claimed and no owned raid is loaded. Placed before the
             // gate poll and the notices on purpose: MapNoticeWiringTests pins the notices' tick as the last statement of this method.
             ScoreMonitorView.Tick();
+            // Native grass probe (docs/progress/yard-release.md item 23; developer key, default Off): one static read per frame while nothing is wanted or built. Before the notices' tick, which stays last.
+            NativeGrassRepairs.Tick();
             // One flag read per frame; armed only while the Arena check outlives startup, disarmed after its one log line.
             ArenaInstallationGate.PollOutcome();
             // The in-game map notices (docs/progress/map-notices.md): one flag read per frame while nothing is pending.
@@ -198,6 +200,7 @@ namespace ArenaMapPort.Client
             NativeDecalRepairs.Install();
             SeaPlaceholderRepairs.Install();
             NativeWaterRepairs.Install();
+            NativeGrassRepairs.Install(); // developer-only grass probe keys (Map (arena_yard)/NativeGrass*, default Off) and its scene events; the build runs from Plugin.LateUpdate
             NativeSpatialAudio.Install(_harmony);
             PrecipitationAudio.Install(); // missing native rain beds, owned independently of local scenery ambience
             RoomReverb.Install();
