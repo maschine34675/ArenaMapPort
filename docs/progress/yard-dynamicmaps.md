@@ -180,3 +180,11 @@ The two overlapping README sections are reconciled to describe seven owned
 overviews and the verified 1.3 adapter. The combined branch must be adopted by
 the release checkout and its client rebuilt/deployed before publishing it. No
 later deployment is silently overwritten by this task.
+
+Combined source commit `2d174c0` builds as `0.7.0+2d174c0` with zero client warnings
+or errors. Its 28 production loader/catalog tests pass. The merged package suite
+passes 202 tests with two data-dependent skips (the isolated checkout lacks the
+spectator-audio input and a complete staged server distribution). These are
+offline checks, not a native raid on the combined binary. A ready candidate is
+staged only in the isolated worktree; no second live deployment was performed.
+The short integration handoff is retained at `work/dynamicmaps-yard/HANDOFF.md`.
