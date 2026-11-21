@@ -420,11 +420,18 @@ public sealed class SpectatorCrowdBedModelTests
     {
         var e = new CrowdExcitement();
         Drive(e, 2000);                                       // warm: the JIT and the first calls may allocate once
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        Drive(e, 50000);
         // The measured loop lives in its own fully optimised helper (the pattern of NoiseProbeModelTests.AddProps): a hot loop in a tier-0 test method can be replaced on the stack (OSR)
         // mid-measurement, and that JIT work is charged to this thread's counter, which is not the model allocating.
-        Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0L, 512L);
+        // The smallest of three passes counts (2026-11-21): the model's own methods are still promoted from tier 0 while the loop runs, and on one full run of the suite that
+        // runtime work charged 5,200 B to this thread in a single pass. A model that allocates does so in every pass (50,000 frames each), so the bound keeps its meaning.
+        long least = long.MaxValue;
+        for (int pass = 0; pass < 3; pass++)
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            Drive(e, 50000);
+            least = Math.Min(least, GC.GetAllocatedBytesForCurrentThread() - before);
+        }
+        Assert.InRange(least, 0L, 512L);
     }
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
