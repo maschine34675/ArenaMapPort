@@ -13,6 +13,7 @@ Shader "Hidden/ArenaMapPort/Cloth/ClothShader_backface"
         _CutOff ("_CutOff", Float) = 0
         _Cutoff ("_Cutoff", Float) = 0
         _CutoutMask ("_CutoutMask", 2D) = "white" {}
+        _CutoutMaskUVScale ("_CutoutMaskUVScale", Float) = 0
         _DXT1_NM ("_DXT1_NM", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0

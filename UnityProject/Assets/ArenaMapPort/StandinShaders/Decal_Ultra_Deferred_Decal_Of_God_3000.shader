@@ -60,6 +60,7 @@ Shader "Hidden/ArenaMapPort/Decal/Ultra Deferred Decal Of God 3000"
         _StencilType ("_StencilType", Float) = 0
         _Temperature ("_Temperature", Color) = (1,1,1,1)
         _Temperature1 ("_Temperature1", Color) = (1,1,1,1)
+        _Temperature2 ("_Temperature2", Color) = (1,1,1,1)
         _USERAIN ("_USERAIN", Float) = 0
         _UVSec ("_UVSec", Float) = 0
         _Units ("_Units", Float) = 0

@@ -7,10 +7,14 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular SMap Parallax"
 {
     Properties
     {
+        _BlendStrength ("_BlendStrength", Float) = 0
         _BumpMap ("_BumpMap", 2D) = "white" {}
         _BumpScale ("_BumpScale", Float) = 0
         _BumpTiling ("_BumpTiling", Float) = 0
         _Color ("_Color", Color) = (1,1,1,1)
+        _Color0 ("_Color0", Color) = (1,1,1,1)
+        _Color1 ("_Color1", Color) = (1,1,1,1)
+        _Color2 ("_Color2", Color) = (1,1,1,1)
         _Cube ("_Cube", Cube) = "white" {}
         _Cutoff ("_Cutoff", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
@@ -19,10 +23,21 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular SMap Parallax"
         _DstBlend ("_DstBlend", Float) = 0
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
         _Factor ("_Factor", Float) = 0
+        _FresnelDiffuse0 ("_FresnelDiffuse0", Float) = 0
+        _FresnelDiffuse1 ("_FresnelDiffuse1", Float) = 0
+        _FresnelDiffuse2 ("_FresnelDiffuse2", Float) = 0
+        _FresnelSpecular0 ("_FresnelSpecular0", Float) = 0
+        _FresnelSpecular1 ("_FresnelSpecular1", Float) = 0
+        _FresnelSpecular2 ("_FresnelSpecular2", Float) = 0
+        _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
         _Glossness ("_Glossness", Float) = 0
+        _GlossyReflections ("_GlossyReflections", Float) = 0
         _MainTex ("_MainTex", 2D) = "white" {}
         _Metallic ("_Metallic", Float) = 0
+        _Metallic0 ("_Metallic0", Float) = 0
+        _Metallic1 ("_Metallic1", Float) = 0
+        _Metallic2 ("_Metallic2", Float) = 0
         _Mode ("_Mode", Float) = 0
         _NdotLOffset ("_NdotLOffset", Float) = 0
         _NightRippleFakeLightOffset ("_NightRippleFakeLightOffset", Float) = 0
@@ -30,21 +45,32 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular SMap Parallax"
         _Parallax ("_Parallax", Float) = 0
         _ParallaxMap ("_ParallaxMap", 2D) = "white" {}
         _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
+        _ReflectionStrength ("_ReflectionStrength", Float) = 0
         _RippleFakeLightIntensityOffset ("_RippleFakeLightIntensityOffset", Float) = 0
         _RippleTexScale ("_RippleTexScale", Float) = 0
         _Shininess ("_Shininess", Float) = 0
         _SkinnedMeshMaterial ("_SkinnedMeshMaterial", Float) = 0
+        _Smoothness0 ("_Smoothness0", Float) = 0
+        _Smoothness1 ("_Smoothness1", Float) = 0
+        _Smoothness2 ("_Smoothness2", Float) = 0
+        _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
         _SpecMap ("_SpecMap", 2D) = "white" {}
         _SpecPower ("_SpecPower", Float) = 0
         _SpecVals ("_SpecVals", Color) = (1,1,1,1)
+        _Specular0 ("_Specular0", Float) = 0
+        _Specular1 ("_Specular1", Float) = 0
+        _Specular2 ("_Specular2", Float) = 0
+        _SpecularHighlights ("_SpecularHighlights", Float) = 0
         _Specularness ("_Specularness", Float) = 0
         _SrcBlend ("_SrcBlend", Float) = 0
         _StencilType ("_StencilType", Float) = 0
         _Temperature ("_Temperature", Color) = (1,1,1,1)
+        _Temperature2 ("_Temperature2", Color) = (1,1,1,1)
         _USERAIN ("_USERAIN", Float) = 0
         _UVSec ("_UVSec", Float) = 0
         _Units ("_Units", Float) = 0
+        _UseMergedTextures ("_UseMergedTextures", Float) = 0
         _ZWrite ("_ZWrite", Float) = 0
     }
     SubShader

@@ -42,7 +42,6 @@ Shader "Hidden/ArenaMapPort/Custom/Billboard_FogSheet_Simple"
         _OcclusionStrength ("_OcclusionStrength", Float) = 0
         _OpacityContrast ("_OpacityContrast", Float) = 0
         _OpacityIntensity ("_OpacityIntensity", Float) = 0
-        _OppositeAngleFadeStrength ("_OppositeAngleFadeStrength", Float) = 0
         _Parallax ("_Parallax", Float) = 0
         _RadialPower ("_RadialPower", Float) = 0
         _RadiusMultiplier ("_RadiusMultiplier", Float) = 0
