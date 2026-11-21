@@ -108,7 +108,7 @@ public sealed class WeatherRigDefaultsTests
     }
 
     [Fact]
-    public void YardHasARigRowWithAHighZeroLevelDerivedFromItsFloorsAndStaysUnreachedBeforeItsPromotion()
+    public void YardHasARigRowWithAHighZeroLevelDerivedFromItsFloorsAndIsReachedSinceItsPromotion()
     {
         var yard = Row.Of(ArenaMapRegistry.Yard.Key);
         // PLAN-YARD item 13 (2026-11-20): the Reserve donor rig and the neutral tuning of AirPit and Bowl, like every released map. Arena's TeamFight mesh
@@ -140,8 +140,8 @@ public sealed class WeatherRigDefaultsTests
     [Fact]
     public void EveryOtherCatalogMapKeepsDonorOffAndNeutralValues()
     {
-        // Yard (PLAN-YARD item 13) has its own rig row while it is Catalog-only; after its promotion it is in All and drops out of the Except anyway.
-        var parked = ArenaMapRegistry.Catalog.Except(ArenaMapRegistry.All).Where(m => m != ArenaMapRegistry.Yard).ToArray();
+        // Yard (PLAN-YARD item 13) has its own rig row; since its promotion (item 15) it is in All and drops out of the Except.
+        var parked = ArenaMapRegistry.Catalog.Except(ArenaMapRegistry.All).ToArray();
         Assert.Equal(7, parked.Length);
         foreach (var map in parked) Assert.Equal(Neutral, Row.Of(map.Key));
         Assert.Equal(Neutral, Row.Of("bigmap"));
@@ -153,8 +153,8 @@ public sealed class WeatherRigDefaultsTests
     {
         var active = ArenaMapRegistry.Catalog.Where(m => MapLightingDefaults.Rig(m.Key).Donor != MapLightingDefaults.OffDonor)
             .Select(m => m.Key);
-        // Plus Yard, whose row exists from PLAN-YARD item 13 on although it joins ArenaMapRegistry.All only at item 15 (a union, so it holds after the promotion too).
-        Assert.Equal(ArenaMapRegistry.All.Select(m => m.Key).Append(ArenaMapRegistry.Yard.Key).Distinct().Order(), active.Order());
+        // Yard's row exists from PLAN-YARD item 13 on and it joined ArenaMapRegistry.All with item 15: the active rigs are exactly the released set.
+        Assert.Equal(ArenaMapRegistry.All.Select(m => m.Key).Order(), active.Order());
     }
 
     [Fact]

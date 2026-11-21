@@ -32,8 +32,10 @@ HEX64_RE = re.compile(r'[0-9a-f]{64}')
 KEY_FILE_MAX_BYTES = 64 * 1024
 
 # Not every released map carries every optional payload. The key set of the release itself comes from
-# validate_map_descriptors.RELEASE_MAP_KEYS (six maps since Autoservice, PLAN-AUTOSERVICE item 12, 2026-11-11; five since Iceberg, PLAN-ICEBERG
-# item 12, 2026-10-30). All six have overview packs (Chop Shop joined on 2026-11-14). AirPit has no active flare light (item 22), so it has no
+# validate_map_descriptors.RELEASE_MAP_KEYS (seven maps since Yard, PLAN-YARD item 15, 2026-11-21; six since Autoservice, PLAN-AUTOSERVICE item 12,
+# 2026-11-11; five since Iceberg, PLAN-ICEBERG item 12, 2026-10-30). Six have overview packs (Chop Shop joined on 2026-11-14; Yard has none, a DynamicMaps overview
+# is a later item of its plan, so it is in no OVERVIEW_MAP_NAMES list). Yard has no MultiFlare package (0 of its 14 flare lights are active), no native water, and a
+# crowd (extract_spectator.MAP_SCENES); its acoustics folder holds two room-tone WAVs (indoor and outdoor tone), which validate_acoustics handles by the graph's clip list. AirPit has no active flare light (item 22), so it has no
 # flare package; Bowl ships one (4 of its 28 lights are active, item 17).
 # Iceberg has an overview but no MultiFlare package (79 FlareLights, four with a negative total scale that need a reviewed
 # rule). Its native sea water joined on 2026-10-31 (WATER_MAP_KEYS below). It has no spectator crowd either: that is
@@ -248,8 +250,8 @@ def _check_art_files(root, expected, label):
 
 
 # Maps whose banner and loading-screen rows exist in the extractor tables before their promotion (Yard until PLAN-YARD
-# item 15, which empties this set with its pin test). The tables must equal the released set plus these.
-PENDING_ART_KEYS = frozenset({'arena_yard'})
+# item 15, 2026-11-21: the set is empty since then, the seam stays for the next map). The tables must equal the released set plus these.
+PENDING_ART_KEYS = frozenset()
 
 
 def validate_art(plugin, server, keys):
@@ -416,7 +418,7 @@ def validate_monitors(plugin):
             raise ValueError(f'Score monitor sprite comes from a key-source file of the maps: {sprite["name"]} ({asset})')
 
 
-def validate_spectator_audio_not_key_sources(audio, arena_data=None):
+def validate_spectator_audio_not_key_sources(audio, arena_data=None, label='Spectator audio'):
     """No file staged under spectator-audio/ (the calls, the crowd murmur bed, the reaction clips and the roar beds, plaintext like all the art and audio) may be
     byte-identical to a stage-2 key-source file of the installed Arena (tools/bundle/key-sources.json): a content key is derived from sampled bytes of
     those files, and a published copy of one would let anyone derive it (docs/PLAN-ENCRYPTION.md). The extractor refuses a clip that streams from one;
@@ -437,7 +439,7 @@ def validate_spectator_audio_not_key_sources(audio, arena_data=None):
     for source in present:
         for name, path in by_size.get(source.stat().st_size, ()):
             if hashlib.sha256(path.read_bytes()).digest() == _file_sha256(source):
-                raise ValueError(f'Spectator audio file is a copy of a key-source file of the maps: {name} ({source.name})')
+                raise ValueError(f'{label} file is a copy of a key-source file of the maps: {name} ({source.name})')
 
 
 def _file_sha256(path):
@@ -573,6 +575,9 @@ def validate():
         if (audio/name).read_bytes() != (extracted_audio/name).read_bytes():
             raise ValueError(f'Stale spectator audio: {name}')
     validate_spectator_audio_not_key_sources(audio)
+    # The acoustics folders (graph JSON, original bake, room-tone WAVs: Yard's two tones are the first map with two) get the same byte-copy check against the key-source
+    # files (PLAN-YARD item 15; compares size first, then SHA-256, of every staged acoustics file with the 36 listed streams that exist in the installed Arena).
+    validate_spectator_audio_not_key_sources(plugin/'acoustics', label='Acoustics')
     from extract_spectator import MAP_SCENES, package_path
     from stage_spectators import validate_staged
     crowd_keys = {f'arena_{name}' for name in MAP_SCENES}

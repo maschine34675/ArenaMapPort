@@ -146,9 +146,11 @@ public sealed class IcebergAmbientAudioTests
         Assert.Equal(audio.GetProperty("players").GetProperty("SeasonAmbientSoundPlayer").GetInt32(), profile.SeasonKindPlayers);
         Assert.Equal(audio.GetProperty("players").GetProperty("LoopAmbientSoundPlayer").GetInt32(), profile.LoopKindPlayers);
         // Autoservice (PLAN-AUTOSERVICE item 4/12) demands its own 16 season players and no loop-kind player; every other map keeps 0 / 0.
-        foreach (var released in AmbientAudioProfiles.All.Where(p => p.OriginalActivation && p.MapKey != Key && p.MapKey != "arena_autoservice"))
+        foreach (var released in AmbientAudioProfiles.All.Where(p => p.OriginalActivation && p.MapKey != Key && p.MapKey != "arena_autoservice" && p.MapKey != "arena_yard"))
             Assert.Equal((0, 0), (released.SeasonKindPlayers, released.LoopKindPlayers));
         Assert.Equal((16, 0), (AmbientAudioProfiles.Get("arena_autoservice").SeasonKindPlayers, AmbientAudioProfiles.Get("arena_autoservice").LoopKindPlayers));
+        // Yard (PLAN-YARD item 6/15) demands its own 22 season players and 2 loop-kind hums (YardAmbientAudioTests pins them against its contract).
+        Assert.Equal((22, 2), (AmbientAudioProfiles.Get("arena_yard").SeasonKindPlayers, AmbientAudioProfiles.Get("arena_yard").LoopKindPlayers));
         var driver = Text("ArenaMapPort.Client/Bay5AmbientAudio.cs");
         var code = string.Join(Environment.NewLine, driver.Split((char)10).Where(l => !l.TrimStart().StartsWith("//")));
         Assert.Contains("p is AmbientSoundPlayer || p is SeasonAmbientSoundPlayer || p is LoopAmbientSoundPlayer", code);

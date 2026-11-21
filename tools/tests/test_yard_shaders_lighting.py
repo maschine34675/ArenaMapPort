@@ -1,6 +1,6 @@
 """Yard's shader, lighting-default and flare decisions (PLAN-YARD item 13, 2026-11-20; record docs/progress/yard-release.md "Item 13").
 
-Yard (Arena's Arena_Yard, key arena_yard, "Arena: Block") is Catalog-only until plan item 15. This file pins what item 13 decided offline, in four groups,
+Yard (Arena's Arena_Yard, key arena_yard, "Arena: Block") is registered since plan item 15 (2026-11-21). This file pins what item 13 decided offline, in four groups,
 each skipped when its input is absent (override the work folder with ARENAMAPPORT_WORK_DIR, the EFT data with ARENAMAPPORT_EFT_DATA, the Arena data with
 ARENAMAPPORT_ARENA_DATA):
 
@@ -91,11 +91,11 @@ class SourcePinTests(unittest.TestCase):
         self.assertNotIn("SpeedTree", fix)
         self.assertNotIn("StandardCrossfade", fix)
 
-    def test_the_yard_switch_is_not_bound_before_the_promotion(self):
-        # No ConfigEntry and no Bind: a Bind would put MaterialFixes/YardShaderStandins into every user's developer archive for a map that cannot run.
-        self.assertNotIn('"YardShaderStandins"', self.standins)
-        self.assertIn("YardStandinsEnabled => ShaderStandinPolicy.YardStandinsDefault", self.standins)
-        self.assertNotIn("YardStandinsEnabled", strip_comments(read(CLIENT / "ShaderRebind.cs")))   # the call site is item 15's
+    def test_the_yard_switch_is_bound_since_the_promotion(self):
+        # PLAN-YARD item 15: a developer key MaterialFixes/YardShaderStandins (default ShaderStandinPolicy.YardStandinsDefault), read by ShaderRebind's call site.
+        self.assertRegex(self.standins, r'settings\.Bind\(\s*"MaterialFixes",\s*"YardShaderStandins",\s*ShaderStandinPolicy\.YardStandinsDefault')
+        self.assertIn("_yardStandins != null ? _yardStandins.Value : ShaderStandinPolicy.YardStandinsDefault", self.standins)
+        self.assertIn("ShaderStandins.YardStandinsEnabled", strip_comments(read(CLIENT / "ShaderRebind.cs")))
 
     def test_yards_lighting_row_exists_and_is_a_reserve_rig_with_a_high_zero_level(self):
         rig = self.lighting[self.lighting.index("internal static RigValues Rig(string mapKey)"):self.lighting.index("internal static bool BindsAuthoredSunKeys")]
@@ -113,14 +113,14 @@ class SourcePinTests(unittest.TestCase):
         self.assertIn("const float DefaultIntensity = 0.35f;", self.bloom)
         self.assertNotIn("Migrate", self.bloom.split("if (yard)")[1].split("\n")[0])   # a Catalog-only map has no saved keys to migrate
 
-    def test_yard_is_not_released_and_has_no_emission_cap(self):
+    def test_yard_is_released_and_has_no_emission_cap(self):
         all_block = re.search(r"public static readonly IReadOnlyList<ArenaMapDescriptor> All = new\[\] \{([^}]*)\}", self.descriptor).group(1)
-        self.assertNotIn("Yard", all_block)                     # item 15 flips this and the pins around it
+        self.assertIn("Yard", all_block)                        # promoted by item 15
         sidecar = json.loads((REPO / "tools" / "maps" / "yard.json").read_text(encoding="utf-8"))
         self.assertIn(sidecar.get("emission_cap", 0), (0, 0.0))
         self.assertNotIn("emission_floor", sidecar)
         names = sidecar.get("shader_fallback_names")
-        self.assertTrue(names is None or names == YARD_FALLBACK_NAMES, names)       # item 15 writes it; until then absent
+        self.assertEqual(names, YARD_FALLBACK_NAMES)
 
     def test_yard_has_no_flare_package_and_stays_out_of_every_flare_list(self):
         import extract_multiflare as M

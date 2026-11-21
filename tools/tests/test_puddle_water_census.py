@@ -15,7 +15,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 SIDECAR_DIR = REPO / "dist" / "BepInEx" / "plugins" / "maschine-ArenaMapPort"
 WATER_SHADER = "Decal/Water Deferred Decal"
-STEMS = ("equator", "bay5", "airpit", "bowl", "iceberg", "autoservice")     # Iceberg's and Autoservice's subtests skip until their shader sidecars are staged (they need the U1 build)
+STEMS = ("equator", "bay5", "airpit", "bowl", "iceberg", "autoservice", "yard")     # Iceberg's, Autoservice's and Yard's subtests skip until their shader sidecars are staged (they need the U1 build)
 # Water-shader materials that stay out of the list on purpose, id -> why.
 EXCLUDED = {
     "bay5": {"25519639aa567c85": "'puddle benz': oil (ring/crater mask, opaque; two renderers are even named puddle_oil)"},
@@ -53,9 +53,9 @@ class PuddleWaterCensusTests(unittest.TestCase):
                 self.assertEqual(set(listed(stem)) & set(excluded), set())
 
     def test_the_rain_driven_water_material_keeps_its_keyword(self):
-        # Equator, Air Pit, Bowl, Iceberg and Autoservice list the rain-driven 'puddle' (USERAIN reads the global _WaterLevel); a package that lost the keyword
+        # Equator, Air Pit, Bowl, Iceberg, Autoservice and Yard list the rain-driven 'puddle' (USERAIN reads the global _WaterLevel); a package that lost the keyword
         # would make the repair read the editor level of a material that never gets wet. Static materials carry no keyword.
-        for stem in ("equator", "airpit", "bowl", "iceberg", "autoservice"):
+        for stem in ("equator", "airpit", "bowl", "iceberg", "autoservice", "yard"):
             with self.subTest(map=stem):
                 path = SIDECAR_DIR / f"material-shaders.arena_{stem}.json"
                 if not path.is_file():

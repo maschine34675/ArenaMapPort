@@ -164,7 +164,7 @@ namespace ArenaMapPort.Client
     /// (indoor_winds_winter) and the ungrouped inactive player of the spline chain. So the strict driver check keeps rejecting every season-loop
     /// player (it accepts the three exporter kinds only) and needs no count for the dropped class. The four far_fight players force Arena's
     /// CommonAmbOutBypass in the source and are routed like their group here (states.forced_mixer_players, importer marker mixerPolicy "group").
-    /// Yard (PLAN-YARD item 6, 2026-11-20; contract native_contracts/yard.json audio block, level163): a STAGED profile, see <see cref="Staged"/>. 50 exported players
+    /// Yard (PLAN-YARD item 6, 2026-11-20; contract native_contracts/yard.json audio block, level163): in the table since item 15, 2026-11-21. 50 exported players
     /// (26 random, 22 season with the keys Spring, SpringEarly, Summer, Autumn and AutumnLate and none for Winter, 2 loop: fridge and electricity, both minDistance 0), two
     /// groups in source order: CommonAmbientOutGroup (AmbientOut, 31) and CommonAmbientInGroup (AmbientIn, 5, effects and reverb reroute). Like Equator and
     /// unlike Bowl and Iceberg the groups list exactly the 36 active players (group_coverage "active_players"): 14 players sit under an inactive ancestor and are in no
@@ -253,21 +253,9 @@ namespace ArenaMapPort.Client
                         AmbientBus.Out, members: 20),
                 },
                 seasonKindPlayers: 16, loopKindPlayers: 0),
-        };
-
-        /// <summary>Every map with an imported ambient graph, in config binding order.</summary>
-        internal static IReadOnlyList<AmbientAudioProfile> All => Table;
-
-        /// <summary>Profiles of maps that are written but not yet in the table: empty after the Autoservice promotion (PLAN-AUTOSERVICE item 12,
-        /// 2026-11-11), as after Iceberg's; Yard's profile waits here since PLAN-YARD item 6 (2026-11-20), never consulted by the driver.</summary>
-        internal static IReadOnlyList<AmbientAudioProfile> Staged => StagedTable;
-
-        // STAGED, not released (PLAN-YARD item 6): the Yard row is written with its exporter and contract pins, but the map is not in ArenaMapRegistry.All, so it
-        // stays out of Table and therefore out of All, TryGet and Get (the driver binds no config keys for it and the released-set tests keep their meaning).
-        // The promotion (PLAN-YARD item 15) moves the row into Table and empties this array. Mirrors tools/extract/native_contracts/yard.json "audio"
-        // (schema 2, level163): 26 random + 22 season + 2 loop players = 50, 36 of them active = group members 31 + 5, the 14 inactive ones in no group.
-        static readonly AmbientAudioProfile[] StagedTable =
-        {
+            // Yard: PLAN-YARD item 6 (staged), moved into the table by the lock-step promotion (item 15, 2026-11-21). Mirrors
+            // tools/extract/native_contracts/yard.json "audio" (schema 2, level163): 26 random + 22 season + 2 loop players = 50, 36 of them active =
+            // group members 31 + 5, the 14 inactive ones in no group.
             new AmbientAudioProfile("arena_yard", "Yard", "ArenaMapPort_YardNativeAudio",
                 players: 50, activePlayers: 36, controllers: 0, hasShoreline: false, usesSeasons: true, originalActivation: true,
                 inactivePlayers: new[]
@@ -285,6 +273,15 @@ namespace ArenaMapPort.Client
                 },
                 seasonKindPlayers: 22, loopKindPlayers: 2),
         };
+
+        /// <summary>Every map with an imported ambient graph, in config binding order.</summary>
+        internal static IReadOnlyList<AmbientAudioProfile> All => Table;
+
+        /// <summary>Profiles of maps that are written but not yet in the table: empty after the Autoservice promotion (PLAN-AUTOSERVICE item 12,
+        /// 2026-11-11) and after the Yard promotion (PLAN-YARD item 15, 2026-11-21); a future map's profile waits here, never consulted by the driver.</summary>
+        internal static IReadOnlyList<AmbientAudioProfile> Staged => StagedTable;
+
+        static readonly AmbientAudioProfile[] StagedTable = new AmbientAudioProfile[0];
 
         internal static bool TryGet(string mapKey, out AmbientAudioProfile profile)
         {

@@ -442,7 +442,7 @@ class SidecarTests(unittest.TestCase):
         autoservice = json.loads((REPO / "tools" / "maps" / "autoservice.json").read_text(encoding="utf-8"))
         self.assertEqual(VD.door_pose_errors(autoservice, REPO / "tools" / "maps" / "autoservice.doors.json", entries["AutoService"].get("DoorPoses")), [])
         yard = json.loads((REPO / "tools" / "maps" / "yard.json").read_text(encoding="utf-8"))
-        self.assertEqual(VD.door_pose_errors(yard, REPO / "tools" / "maps" / "yard.doors.json", entries["Yard"].get("DoorPoses")), [])   # Yard, since item 10 part 2 (Catalog only)
+        self.assertEqual(VD.door_pose_errors(yard, REPO / "tools" / "maps" / "yard.doors.json", entries["Yard"].get("DoorPoses")), [])   # Yard, since item 10 part 2 (registered since item 15)
         for name, entry in entries.items():
             if name not in ("Bowl", "Equator", "Bay5", "AirPit", "Iceberg", "AutoService", "Yard"):     # the six released maps and Yard; the spike maps carry none
                 self.assertIsNone(entry.get("DoorPoses"), name)

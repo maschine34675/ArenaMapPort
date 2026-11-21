@@ -147,6 +147,7 @@ public sealed class ScoreMonitorModelTests
     [InlineData("arena_bowl", 16, 6)]
     [InlineData("arena_iceberg", 6, 4)]      // the two word-13 boards (capture point status, by inference) stay dark
     [InlineData("arena_autoservice", 4, 4)]
+    [InlineData("arena_yard", 8, 8)]
     public void OnlyTheActiveRowsWithAFaceAreUsable(string key, int rows, int usable)
     {
         var map = ArenaMapRegistry.All.Single(m => m.Key == key);

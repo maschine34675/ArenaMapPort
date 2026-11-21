@@ -1618,7 +1618,7 @@ namespace ArenaMapPort.Shared
 
         // Source scene selection: tools/extract/plans/yard.json. Identity is permanent.
         // PLAN-YARD item 10 part 2 (2026-11-21): the sidecars are tools/maps/yard.json, yard.exits.json, yard.doors.json, yard.monitors.json and yard.borders.json,
-        // mirrored number for number (YardMapTests, validate_map_descriptors.py). Catalog only: Yard is NOT in All until item 15, so no raid reaches any of it.
+        // mirrored number for number (YardMapTests, validate_map_descriptors.py). Yard joined ArenaMapRegistry.All with PLAN-YARD item 15 (2026-11-21): registered, bundles and key still to come (items 16 and 17).
         public static readonly ArenaMapDescriptor Yard = new(
             Key: "arena_yard",
             IdField: "187d5cbc21744c97e8348e76",
@@ -2038,7 +2038,8 @@ namespace ArenaMapPort.Shared
         /// <summary>Playable and distributable maps. Runtime consumers must iterate this release subset.
         /// Equator, Bay5 and AirPit are the released ones (0.2.2); Bowl joined for 0.3.0 (PLAN-BOWL item 8, 2026-10-18) and shipped with it;
         /// Iceberg joined on feature/iceberg (PLAN-ICEBERG item 12, 2026-10-30) and is registered and staged, not yet released (its bundles
-        /// wait for the first Unity build); AutoService joined on feature/autoservice (PLAN-AUTOSERVICE item 12, 2026-11-11) in the same state.</summary>
-        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5, AirPit, Bowl, Iceberg, AutoService };
+        /// wait for the first Unity build); AutoService joined on feature/autoservice (PLAN-AUTOSERVICE item 12, 2026-11-11) in the same state;
+        /// Yard joined on feature/yard (PLAN-YARD item 15, 2026-11-21): registered and staged without bundles and without a content key (items 16 and 17).</summary>
+        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5, AirPit, Bowl, Iceberg, AutoService, Yard };
     }
 }

@@ -37,7 +37,7 @@ public sealed class DoorPoseSidecarTests
         "airpit" => ArenaMapRegistry.AirPit,
         "iceberg" => ArenaMapRegistry.Iceberg,
         "autoservice" => ArenaMapRegistry.AutoService,
-        "yard" => ArenaMapRegistry.Yard, // Catalog only until PLAN-YARD item 15; its rows are in the descriptor since item 10 part 2 (2026-11-21)
+        "yard" => ArenaMapRegistry.Yard, // in the released set since PLAN-YARD item 15 (2026-11-21); its rows were in the descriptor since item 10 part 2
         _ => throw new ArgumentOutOfRangeException(nameof(stem)),
     };
 
@@ -419,11 +419,11 @@ public sealed class DoorPoseSidecarTests
     }
 
     [Fact]
-    public void OnlyTheSixReleasedMapsCarryDoorPoses()
+    public void OnlyTheSevenReleasedMapsCarryDoorPoses()
     {
-        // Yard (Catalog only until PLAN-YARD item 15) carries its three rows since item 10 part 2, 2026-11-21: the descriptor row and the sidecar change in one commit
+        // Yard carries its three rows since item 10 part 2, 2026-11-21, and is in the released set since item 15: the descriptor row and the sidecar change in one commit
         foreach (var map in ArenaMapRegistry.Catalog)
-            Assert.Equal(ArenaMapRegistry.All.Contains(map) || ReferenceEquals(map, ArenaMapRegistry.Yard), map.DoorPoses.Length > 0);
+            Assert.Equal(ArenaMapRegistry.All.Contains(map), map.DoorPoses.Length > 0);
         Assert.All(ArenaMapRegistry.Bowl.DoorPoses.Concat(ArenaMapRegistry.Bay5.DoorPoses).Concat(ArenaMapRegistry.Iceberg.DoorPoses),
             p => Assert.False(p.IsSwitch));                                         // switches: AirPit's lamps and Equator's exit lamps only
         Assert.All(ArenaMapRegistry.Equator.DoorPoses.Where(p => p.IsSwitch), p => Assert.Equal("EXIT_LIGHT_EMISSIVE", p.Barrier));

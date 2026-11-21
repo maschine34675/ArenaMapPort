@@ -28,7 +28,7 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
         "arena_airpit" => " terminal fixture",
         "arena_bowl" => " stadium fixture", // PLAN-BOWL item 8, 2026-10-18
         "arena_autoservice" => " workshop fixture", // PLAN-AUTOSERVICE item 9, 2026-11-11; released set since item 12
-        "arena_yard" => " courtyard fixture", // PLAN-YARD item 11, 2026-11-20; pending (Catalog-only) until item 15
+        "arena_yard" => " courtyard fixture", // PLAN-YARD item 11, 2026-11-20; released set since item 15, 2026-11-21
         _ => throw new InvalidOperationException("no official text for " + map.Key),
     };
 
@@ -242,33 +242,53 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
     }
 
     [Fact]
-    public void Yard_is_a_pending_official_text_map_its_entry_is_accepted_and_never_required()
+    public void Yard_is_a_released_official_text_map_and_its_entry_is_required()
     {
-        // PLAN-YARD item 11: Arena's location id 64b7d7f2... has Name and Description rows, so the map is in OfficialTextMapKeys, but it is Catalog-only
-        // until item 15: the generic pending rule of Load accepts its entry (the extractor writes a six-entry pack) and does not require it.
+        // PLAN-YARD item 11: Arena's location id 64b7d7f2... has Name and Description rows, so the map is in OfficialTextMapKeys; item 15 (2026-11-21) put it
+        // into the released set, so the pack must cover it like the other official-text maps (a pack without its entry is discarded whole).
         Assert.True(ArenaMapDescriptions.HasOfficialText(ArenaMapRegistry.Yard));
         Assert.Contains(ArenaMapRegistry.Yard, ArenaMapRegistry.Catalog);
-        Assert.DoesNotContain(ArenaMapRegistry.Yard, ArenaMapRegistry.All);
-        Assert.DoesNotContain(ArenaMapRegistry.Yard, OfficialTextMaps);
-        foreach (var withYard in new[] { true, false })
-        {
-            var data = Fixture();
-            if (!withYard) foreach (var language in data.Values) language.Remove("arena_yard");
-            WritePack(data);
-            var warnings = new List<string>();
-            var pack = ArenaMapDescriptions.Load(PackPath, warnings.Add);
-            Assert.Empty(warnings);
-            foreach (var map in OfficialTextMaps)
-                Assert.EndsWith(Kind(map), pack.Resolve("en", map));
-            // the Yard answer is the pack text when the entry is there; nothing in the registration reads it while the map is unregistered
-            if (withYard) Assert.EndsWith(" courtyard fixture", pack.Resolve("ge", ArenaMapRegistry.Yard));
-        }
+        Assert.Contains(ArenaMapRegistry.Yard, ArenaMapRegistry.All);
+        Assert.Contains(ArenaMapRegistry.Yard, OfficialTextMaps);
+
+        WritePack(Fixture());
+        var warnings = new List<string>();
+        var pack = ArenaMapDescriptions.Load(PackPath, warnings.Add);
+        Assert.Empty(warnings);
+        foreach (var map in OfficialTextMaps)
+            Assert.EndsWith(Kind(map), pack.Resolve("en", map));
+        Assert.EndsWith(" courtyard fixture", pack.Resolve("ge", ArenaMapRegistry.Yard));
+
+        var data = Fixture();
+        foreach (var language in data.Values) language.Remove("arena_yard");
+        WritePack(data);
+        warnings.Clear();
+        var without = ArenaMapDescriptions.Load(PackPath, warnings.Add);
+        Assert.Single(warnings);
+        Assert.Contains("Description map set differs from the released maps", warnings[0]);
+        foreach (var map in ArenaMapRegistry.All)
+            Assert.Equal(map.LocaleDescription, without.Resolve("ge", map));
+    }
+
+    [Fact]
+    public void The_generic_pending_rule_also_holds_for_a_registry_without_Yard()
+    {
+        // The loader's rule is map-agnostic: against the registry as it was before Yard joined, the six-entry pack loads without a warning and the
+        // Yard entry costs the other maps nothing (the seam of the next map).
+        WritePack(Fixture());
+        var warnings = new List<string>();
+        var withoutYard = ArenaMapRegistry.All.Where(map => map.Key != ArenaMapRegistry.Yard.Key).ToArray();
+        var pack = ArenaMapDescriptions.Load(PackPath, warnings.Add, withoutYard);
+        Assert.Empty(warnings);
+        foreach (var map in withoutYard.Where(ArenaMapDescriptions.HasOfficialText))
+            Assert.EndsWith(Kind(map), pack.Resolve("en", map));
+        Assert.EndsWith(" courtyard fixture", pack.Resolve("en", ArenaMapRegistry.Yard));
     }
 
     [Fact]
     public void A_yard_only_fault_in_a_six_entry_pack_is_still_discarded_whole()
     {
-        // The pending entry is validated like the others: an empty Yard text discards the pack, so the official texts are never half-applied.
+        // The Yard entry is validated like the others: an empty Yard text discards the pack, so the official texts are never half-applied.
         var data = Fixture();
         data["ru"]["arena_yard"] = " ";
         WritePack(data);

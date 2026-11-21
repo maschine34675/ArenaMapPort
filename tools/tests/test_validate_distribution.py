@@ -48,7 +48,8 @@ KEY_SOURCES = {"arena_equator": ((51, "assets.resS"), (55, "assets.resS"), (57, 
                "arena_bowl": ((41, "assets.resS"), (41, "resource"), (45, "assets.resS"), (46, "assets.resS"), (47, "assets.resS"),
                               (48, "assets.resS"), (48, "resource"), (95, "assets.resS")),
                "arena_iceberg": ((256, "assets.resS"), (258, "assets.resS"), (375, "assets.resS"), (376, "assets.resS")),
-               "arena_autoservice": ((62, "assets.resS"), (62, "resource"), (66, "assets.resS"))}
+               "arena_autoservice": ((62, "assets.resS"), (62, "resource"), (66, "assets.resS")),
+               "arena_yard": ((72, "assets.resS"), (74, "assets.resS"), (310, "assets.resS"))}
 
 
 def source(n, kind="assets.resS", size=None):
@@ -171,7 +172,7 @@ class DistributionSidecarTests(unittest.TestCase):
                                                        if key in self.RELEASED})
             art_pin.start()
             self.addCleanup(art_pin.stop)
-        for name in ('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService'):
+        for name in ('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService'):      # Yard has no overview pack
             for file in (f'ArenaMapPort_{name}.jsonc', 'Layers/Ground.svg'):
                 relative = f'ArenaMapPort_{name}/{file}'
                 for root in (self.plugin/'dynamicmaps', self.repo/'work/dynamicmaps/release'):
@@ -219,14 +220,15 @@ class DistributionSidecarTests(unittest.TestCase):
         for folder in (self.server / "db/arena_equator", self.repo / "ArenaMapPort.Server/db/arena_equator"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_equator"}', encoding="utf-8")
-        # The release is exactly six maps (Bowl since PLAN-BOWL item 8, 2026-10-18, Iceberg since PLAN-ICEBERG item 12, 2026-10-30, Autoservice since
-        # PLAN-AUTOSERVICE item 12, 2026-11-11), even
+        # The release is exactly seven maps (Bowl since PLAN-BOWL item 8, 2026-10-18, Iceberg since PLAN-ICEBERG item 12, 2026-10-30, Autoservice since
+        # PLAN-AUTOSERVICE item 12, 2026-11-11, Yard since PLAN-YARD item 15, 2026-11-21), even
         # when parked descriptors remain in source.
         (self.maps / "bay5.json").write_text(json.dumps({"key": "arena_bay5", "db_base_json_path": "arena_bay5/base.json"}), encoding="utf-8")
         (self.maps / "airpit.json").write_text(json.dumps({"key": "arena_airpit", "db_base_json_path": "arena_airpit/base.json"}), encoding="utf-8")
         (self.maps / "bowl.json").write_text(json.dumps({"key": "arena_bowl", "db_base_json_path": "arena_bowl/base.json"}), encoding="utf-8")
         (self.maps / "iceberg.json").write_text(json.dumps({"key": "arena_iceberg", "db_base_json_path": "arena_iceberg/base.json"}), encoding="utf-8")
         (self.maps / "autoservice.json").write_text(json.dumps({"key": "arena_autoservice", "db_base_json_path": "arena_autoservice/base.json"}), encoding="utf-8")
+        (self.maps / "yard.json").write_text(json.dumps({"key": "arena_yard", "db_base_json_path": "arena_yard/base.json"}), encoding="utf-8")
         self.put_bundles("arena_bay5")
         (self.plugin / "material-shaders.arena_bay5.json").write_text("{}", encoding="utf-8")
         for folder in (self.server / "db/arena_bay5", self.repo / "ArenaMapPort.Server/db/arena_bay5"):
@@ -260,6 +262,13 @@ class DistributionSidecarTests(unittest.TestCase):
         for folder in (self.server / "db/arena_autoservice", self.repo / "ArenaMapPort.Server/db/arena_autoservice"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_autoservice"}', encoding="utf-8")
+        # Yard (PLAN-YARD item 15): bundles, shader sidecar, database, art (banner and loading images), AI sidecar, acoustics (the fixture stages one room tone per map; the real Yard package has two), gate sounds,
+        # monitors and a spectator package (put_spectators); no flares, no water and no overview pack (explicit absences, never fake data).
+        self.put_bundles("arena_yard")
+        (self.plugin / "material-shaders.arena_yard.json").write_text("{}", encoding="utf-8")
+        for folder in (self.server / "db/arena_yard", self.repo / "ArenaMapPort.Server/db/arena_yard"):
+            folder.mkdir(parents=True)
+            (folder / "base.json").write_text('{"Id": "arena_yard"}', encoding="utf-8")
         self.built = {}
         for name, destination in (("Client", self.plugin), ("Server", self.server)):
             built = self.repo / f"ArenaMapPort.{name}/bin/Release/maschine-ArenaMapPort.{name}.dll"
@@ -268,7 +277,7 @@ class DistributionSidecarTests(unittest.TestCase):
             (destination / built.name).write_bytes(built.read_bytes())
             self.built[name] = built
 
-    RELEASED = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice")
+    RELEASED = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice", "arena_yard")
 
     @staticmethod
     def banner_names():
@@ -506,7 +515,7 @@ class DistributionSidecarTests(unittest.TestCase):
         self.assertEqual(Path(descriptors[1]).name, "validate_map_descriptors.py")
         # The bundle-name validator is told where the key store is: it reads the encrypted bundles through the tool.
         self.assertEqual(names[-2:], ["--key-store", str(self.repo / "work" / "release-keys")])
-        self.assertIn("DISTRIBUTION_OK 6 maps 18 bundles 6 sidecars encrypted", output.getvalue())
+        self.assertIn("DISTRIBUTION_OK 7 maps 21 bundles 7 sidecars encrypted", output.getvalue())
 
     def test_distribution_accepts_bots_exits_and_other_dotted_sidecars(self):
         (self.maps / "equator.bots.json").write_text('{"player_spawns": []}', encoding="utf-8")
@@ -800,7 +809,7 @@ class DistributionSidecarTests(unittest.TestCase):
                 if path.parent != keys:
                     path.parent.rmdir()
         shutil.rmtree(keys)
-        with self.assertRaisesRegex(ValueError, "Key file set mismatch: missing=\\['arena_airpit.json', 'arena_autoservice.json', 'arena_bay5.json', 'arena_bowl.json', 'arena_equator.json', 'arena_iceberg.json'\\]"):
+        with self.assertRaisesRegex(ValueError, "Key file set mismatch: missing=\\['arena_airpit.json', 'arena_autoservice.json', 'arena_bay5.json', 'arena_bowl.json', 'arena_equator.json', 'arena_iceberg.json', 'arena_yard.json'\\]"):
             self.validate()
 
     def test_key_files_must_have_the_schema_and_nothing_else(self):
@@ -1556,6 +1565,21 @@ class DistributionSidecarTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, r"sub/copy.bin \(sharedassets28.resource\)"):
                 distribution.validate_spectator_audio_not_key_sources(audio, self.arena_data)
 
+    def test_a_staged_acoustics_file_must_not_be_a_copy_of_a_key_source_file(self):
+        # PLAN-YARD item 15: the acoustics folders (graph JSON, bake, room tones; Yard is the first map with two tones) get the same byte-copy check as
+        # the spectator audio, reported with their own label and the path below acoustics/
+        tone = self.plugin / "acoustics/arena_yard/arena_yard_tone.wav"
+        source = self.arena_data / "sharedassets28.resource"
+        with self.changed(source, tone.read_bytes()), self.assertRaisesRegex(
+                ValueError, r"Acoustics file is a copy of a key-source file of the maps: arena_yard/arena_yard_tone\.wav \(sharedassets28\.resource\)"):
+            self.validate()
+        # the same size with other bytes is no copy: only equal bytes count
+        other = bytearray(tone.read_bytes())
+        other[-1] ^= 1
+        with self.changed(source, bytes(other)):
+            self.validate()
+        self.validate()
+
     def test_the_spectator_voices_must_be_the_extracted_ones(self):
         extracted = self.repo / "work/extract/spectator-audio"
         clip = "arena_fan7_participating_00.wav"
@@ -1578,7 +1602,7 @@ class DistributionSidecarTests(unittest.TestCase):
         spectators = self.plugin / "spectators"
         shared = spectators / "shared"
         image, manifest, graph = self.SPECTATOR_IMAGE, stage_spectators.MANIFEST, stage_spectators.GRAPH
-        self.assertEqual({"arena_airpit", "arena_autoservice", "arena_bay5", "arena_bowl", "arena_equator", "shared"}, {p.name for p in spectators.iterdir()})
+        self.assertEqual({"arena_airpit", "arena_autoservice", "arena_bay5", "arena_bowl", "arena_equator", "arena_yard", "shared"}, {p.name for p in spectators.iterdir()})
         self.validate()
         with self.changed(shared / image), self.assertRaisesRegex(FileNotFoundError, image):
             self.validate()
@@ -1844,15 +1868,22 @@ class DistributionSidecarTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Loadscreen table does not match"):
                 self.validate()
 
-    def test_pending_art_rows_are_tolerated_only_for_the_listed_pending_maps(self):
-        # PLAN-YARD item 15 empties PENDING_ART_KEYS and inverts this pin
-        self.assertEqual(distribution.PENDING_ART_KEYS, frozenset({"arena_yard"}))
-        pending = {**extract_banners.BANNERS, "arena_yard": extract_banners.BANNERS["arena_airpit"]}
-        with patch.object(extract_banners, "BANNERS", pending):
-            self.validate()                                   # the pending Yard row is not a released map and is allowed
-        other = {**extract_banners.BANNERS, "arena_prison": extract_banners.BANNERS["arena_airpit"]}
-        with patch.object(extract_banners, "BANNERS", other):
+    def test_no_art_row_is_pending_since_yards_promotion_and_yards_row_is_required(self):
+        # PLAN-YARD item 15 emptied PENDING_ART_KEYS (the seam stays for the next Catalog-only map): every table row is a released map's
+        self.assertEqual(distribution.PENDING_ART_KEYS, frozenset())
+        self.assertIn("arena_yard", extract_banners.BANNERS)
+        without_yard = {k: v for k, v in extract_banners.BANNERS.items() if k != "arena_yard"}
+        with patch.object(extract_banners, "BANNERS", without_yard):
             with self.assertRaisesRegex(ValueError, "Banner table does not match"):
+                self.validate()
+        for extra_key in ("arena_prison", "arena_yard_second"):
+            other = {**extract_banners.BANNERS, extra_key: extract_banners.BANNERS["arena_airpit"]}
+            with patch.object(extract_banners, "BANNERS", other):
+                with self.assertRaisesRegex(ValueError, "Banner table does not match"):
+                    self.validate()
+        with patch.object(distribution, "PENDING_ART_KEYS", frozenset({"arena_prison"})):         # the scaffolding still works for the next map
+            other = {**extract_banners.BANNERS, "arena_prison": extract_banners.BANNERS["arena_airpit"]}
+            with patch.object(extract_banners, "BANNERS", other):
                 self.validate()
 
     def test_distribution_rejects_missing_stale_or_unexpected_overview(self):

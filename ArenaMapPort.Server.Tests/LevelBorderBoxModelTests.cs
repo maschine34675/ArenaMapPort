@@ -9,7 +9,7 @@ namespace ArenaMapPort.Server.Tests;
 /// <summary>
 /// The pure rules behind LevelBorderBoxRepairs (PLAN-YARD item 10 part 2, 2026-11-21): names, the layer, which rows can be raised, the normalised rotation, the world
 /// bounds of an oriented box and the decision of a second pass over an existing set. The Unity glue is pinned as text (<see cref="LevelBorderBoxSourcePinTests"/>); the
-/// descriptor rows against the sidecar are in YardMapTests. Host test pending: Yard is Catalog only until PLAN-YARD item 15.
+/// descriptor rows against the sidecar are in YardMapTests. Yard is in the released set since PLAN-YARD item 15; its host test is the lead's (item 18).
 /// </summary>
 public sealed class LevelBorderBoxModelTests
 {
@@ -159,7 +159,8 @@ public sealed class LevelBorderBoxModelTests
     [Fact]
     public void AMapWithoutRowsPlansNothingAndHasNoUsableRow()
     {
-        // every registered map except Yard (which joins All at item 15 and is the one map with rows): no usable row, so the pass plans nothing and Apply creates nothing
+        // every registered map except Yard (in All since item 15 and the one map with rows): no usable row, so the pass plans nothing and Apply creates nothing
+        Assert.Equal(104, LevelBorderBoxModel.CountUsable(ArenaMapRegistry.Yard.LevelBorderBoxes));
         foreach (var map in ArenaMapRegistry.All.Where(m => !ReferenceEquals(m, ArenaMapRegistry.Yard)))
         {
             Assert.Equal(0, LevelBorderBoxModel.CountUsable(map.LevelBorderBoxes));
@@ -171,7 +172,7 @@ public sealed class LevelBorderBoxModelTests
 /// <summary>
 /// The glue file LevelBorderBoxRepairs.cs and its wiring, pinned as text (the Unity types keep it out of the test project): it never runs for a map without rows, never
 /// searches the scene per row, names nothing LevelBorder*, raises plain BoxColliders on the resolved layer into an owned scene and is installed after AuthoredBorderRepairs
-/// behind its own guard. Host test pending (Catalog only until PLAN-YARD item 15).
+/// behind its own guard. Host test pending (Yard is in the released set since PLAN-YARD item 15).
 /// </summary>
 public sealed class LevelBorderBoxSourcePinTests
 {
@@ -292,11 +293,12 @@ public sealed class LevelBorderBoxSourcePinTests
     }
 
     [Fact]
-    public void YardIsNamedByNoClientListAndNoCsprojRow()
+    public void YardHasItsCsprojRowsButTheWallsNeedNoClientListAndNoCsprojRow()
     {
-        // Catalog only: a Release or DllOnly client build must not require any Yard file and no release list names Yard (item 15 adds the rows)
+        // Yard is a released map since item 15: the client csproj names it (bundles, sidecars, acoustics, gate sounds, stage rows). The walls themselves are the
+        // descriptor literal: no staged file, no csproj row, and the repair iterates ArenaMapRegistry.All instead of naming a map.
         string csproj = File.ReadAllText(Path.Combine(ClientDirectory(), "ArenaMapPort.Client.csproj"));
-        Assert.DoesNotContain("yard", csproj, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("arena_yard", csproj);
         Assert.DoesNotContain("LevelBorder", csproj);                             // the descriptor literal is the data: no staged file, no csproj row
         string code = Code("LevelBorderBoxRepairs.cs");
         Assert.DoesNotContain("Yard", code);

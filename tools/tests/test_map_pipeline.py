@@ -839,26 +839,26 @@ class RegistryTests(unittest.TestCase):
                 self.assertTrue(VD.puddle_errors(data), label)
 
     def test_catalog_and_release_membership_are_independently_checked(self):
-        # The released set is Equator, Bay5, AirPit, Bowl, Iceberg and AutoService (RELEASE_MAP_NAMES, Bowl since PLAN-BOWL item 8,
-        # 2026-10-18, Iceberg since PLAN-ICEBERG item 12, 2026-10-30, AutoService since PLAN-AUTOSERVICE item 12, 2026-11-11); Third stands
+        # The released set is Equator, Bay5, AirPit, Bowl, Iceberg, AutoService and Yard (RELEASE_MAP_NAMES, Bowl since PLAN-BOWL item 8,
+        # 2026-10-18, Iceberg since PLAN-ICEBERG item 12, 2026-10-30, AutoService since PLAN-AUTOSERVICE item 12, 2026-11-11, Yard since PLAN-YARD item 15, 2026-11-21); Third stands
         # for any parked map.
-        entries = {name: {} for name in ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService", "Third")}
+        entries = {name: {} for name in ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService", "Yard", "Third")}
         prefix = "public static readonly IReadOnlyList<ArenaMapDescriptor> "
         def source(catalog, release):
             return prefix + "Catalog = new[] {" + catalog + "};\n" + prefix + "All = new[] {" + release + "};"
-        released = "Equator, Bay5, AirPit, Bowl, Iceberg, AutoService"
-        full = "Equator, Bay5, AirPit, Bowl, Iceberg, AutoService, Third"
-        self.assertEqual(VD.RELEASE_MAP_NAMES, ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService"))
-        self.assertEqual(VD.RELEASE_MAP_KEYS, ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice"))
+        released = "Equator, Bay5, AirPit, Bowl, Iceberg, AutoService, Yard"
+        full = "Equator, Bay5, AirPit, Bowl, Iceberg, AutoService, Yard, Third"
+        self.assertEqual(VD.RELEASE_MAP_NAMES, ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService", "Yard"))
+        self.assertEqual(VD.RELEASE_MAP_KEYS, ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice", "arena_yard"))
         self.assertEqual(VD.CROWDLESS_MAP_KEYS, ("arena_iceberg",))
         self.assertTrue(set(VD.CROWDLESS_MAP_KEYS) <= set(VD.RELEASE_MAP_KEYS))
         self.assertEqual(VD.registry_membership_errors(source(full, released), entries), [])
-        for catalog, release in (("Equator, Bay5, AirPit, Bowl, Iceberg, AutoService", released), (full + ", Third", released),
-                                 ("Equator, Bay5, AirPit, Bowl, Iceberg, AutoService, Unknown", released), (full, "Equator"),
+        for catalog, release in (("Equator, Bay5, AirPit, Bowl, Iceberg, AutoService, Yard", released), (full + ", Third", released),
+                                 ("Equator, Bay5, AirPit, Bowl, Iceberg, AutoService, Yard, Unknown", released), (full, "Equator"),
                                  (full, "Equator, Bay5"), (full, "Equator, Bay5, AirPit"),
-                                 (full, "Equator, Bay5, AirPit, Bowl"), (full, "Equator, Bay5, AirPit, Bowl, Iceberg"),
-                                 (full, "Equator, Bay5, AirPit, Bowl, Iceberg, AutoService, Third"),
-                                 (full, "Equator, Bay5, AirPit, Bowl, Iceberg, AutoService, AutoService")):
+                                 (full, "Equator, Bay5, AirPit, Bowl"), (full, "Equator, Bay5, AirPit, Bowl, Iceberg"), (full, "Equator, Bay5, AirPit, Bowl, Iceberg, AutoService"),
+                                 (full, "Equator, Bay5, AirPit, Bowl, Iceberg, AutoService, Yard, Third"),
+                                 (full, "Equator, Bay5, AirPit, Bowl, Iceberg, AutoService, Yard, Yard")):
             with self.subTest(catalog=catalog, release=release):
                 self.assertTrue(VD.registry_membership_errors(source(catalog, release), entries))
 

@@ -44,7 +44,7 @@ class PartitionTests(unittest.TestCase):
     def test_stage_spectators_stages_exactly_the_crowd_maps(self):
         import extract_spectator
         import stage_spectators
-        self.assertEqual(set(extract_spectator.MAP_SCENES), {"airpit", "equator", "bay5", "bowl", "autoservice"})
+        self.assertEqual(set(extract_spectator.MAP_SCENES), {"airpit", "equator", "bay5", "bowl", "autoservice", "yard"})
         text = (REPO / "tools" / "extract" / "stage_spectators.py").read_text(encoding="utf-8")
         self.assertNotIn("iceberg", text.lower())                  # no per-map literal: MAP_SCENES is the one list
         self.assertNotIn("autoservice", text.lower())              # the same for the fifth crowd map: its scene name lives in MAP_SCENES only
@@ -56,10 +56,10 @@ class PartitionTests(unittest.TestCase):
         body = re.search(r"static string DesignScene\(string key\)\s*\{(?P<body>.*?)\n        \}\n", source, re.S).group("body")
         returns = dict(re.findall(r'case "(arena_[a-z0-9]+)": return (null|"[A-Za-z_0-9]+");', body))
         scenes = {key: value.strip('"') for key, value in returns.items() if value != "null"}
-        # the staged crowd maps plus the pending ones (Yard, PLAN-YARD item 14: its client row is dormant until item 15 stages it)
+        # the staged crowd maps plus the pending ones (none since PLAN-YARD item 15; the seam stays)
         self.assertEqual(scenes, {f"arena_{name}": scene for name, scene in extract_spectator.ALL_MAP_SCENES.items()})
         self.assertEqual({key for key, value in returns.items() if value == "null"}, set(VD.CROWDLESS_MAP_KEYS))
-        self.assertNotIn("arena_yard", VD.CROWDLESS_MAP_KEYS)      # Yard has a crowd (27 fans): it is pending, never crowdless
+        self.assertNotIn("arena_yard", VD.CROWDLESS_MAP_KEYS)      # Yard has a crowd (27 fans): never crowdless
         self.assertIn("default: return null;", body)
 
     def test_the_csproj_names_no_map_for_the_spectator_staging(self):
@@ -84,7 +84,7 @@ class PackerTests(unittest.TestCase):
             self.assertEqual(graph in required[stem], key not in VD.CROWDLESS_MAP_KEYS, key)
         labels = {(rule.part, rule.label) for rule in release.build_rules(spec)}
         self.assertNotIn(("iceberg", "spectators"), labels)
-        for stem in ("equator", "bay5", "airpit", "bowl", "autoservice"):
+        for stem in ("equator", "bay5", "airpit", "bowl", "autoservice", "yard"):
             self.assertIn((stem, "spectators"), labels)
 
     def test_a_stray_spectator_package_of_a_crowdless_map_is_unclassified(self):

@@ -148,7 +148,7 @@ class CsharpLiteralTests(unittest.TestCase):
         bad = subprocess.run([sys.executable, script, "--csharp"], capture_output=True, text=True)
         self.assertNotEqual(bad.returncode, 0)                                            # the Arena run needs --plan, --root and --out
 
-    def test_no_released_map_has_border_boxes_or_a_border_sidecar(self):
+    def test_yard_is_the_one_map_with_border_boxes_and_a_border_sidecar(self):
         entries = VD.registry_entries(DESCRIPTOR.read_text(encoding="utf-8"))
         for name, entry in entries.items():
             if name != "Yard":

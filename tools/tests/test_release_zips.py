@@ -756,6 +756,8 @@ class BuildTests(FakeRepoCase):
         self.assertEqual(release.prose_name("Bowl"), "Bowl")
         # Chop Shop's registry display is "AutoService"; every player text uses the in-game name.
         self.assertEqual(release.prose_name("AutoService"), "Chop Shop")
+        # Yard (PLAN-YARD item 15): the registry display is "Yard", the in-game name is "Block"
+        self.assertEqual(release.prose_name("Yard"), "Block")
         self.assertEqual(release.MapRelease("arena_airpit", "airpit", "AirPit").display, "AirPit")
 
     def test_the_multi_part_readme_tells_a_0_3_0_player_to_delete_the_old_single_zip_manifest(self):

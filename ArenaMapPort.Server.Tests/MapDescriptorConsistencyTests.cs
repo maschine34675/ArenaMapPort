@@ -118,7 +118,7 @@ public class MapDescriptorConsistencyTests
             "DOORS/roller_shutters_techlight_01",
             "DOORS/roller_shutters_techlight_01 (1)",
         }, ArenaMapRegistry.AutoService.OpenedBarriers);
-        // Yard (PLAN-YARD item 10, 2026-11-21; Catalog only until item 15): the two gate units of its DOORS, the paths the rows of tools/maps/yard.doors.json name:
+        // Yard (PLAN-YARD item 10, 2026-11-21; in the released set since item 15): the two gate units of its DOORS, the paths the rows of tools/maps/yard.doors.json name:
         // the north pocket's swing gate (two leaves) and the south pocket's rising gondola.
         Assert.Equal(new[] { "DOORS/Metal_gate_1", "DOORS/Construction_Cradle_02" }, ArenaMapRegistry.Yard.OpenedBarriers);
         var walked = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg, ArenaMapRegistry.AutoService, ArenaMapRegistry.Yard };
@@ -176,23 +176,19 @@ public class MapDescriptorConsistencyTests
     }
 
     // 2026-11-21 (PLAN-YARD item 10 part 2): the oriented border walls of LevelBorderBoxRepairs are Yard's alone (Arena's Scripts-scene cubes, which no package
-    // imports); every other map keeps the default (none), so the repair never runs for the six released maps. YardMapTests pins the rows against the sidecar.
+    // imports); every other map keeps the default (none), so the repair never runs for the six maps released before Yard. YardMapTests pins the rows against the sidecar.
     [Fact]
     public void LevelBorderBoxes_ExistForYardOnly()
     {
         Assert.Equal(104, ArenaMapRegistry.Yard.LevelBorderBoxes.Length);
-        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ReferenceEquals(m, ArenaMapRegistry.Yard)))
+        foreach (var map in ArenaMapRegistry.Catalog)
         {
             Assert.NotNull(map.LevelBorderBoxes);
-            Assert.Empty(map.LevelBorderBoxes);
+            Assert.Equal(ReferenceEquals(map, ArenaMapRegistry.Yard), map.LevelBorderBoxes.Length > 0);
         }
-        // the released set: none of its maps has rows (Yard joins it at item 15 and is the one exception then, so the repair still never runs for the six released maps)
-        foreach (var map in ArenaMapRegistry.All.Where(m => !ReferenceEquals(m, ArenaMapRegistry.Yard)))
-        {
-            Assert.Empty(map.LevelBorderBoxes);
-        }
-        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice" },
-            ArenaMapRegistry.All.Where(m => !ReferenceEquals(m, ArenaMapRegistry.Yard)).Select(m => m.Key).ToArray());
+        // the released set (Yard joined it at item 15 and is the one map with rows, so the repair still never runs for the six maps released before it)
+        Assert.Equal(new[] { "arena_yard" }, ArenaMapRegistry.All.Where(m => m.LevelBorderBoxes.Length > 0).Select(m => m.Key).ToArray());
+        Assert.Equal(ArenaMapRegistry.Yard, ArenaMapRegistry.All[^1]);
     }
 
     // 2026-10-13: the passport-hall lamp fill (LampFillRepairs) is AirPit's alone; every other map keeps the default (none),

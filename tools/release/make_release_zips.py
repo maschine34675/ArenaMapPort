@@ -697,7 +697,7 @@ ENCRYPTION_TEXT = (
 
 # The game's own spelling of a map in prose. MapRelease.display is a folder name (DynamicMaps' ArenaMapPort_AirPit) and stays
 # as it is; every sentence of the generated README.txt says "Air Pit", like README.md, the release notes and the in-game name.
-PROSE_NAMES = {"AirPit": "Air Pit", "AutoService": "Chop Shop"}
+PROSE_NAMES = {"AirPit": "Air Pit", "AutoService": "Chop Shop", "Yard": "Block"}
 
 
 def prose_name(display: str) -> str:

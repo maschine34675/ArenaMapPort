@@ -20,8 +20,8 @@ namespace ArenaMapPort.Server;
 /// Matchmaker_Banner_TheBowl / Matchmaker_Banners_Iceberg / Matchmaker_Banner_chop-shop / Matchmaker_Banner_Yard art (extracted read-only by
 /// tools/extract/extract_banners.py, never committed).
 ///
-/// Equator, Bay5, AirPit, Bowl and Iceberg only (the maps of <see cref="ArenaMapRegistry.All"/>; Bowl joined
-/// with PLAN-BOWL item 8, 2026-10-18, Iceberg's row with PLAN-ICEBERG item 10, 2026-10-30) — deliberately NOT a field on
+/// The maps of <see cref="ArenaMapRegistry.All"/> only (Equator, Bay5, AirPit, Bowl, Iceberg, Chop Shop and Yard; Bowl joined
+/// with PLAN-BOWL item 8, 2026-10-18, Iceberg's row with PLAN-ICEBERG item 10, 2026-10-30, Yard's with PLAN-YARD item 15, 2026-11-21) — deliberately NOT a field on
 /// <see cref="ArenaMapDescriptor"/> (Shared/Client/UnityProject are out of scope for this pass;
 /// keeping it here also means the nine parked maps need no descriptor change at all to stay
 /// bannerless). <c>db/&lt;key&gt;/base.json</c> keeps shipping <c>Banners: []</c> byte-for-byte
@@ -62,7 +62,7 @@ public static class ArenaMapBanners
         // The row precedes the map's promotion into ArenaMapRegistry.All (item 12): it is only consulted for the maps of All.
         [ArenaMapRegistry.AutoService.Key] = new Descriptor("arena_autoservice_banner", "arena_autoservice"),
         // PLAN-YARD item 11 (2026-11-20): Arena's Matchmaker_Banner_Yard, extract_banners.BANNERS["arena_yard"].
-        // The row precedes the map's promotion into ArenaMapRegistry.All (item 15): it is only consulted for the maps of All.
+        // The row preceded the map's promotion into ArenaMapRegistry.All (PLAN-YARD item 15, 2026-11-21); it is only consulted for the maps of All.
         [ArenaMapRegistry.Yard.Key] = new Descriptor("arena_yard_banner", "arena_yard"),
     };
 

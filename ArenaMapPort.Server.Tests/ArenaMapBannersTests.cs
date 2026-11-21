@@ -45,7 +45,7 @@ public sealed class ArenaMapBannersTests : IDisposable
     [InlineData("arena_bowl", "arena_bowl_banner", "arena_bowl")] // PLAN-BOWL item 8, 2026-10-18
     [InlineData("arena_iceberg", "arena_iceberg_banner", "arena_iceberg")] // PLAN-ICEBERG item 10, 2026-10-30 (row precedes the promotion)
     [InlineData("arena_autoservice", "arena_autoservice_banner", "arena_autoservice")] // PLAN-AUTOSERVICE item 9, 2026-11-11 (row precedes the promotion)
-    [InlineData("arena_yard", "arena_yard_banner", "arena_yard")] // PLAN-YARD item 11, 2026-11-20 (row precedes the promotion, item 15)
+    [InlineData("arena_yard", "arena_yard_banner", "arena_yard")] // PLAN-YARD item 11, 2026-11-20 (row preceded the promotion, item 15, 2026-11-21)
     public void For_ReturnsTheExpectedDescriptor_ForEachBanneredMap(string mapKey, string expectedId, string expectedFileStem)
     {
         var map = FindMap(mapKey);
@@ -92,13 +92,17 @@ public sealed class ArenaMapBannersTests : IDisposable
     }
 
     [Fact]
-    public void Yard_has_a_banner_row_but_is_still_outside_the_registered_set()
+    public void Yard_has_a_banner_row_and_is_in_the_registered_set()
     {
-        // PLAN-YARD item 11: the row precedes the promotion. The server only resolves banners for the maps of ArenaMapRegistry.All, so until item 15
-        // adds Yard there the row serves nothing; this pin fails on the promotion on purpose (invert it there).
+        // PLAN-YARD item 11 wrote the row, item 15 (2026-11-21) put Yard into ArenaMapRegistry.All, the set the server resolves banners for; the file
+        // arena_yard.jpg reaches dist/ with the banner extraction at item 17, and Resolve (below) never produces an entry for a file that is not there.
         Assert.NotNull(ArenaMapBanners.For(ArenaMapRegistry.Yard));
-        Assert.DoesNotContain(ArenaMapRegistry.Yard, ArenaMapRegistry.All);
+        Assert.Contains(ArenaMapRegistry.Yard, ArenaMapRegistry.All);
         Assert.Contains(ArenaMapRegistry.Yard, ArenaMapRegistry.Catalog);
+        var warnings = new List<string>();
+        Assert.Null(ArenaMapBanners.Resolve(ArenaMapRegistry.Yard, _bannersDir, warnings.Add));
+        Assert.Single(warnings);
+        Assert.Contains("arena_yard", warnings[0]);
     }
 
     [Fact]

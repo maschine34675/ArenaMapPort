@@ -36,7 +36,7 @@ public sealed class GateSoundModelTests
         return null;
     }
 
-    static readonly string[] Maps = { "equator", "bay5", "airpit", "bowl", "iceberg", "autoservice" };
+    static readonly string[] Maps = { "equator", "bay5", "airpit", "bowl", "iceberg", "autoservice", "yard" };
 
     // ---- manifest built from the tracked row sidecar (the real rows, synthetic whole clips) --------------------------------
 
@@ -129,7 +129,7 @@ public sealed class GateSoundModelTests
     [Fact]
     public void TheRealRowsGiveEveryGatePartAtMostOneSoundAndTheSoundingPartsAreThePlanSet()
     {
-        var expected = new Dictionary<string, int> { ["equator"] = 5, ["bay5"] = 5, ["airpit"] = 11, ["bowl"] = 4, ["iceberg"] = 6, ["autoservice"] = 4 };
+        var expected = new Dictionary<string, int> { ["equator"] = 5, ["bay5"] = 5, ["airpit"] = 11, ["bowl"] = 4, ["iceberg"] = 6, ["autoservice"] = 4, ["yard"] = 3 };
         foreach (var stem in Maps)
         {
             var manifest = FromSidecar(stem);
@@ -155,7 +155,8 @@ public sealed class GateSoundModelTests
             }
             // Iceberg: 6 rows, 11 gate keys (4 + 6 + 1 pose groups), every key hits exactly one row (2026-10-30 second pass of the integration review)
             // Autoservice (PLAN-AUTOSERVICE item 7/12): 4 rows without a part, 19 gate keys (the big gate's leaf, 6 + 6 + 6 roller nodes), each hits exactly one row
-            Assert.Equal(new Dictionary<string, int> { ["equator"] = 10, ["bay5"] = 7, ["airpit"] = 11, ["bowl"] = 4, ["iceberg"] = 11, ["autoservice"] = 19 }[stem], sounding);
+            // Yard (PLAN-YARD item 9/15): 3 rows (the gondola without a part, the two leaves of the swing gate by part), 3 gate keys, each hits exactly one row
+            Assert.Equal(new Dictionary<string, int> { ["equator"] = 10, ["bay5"] = 7, ["airpit"] = 11, ["bowl"] = 4, ["iceberg"] = 11, ["autoservice"] = 19, ["yard"] = 3 }[stem], sounding);
         }
     }
 
@@ -172,7 +173,8 @@ public sealed class GateSoundModelTests
                 // Iceberg's six players name no mixer group (mixer null, mixer_db 0) and a player volume of 0.9: 20 log10(0.9) = -0.9 dB for
                 // all of them, whatever the clip is called (its check-point clip is Equator's arena_equator_old_slide_doors, which is -15.0 dB
                 // there). That loudness is an open listening item of docs/progress/iceberg-release.md, so the number is pinned per map, not per clip.
-                double expected = stem == "iceberg" ? -0.9 : row.Clip switch
+                // Yard: the second leaf of the swing gate (ARENA_GATES_SOUND/gate_door_2) authors player volume 0.9 (20 log10(0.9) = -0.9 dB on top of the mixer's -15), its other two rows 1.0
+                double expected = stem == "iceberg" ? -0.9 : stem == "yard" && row.Origin.EndsWith("gate_door_2") ? -15.9 : row.Clip switch
                 {
                     "arena_bay5_roller_door_full" => -15.9,
                     "arena_bay5_big_gates" => -17.5,
@@ -273,6 +275,9 @@ public sealed class GateSoundModelTests
             // Autoservice's four clips (extract_gate_sounds.py clips, gate_sound_fit.json map_clips; docs/progress/autoservice-release.md item 7)
             ("arena_autoservice", "Arena_autoservice_gates_outdoor_left", 3.395, 3.485), ("arena_autoservice", "Arena_autoservice_gates_outdoor_right", 1.503, 1.547),
             ("arena_autoservice", "Arena_autoservice_gates_indoor_left", 3.104, 3.296), ("arena_autoservice", "Arena_autoservice_gates_indoor_right", 3.102, 3.178),
+            // Yard's two clips (PLAN-YARD item 9; pitch-baked at extraction, fitted per map in gate_sound_fit.json map_clips): at scale 0.5 the gondola clip drops its
+            // 2.502 s seam (event 5.07 s lands at 2.568 s), the swing-gate clip its only clean seam, 0.098 s (event 1.55 s lands at 1.452 s)
+            ("arena_yard", "arena_yard_gates_full", 2.502, 2.568), ("arena_yard", "arena_yard_gates_metall", 0.098, 1.452),
         };
         int checkedClips = 0;
         foreach (var map in expected.Select(e => e.map).Distinct())
@@ -489,11 +494,12 @@ public sealed class GateSoundModelTests
         {
             var manifest = FromSidecar(stem);
             Assert.All(manifest.Rows, r => Assert.NotNull(manifest.ClipOf(r.Clip)));
-            Assert.All(manifest.Rows, r => Assert.True(r.MaxDistance >= 30f && r.MinDistance < 1.5f));
+            // every map's rows reach at least 30 m, except the two rows of Yard's swing gate, which Arena authors at 20 m (the gondola's row is 30 m)
+            Assert.All(manifest.Rows, r => Assert.True(r.MaxDistance >= (stem == "yard" && r.Clip == "arena_yard_gates_metall" ? 20f : 30f) && r.MinDistance < 1.5f));
         }
         // 9 ids of the four older maps plus Iceberg's two own ones (arena_san_gates_blue/red; its check-point clip reuses Equator's id) plus
-        // Autoservice's four (Arena_autoservice_gates_indoor/outdoor_left/right)
-        Assert.Equal(15, Maps.SelectMany(s => FromSidecar(s).Clips).Select(c => c.Id).Distinct().Count());
+        // Autoservice's four (Arena_autoservice_gates_indoor/outdoor_left/right) plus Yard's two (arena_yard_gates_full/metall)
+        Assert.Equal(17, Maps.SelectMany(s => FromSidecar(s).Clips).Select(c => c.Id).Distinct().Count());
     }
 
     // ---- PCM ------------------------------------------------------------------------------------------------------------------------
@@ -547,7 +553,7 @@ public sealed class GateSoundModelTests
     public void TheStagedWavsMatchTheirManifestWhenThePackageIsExtracted()
     {
         int checkedFiles = 0;
-        foreach (var map in new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice" })
+        foreach (var map in new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice", "arena_yard" })
         {
             string text = RepoTextOrNull($"work/extract/gate-sounds/{map}/gate-sounds.json");
             if (text == null) continue;
@@ -575,6 +581,6 @@ public sealed class GateSoundModelTests
                 checkedFiles++;
             }
         }
-        Assert.True(checkedFiles == 0 || checkedFiles == 16, "a package of some maps only");   // 9 clips of the four older maps, Iceberg's 3 and Autoservice's 4
+        Assert.True(checkedFiles == 0 || checkedFiles == 18, "a package of some maps only");   // 9 clips of the four older maps, Iceberg's 3, Autoservice's 4 and Yard's 2
     }
 }

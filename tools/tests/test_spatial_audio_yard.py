@@ -6,7 +6,7 @@ of the exporter turns it red.
 
 The synthetic controls run everywhere; the package tests read the ignored export (ARENAMAPPORT_SPATIAL_AUDIO_DIR, else
 work/extract/spatial-audio of this checkout) and skip without it; the live tests re-export from the installed Arena
-(ARENAMAPPORT_ARENA_DATA, else the default install) into a temporary folder and skip without it. Yard is Catalog-only: nothing here
+(ARENAMAPPORT_ARENA_DATA, else the default install) into a temporary folder and skip without it. Yard is registered since item 15 but not built: nothing here
 reads dist/ or the client's release lists.
 """
 import json

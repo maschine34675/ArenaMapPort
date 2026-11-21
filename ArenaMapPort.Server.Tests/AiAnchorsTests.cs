@@ -38,6 +38,7 @@ public sealed class AiAnchorsTests
     [InlineData("airpit.ai.json", 19, 3, 35)] // PLAN-AIRPIT item 20: 19 core points, hubs 12/12/11 (id 7 sits in the closed north pocket, an island like Equator's 13/14)
     [InlineData("iceberg.ai.json", 11, 0, 0)] // PLAN-ICEBERG item 7: 11 core points; the scene's 4 hubs / 40 sub points lie off the map and are not shipped
     [InlineData("autoservice.ai.json", 7, 5, 54)] // PLAN-AUTOSERVICE item 6: 7 core points, one 5-hub PatrolWay with 54 sub points, all on the map
+    [InlineData("yard.ai.json", 7, 4, 48)] // PLAN-YARD item 8/15: 7 core points, one 4-hub PatrolWay with 48 sub points
     public void CountsMatchTheResearchPass(string file, int expectedCorePoints, int expectedHubs, int expectedSubPoints)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(file)));
@@ -55,6 +56,7 @@ public sealed class AiAnchorsTests
     [InlineData("airpit.ai.json")]
     [InlineData("iceberg.ai.json")]
     [InlineData("autoservice.ai.json")]
+    [InlineData("yard.ai.json")]
     public void CorePointIdsAreUniqueWithFinitePositionsInTheBakeVolume(string file)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(file)));
@@ -76,6 +78,7 @@ public sealed class AiAnchorsTests
     [InlineData("airpit.ai.json")]
     [InlineData("iceberg.ai.json")]
     [InlineData("autoservice.ai.json")]
+    [InlineData("yard.ai.json")]
     public void EveryHubCorePointIdExistsAndEveryPositionIsValid(string file)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(file)));
@@ -104,6 +107,7 @@ public sealed class AiAnchorsTests
     [InlineData("airpit.ai.json")]
     [InlineData("iceberg.ai.json")]
     [InlineData("autoservice.ai.json")]
+    [InlineData("yard.ai.json")]
     public void NoConnectionOrEdgeFieldsAreShipped(string file)
     {
         // Deliberate -- extract_ai_anchors.py's own module docstring: AICorePoint.ConnectionsAtNet is
@@ -246,6 +250,41 @@ public sealed class AiAnchorsTests
             using var other = JsonDocument.Parse(File.ReadAllText(Sidecar(released)));
             Assert.False(other.RootElement.TryGetProperty("born_points", out _), released);
             Assert.False(other.RootElement.TryGetProperty("scene_census", out _), released);
+        }
+    }
+
+    [Fact]
+    public void YardsAnchorsSitInsideTheDescriptorBakeBounds()
+    {
+        // PLAN-YARD item 8/10/15: Yard's bake volume is descriptor data (x -67..21, y 4..14, z -1..162; its decks reach 10.65 m), tighter than the -8..12 of the theories
+        // above in x and z and shifted up in y. Every anchor the sidecar keeps (core points, hubs and their sub points, born and mine points) must lie inside it, or the
+        // client could not snap it to the NavMesh the bots walk. (The theories above hold the y 12 ceiling for Yard's anchors too.)
+        var bounds = ArenaMapRegistry.Yard.BakeBounds;
+        Assert.Equal(6, bounds.Length);
+        using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("yard.ai.json")));
+        var anchors = new List<JsonElement>();
+        anchors.AddRange(doc.RootElement.GetProperty("core_points").EnumerateArray().Select(cp => cp.GetProperty("position")));
+        anchors.AddRange(doc.RootElement.GetProperty("born_points").EnumerateArray().Select(p => p.GetProperty("position")));
+        anchors.AddRange(doc.RootElement.GetProperty("mine_points").EnumerateArray().Select(p => p.GetProperty("position")));
+        foreach (var hub in doc.RootElement.GetProperty("patrol_ways").EnumerateArray().SelectMany(way => way.GetProperty("hubs").EnumerateArray()))
+        {
+            anchors.Add(hub.GetProperty("position"));
+            anchors.AddRange(hub.GetProperty("sub_points").EnumerateArray());
+        }
+        // nothing is dropped (Arena_Yard_AI lies on the map), 11 bot born points and 43 AIMinePoints (AI data, not minefields) come with the 7 core points and the 4 hubs with 48 sub points
+        Assert.False(doc.RootElement.TryGetProperty("dropped", out _));
+        Assert.Equal(11, doc.RootElement.GetProperty("born_points").GetArrayLength());
+        Assert.Equal(43, doc.RootElement.GetProperty("mine_points").GetArrayLength());
+        Assert.Equal(7 + 11 + 43 + 4 + 48, anchors.Count);
+        foreach (var position in anchors)
+        {
+            var p = position.EnumerateArray().Select(v => v.GetSingle()).ToArray();
+            Assert.InRange(p[0], bounds[0], bounds[1]);
+            Assert.InRange(p[1], bounds[2], bounds[3]);
+            Assert.InRange(p[2], bounds[4], bounds[5]);
+            // the extractor's play area (Arena's surface volume rounded outward): x -66.4..20.8, z -19.1..161.1
+            Assert.InRange(p[0], -66.4f, 20.8f);
+            Assert.InRange(p[2], -19.1f, 161.1f);
         }
     }
 

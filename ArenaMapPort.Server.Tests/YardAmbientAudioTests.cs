@@ -6,9 +6,8 @@ using Xunit;
 namespace ArenaMapPort.Server.Tests;
 
 /// <summary>
-/// PLAN-YARD item 6 (ambient audio, package v2). The client profile row is STAGED in <c>AmbientAudioProfiles.Staged</c> until the lock-step promotion
-/// (item 15) moves it into <see cref="AmbientAudioProfiles.All"/>; the generic table tests (<c>AmbientAudioProfilesTests</c>) cover it through
-/// <c>Everything</c>. What is specific to Yard is pinned here against the contract the validators check on the package and the bundle
+/// PLAN-YARD item 6 (ambient audio, package v2). The client profile row was staged in <c>AmbientAudioProfiles.Staged</c> until the lock-step promotion
+/// (item 15, 2026-11-21) moved it into <see cref="AmbientAudioProfiles.All"/>; the generic table tests (<c>AmbientAudioProfilesTests</c>) cover it too. What is specific to Yard is pinned here against the contract the validators check on the package and the bundle
 /// (<c>tools/extract/native_contracts/yard.json</c>, key <c>audio</c>): 50 exported players of three kinds, the two minDistance-0 hums, the 14 players under an
 /// inactive ancestor that no group lists, the one silent source clip, and the start mix.
 /// </summary>
@@ -36,7 +35,7 @@ public sealed class YardAmbientAudioTests
         return audio.Clone();
     }
 
-    static AmbientAudioProfile Profile() => AmbientAudioProfiles.Staged.Single(p => p.MapKey == Key);
+    static AmbientAudioProfile Profile() => AmbientAudioProfiles.Get(Key);
 
     static (string Name, string Value)[] Pins(JsonElement states, string name) =>
         states.GetProperty(name).EnumerateObject().Select(p => (p.Name, p.Value.GetString())).Order().ToArray();
@@ -136,13 +135,15 @@ public sealed class YardAmbientAudioTests
     }
 
     [Fact]
-    public void TheProfileIsStagedNotReleased()
+    public void TheProfileIsInTheReleasedTableAndNoLongerStaged()
     {
-        // The map is Catalog-only until the lock-step promotion: the released table, TryGet and Get must not see it.
-        Assert.False(AmbientAudioProfiles.TryGet(Key, out _));
-        Assert.DoesNotContain(AmbientAudioProfiles.All, p => p.MapKey == Key);
-        Assert.Throws<ArgumentException>(() => AmbientAudioProfiles.Get(Key));
-        Assert.DoesNotContain(ArenaMapPort.Shared.ArenaMapRegistry.All, m => m.Key == Key);
+        // Yard joined ArenaMapRegistry.All with item 15: the released table, TryGet and Get see its profile and the staged list is empty.
+        Assert.True(AmbientAudioProfiles.TryGet(Key, out var found));
+        Assert.Same(found, AmbientAudioProfiles.Get(Key));
+        Assert.Contains(AmbientAudioProfiles.All, p => p.MapKey == Key);
+        Assert.Equal(AmbientAudioProfiles.All[^1], AmbientAudioProfiles.Get(Key));          // the last row, after Autoservice's
+        Assert.DoesNotContain(AmbientAudioProfiles.Staged, p => p.MapKey == Key);
+        Assert.Contains(ArenaMapPort.Shared.ArenaMapRegistry.All, m => m.Key == Key);
         Assert.Contains(ArenaMapPort.Shared.ArenaMapRegistry.Catalog, m => m.Key == Key);
     }
 

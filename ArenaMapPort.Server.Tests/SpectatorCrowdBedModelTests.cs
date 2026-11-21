@@ -18,7 +18,7 @@ internal sealed class DistCrowdFactAttribute : FactAttribute
 
 internal static class DistCrowd
 {
-    internal static readonly string[] Maps = { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_autoservice" };
+    internal static readonly string[] Maps = { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_autoservice", "arena_yard" };
 
     internal static string? Graph(string key)
     {
@@ -546,11 +546,11 @@ public sealed class SpectatorCrowdBedModelTests
     // ---- the real crowds -----------------------------------------------------------------------------------------------------------------
 
     [DistCrowdFact]
-    public void TheFiveRealCrowdsFormTwoToSixStandsEachMeetingTheRadiusRuleOrTheCap()
+    public void TheSixRealCrowdsFormTwoToSixStandsEachMeetingTheRadiusRuleOrTheCap()
     {
         // The rule (k from 2 until every stand is at most 25 m wide, at most six) gives, with the positions of the dist/ graphs of 2026-10-30: Equator 4 (the natural
-        // four stands, 13 to 17 m), Bay5 4, Air Pit 6 and Bowl 6 (the cap; wider than 25 m); Autoservice (30 fans, added 2026-11-11) 4 stands of 11 to 16 m. At the first draft's 30 m Equator was 2 stands (radii 29 and 27 m) and Air Pit 5.
-        var expected = new Dictionary<string, int> { ["arena_equator"] = 4, ["arena_bay5"] = 4, ["arena_airpit"] = 6, ["arena_bowl"] = 6, ["arena_autoservice"] = 4 };
+        // four stands, 13 to 17 m), Bay5 4, Air Pit 6 and Bowl 6 (the cap; wider than 25 m); Autoservice (30 fans, added 2026-11-11) 4 stands of 11 to 16 m; Yard (27 fans, PLAN-YARD item 14, staged by the promotion of item 15) 4 stands (YardCrowdBedTests pins its plan from the source export). At the first draft's 30 m Equator was 2 stands (radii 29 and 27 m) and Air Pit 5.
+        var expected = new Dictionary<string, int> { ["arena_equator"] = 4, ["arena_bay5"] = 4, ["arena_airpit"] = 6, ["arena_bowl"] = 6, ["arena_autoservice"] = 4, ["arena_yard"] = 4 };
         foreach (string key in DistCrowd.Maps)
         {
             var points = DistCrowd.Points(key);
@@ -572,7 +572,7 @@ public sealed class SpectatorCrowdBedModelTests
     }
 
     [DistCrowdFact]
-    public void TheFiveRealCrowdsAreTheSameWhateverTheReach()
+    public void TheSixRealCrowdsAreTheSameWhateverTheReach()
     {
         foreach (string key in DistCrowd.Maps)
         {

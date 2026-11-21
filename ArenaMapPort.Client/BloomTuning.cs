@@ -59,9 +59,9 @@ namespace ArenaMapPort.Client
                 bool donorDefaults = map.Key == ArenaMapRegistry.Equator.Key || map.Key == ArenaMapRegistry.Bay5.Key;
                 bool airPit = map.Key == ArenaMapRegistry.AirPit.Key;
                 bool iceberg = map.Key == ArenaMapRegistry.Iceberg.Key;
-                // Yard (PLAN-YARD item 13, 2026-11-20): the donor pair 2.10/0.35 from its first raid on, without a migration (a Catalog-only map has no
+                // Yard (PLAN-YARD item 13, 2026-11-20): the donor pair 2.10/0.35 from its first raid on, without a migration (a map that was not registered before has no
                 // saved keys). Its strongest emissive materials are 3.93 / 2.97 / 2.58 (Equator and Bowl have the same 3.93 material, and both
-                // run this pair; whether Yard's lamps read well at it is a host question). Unreached before the promotion: this loop walks ArenaMapRegistry.All.
+                // run this pair; whether Yard's lamps read well at it is a host question). Registered since item 15: this loop walks ArenaMapRegistry.All.
                 bool yard = map.Key == ArenaMapRegistry.Yard.Key;
                 float defaultThreshold = donorDefaults || iceberg ? DefaultThreshold : airPit ? AirPitThreshold : -1f;
                 float defaultIntensity = donorDefaults || iceberg ? DefaultIntensity : airPit ? AirPitIntensity : -1f;

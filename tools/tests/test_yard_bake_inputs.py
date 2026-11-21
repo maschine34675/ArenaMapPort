@@ -5,7 +5,7 @@ oracle says about the pockets, the gates, the layer-0 solids, the south band, th
 Why: the Unity bake is a 15-minute batch run (item 16), so everything checkable offline is pinned here, as test_autoservice_bake_inputs.py
 did for Autoservice. The DECIDED_* constants are the values tools/maps/yard.json carries since item 10 part 1; the Yard descriptor row of
 ArenaMapPort.Shared/ArenaMapDescriptor.cs must mirror them number for number (part 2, which also adds the C# mirror tests and
-validate_map_descriptors' view of the sidecar: until then the sidecar and the still-stub descriptor DISAGREE on purpose). Yard is Catalog-only
+validate_map_descriptors' view of the sidecar: until then the sidecar and the still-stub descriptor DISAGREE on purpose). Yard is registered since item 15 but not built
 until plan item 15, so none of this reaches a release. Groups, each skipped when its input is absent:
 
   * constants and code pins (repository only): the validators accept the decided values, ARENA_SOURCES["yard"] is the measured row;

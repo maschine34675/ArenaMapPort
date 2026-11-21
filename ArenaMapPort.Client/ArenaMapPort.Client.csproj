@@ -17,7 +17,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>maschine-ArenaMapPort.Client</AssemblyName>
     <RootNamespace>ArenaMapPort.Client</RootNamespace>
-    <Description>Loads and repairs the Equator, Bay5, Air Pit, Bowl, Iceberg and Chop Shop Arena maps in SPT.</Description>
+    <Description>Loads and repairs the Equator, Bay5, Air Pit, Bowl, Iceberg, Chop Shop and Block Arena maps in SPT.</Description>
     <Company>https://github.com/maschine34675/ArenaMapPort</Company>
     <Authors>maschine</Authors>
     <Version>0.6.0</Version>
@@ -187,7 +187,7 @@
   <!-- Optional ArenaMode audio/UI exports remain development inputs only.
        ArenaMapPort has no runtime consumers and does not distribute them. -->
 
-  <!-- The crowd maps are extract_spectator.MAP_SCENES (Equator, Bay5, AirPit, Bowl, Autoservice since 2026-11-11, whose fans sit in its TeamFight design scene); stage_spectators.py stages exactly those.
+  <!-- The crowd maps are extract_spectator.MAP_SCENES (Equator, Bay5, AirPit, Bowl, Autoservice since 2026-11-11, Yard since 2026-11-21 (PLAN-YARD item 15); the fans of both sit in their TeamFight design scene); stage_spectators.py stages exactly those.
        Iceberg has no crowd and no murmur bed: it is validate_map_descriptors.CROWDLESS_MAP_KEYS, so nothing is staged for it and nothing demands a package. -->
   <Target Name="ArenaMapPortStageSpectator" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
     <Exec Command="python &quot;$(MSBuildThisFileDirectory)..\tools\extract\stage_spectators.py&quot; stage --output &quot;$(ArenaMapPortDistDir)\spectators&quot;" />
@@ -259,7 +259,7 @@
     <Copy SourceFiles="@(ArenaMapPortOverview->'$(ArenaMapPortOverviewRoot)\%(Identity)')" DestinationFiles="@(ArenaMapPortOverview->'$(ArenaMapPortDistDir)\dynamicmaps\%(Identity)')" />
   </Target>
 
-  <!-- PLAN-TWO-MAPS item 8 (AirPit joined by PLAN-AIRPIT item 20, Bowl by PLAN-BOWL item 8/15, Iceberg by PLAN-ICEBERG item 12, Autoservice by PLAN-AUTOSERVICE item 12): AiAnchors.cs reads <plugin>/ai/<key>.ai.json at
+  <!-- PLAN-TWO-MAPS item 8 (AirPit joined by PLAN-AIRPIT item 20, Bowl by PLAN-BOWL item 8/15, Iceberg by PLAN-ICEBERG item 12, Autoservice by PLAN-AUTOSERVICE item 12, Yard by PLAN-YARD item 15): AiAnchors.cs reads <plugin>/ai/<key>.ai.json at
        raid start, <key> being the map key without its "arena_" prefix. The sidecars are git-tracked
        (tools/maps/*.ai.json, written by tools/extract/extract_ai_anchors.py), so they are staged with the DLL on
        every Release build, DllOnly included. One row per released map that has a sidecar. -->
@@ -271,6 +271,7 @@
       <ArenaMapPortAiSidecar Include="$(MSBuildThisFileDirectory)..\tools\maps\bowl.ai.json" />
       <ArenaMapPortAiSidecar Include="$(MSBuildThisFileDirectory)..\tools\maps\iceberg.ai.json" />
       <ArenaMapPortAiSidecar Include="$(MSBuildThisFileDirectory)..\tools\maps\autoservice.ai.json" />
+      <ArenaMapPortAiSidecar Include="$(MSBuildThisFileDirectory)..\tools\maps\yard.ai.json" />
     </ItemGroup>
     <Error Condition="!Exists('%(ArenaMapPortAiSidecar.Identity)')" Text="[ArenaMapPort] missing AI sidecar %(ArenaMapPortAiSidecar.Identity)" />
     <MakeDir Directories="$(ArenaMapPortDistDir)\ai" />
@@ -283,8 +284,8 @@
     <PropertyGroup>
       <ArenaMapPortAcousticsDir>$(MSBuildThisFileDirectory)..\work\extract\spatial-audio</ArenaMapPortAcousticsDir>
     </PropertyGroup>
-    <Error Condition="!Exists('$(ArenaMapPortAcousticsDir)\arena_equator\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_bay5\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_airpit\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_bowl\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_iceberg\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_autoservice\spatial-audio.json')"
-           Text="Missing native acoustic input; run tools/extract/extract_spatial_audio.py (AirPit: --map arena_airpit, Bowl: --map arena_bowl, Iceberg: --map arena_iceberg, Autoservice: --map arena_autoservice)" />
+    <Error Condition="!Exists('$(ArenaMapPortAcousticsDir)\arena_equator\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_bay5\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_airpit\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_bowl\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_iceberg\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_autoservice\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_yard\spatial-audio.json')"
+           Text="Missing native acoustic input; run tools/extract/extract_spatial_audio.py (AirPit: --map arena_airpit, Bowl: --map arena_bowl, Iceberg: --map arena_iceberg, Autoservice: --map arena_autoservice, Yard: --map arena_yard)" />
     <ItemGroup>
       <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\arena_equator\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\arena_equator\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\arena_equator\**\*.wav"><MapKey>arena_equator</MapKey></ArenaMapPortAcousticFile>
       <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\arena_bay5\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\arena_bay5\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\arena_bay5\**\*.wav"><MapKey>arena_bay5</MapKey></ArenaMapPortAcousticFile>
@@ -292,6 +293,7 @@
       <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\arena_bowl\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\arena_bowl\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\arena_bowl\**\*.wav"><MapKey>arena_bowl</MapKey></ArenaMapPortAcousticFile>
       <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\arena_iceberg\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\arena_iceberg\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\arena_iceberg\**\*.wav"><MapKey>arena_iceberg</MapKey></ArenaMapPortAcousticFile>
       <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\arena_autoservice\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\arena_autoservice\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\arena_autoservice\**\*.wav"><MapKey>arena_autoservice</MapKey></ArenaMapPortAcousticFile>
+      <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\arena_yard\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\arena_yard\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\arena_yard\**\*.wav"><MapKey>arena_yard</MapKey></ArenaMapPortAcousticFile>
     </ItemGroup>
     <Copy SourceFiles="@(ArenaMapPortAcousticFile)" DestinationFiles="@(ArenaMapPortAcousticFile->'$(ArenaMapPortDistDir)\acoustics\%(MapKey)\%(RecursiveDir)%(Filename)%(Extension)')" />
   </Target>
@@ -304,7 +306,7 @@
     <PropertyGroup>
       <ArenaMapPortGateSoundsDir>$(MSBuildThisFileDirectory)..\work\extract\gate-sounds</ArenaMapPortGateSoundsDir>
     </PropertyGroup>
-    <Error Condition="!Exists('$(ArenaMapPortGateSoundsDir)\arena_equator\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_bay5\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_airpit\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_bowl\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_iceberg\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_autoservice\gate-sounds.json')"
+    <Error Condition="!Exists('$(ArenaMapPortGateSoundsDir)\arena_equator\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_bay5\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_airpit\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_bowl\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_iceberg\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_autoservice\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_yard\gate-sounds.json')"
            Text="Missing gate sound input; run tools/extract/extract_gate_sounds.py clips" />
     <ItemGroup>
       <ArenaMapPortGateSoundFile Include="$(ArenaMapPortGateSoundsDir)\arena_equator\gate-sounds.json;$(ArenaMapPortGateSoundsDir)\arena_equator\*.wav"><MapKey>arena_equator</MapKey></ArenaMapPortGateSoundFile>
@@ -313,6 +315,7 @@
       <ArenaMapPortGateSoundFile Include="$(ArenaMapPortGateSoundsDir)\arena_bowl\gate-sounds.json;$(ArenaMapPortGateSoundsDir)\arena_bowl\*.wav"><MapKey>arena_bowl</MapKey></ArenaMapPortGateSoundFile>
       <ArenaMapPortGateSoundFile Include="$(ArenaMapPortGateSoundsDir)\arena_iceberg\gate-sounds.json;$(ArenaMapPortGateSoundsDir)\arena_iceberg\*.wav"><MapKey>arena_iceberg</MapKey></ArenaMapPortGateSoundFile>
       <ArenaMapPortGateSoundFile Include="$(ArenaMapPortGateSoundsDir)\arena_autoservice\gate-sounds.json;$(ArenaMapPortGateSoundsDir)\arena_autoservice\*.wav"><MapKey>arena_autoservice</MapKey></ArenaMapPortGateSoundFile>
+      <ArenaMapPortGateSoundFile Include="$(ArenaMapPortGateSoundsDir)\arena_yard\gate-sounds.json;$(ArenaMapPortGateSoundsDir)\arena_yard\*.wav"><MapKey>arena_yard</MapKey></ArenaMapPortGateSoundFile>
     </ItemGroup>
     <Copy SourceFiles="@(ArenaMapPortGateSoundFile)" DestinationFiles="@(ArenaMapPortGateSoundFile->'$(ArenaMapPortDistDir)\gate-sounds\%(MapKey)\%(Filename)%(Extension)')" />
   </Target>
@@ -420,6 +423,11 @@
            (the first Unity build, U1), from work/extract/autoservice-native-v2; its preset bundle lands in the same shared preset dir. The map has
            no spectator crowd, no native water and no DynamicMaps overview; its flares, acoustics and gate sounds have their own staging targets. -->
       <ArenaMapPortAutoServiceBuildDir>$(MSBuildThisFileDirectory)..\work\build\autoservice</ArenaMapPortAutoServiceBuildDir>
+      <!-- Yard (docs/PLAN-YARD.md item 15/16): tools/build_all.ps1 -MapKey arena_yard -MapDescriptor D:/ArenaMapPort/tools/maps/yard.json
+           -PackageDir D:/ArenaMapPort/work/extract/yard-native-v2 -FullMap -OutputDir D:/ArenaMapPort/work/build/yard (the first Unity build, U1);
+           its preset bundle lands in the same shared preset dir. The map has a spectator crowd (27 fans) but no flare package, no native water and
+           no DynamicMaps overview; its acoustics and gate sounds have their own staging targets. -->
+      <ArenaMapPortYardBuildDir>$(MSBuildThisFileDirectory)..\work\build\yard</ArenaMapPortYardBuildDir>
     </PropertyGroup>
     <ItemGroup>
       <ArenaMapPortBundles Include="$(ArenaMapPortFullBuildDir)\arena_equator_scenes.bundle"><MapKey>arena_equator</MapKey></ArenaMapPortBundles>
@@ -462,8 +470,14 @@
       <ArenaMapPortBundles Include="$(ArenaMapPortAutoServiceBuildDir)\arena_autoservice_navmesh.bundle"><MapKey>arena_autoservice</MapKey></ArenaMapPortBundles>
       <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_autoservice_preset.bundle"><MapKey>arena_autoservice</MapKey></ArenaMapPortBundles>
       <ArenaMapPortAutoServiceShaderSidecarSrc Include="$(ArenaMapPortAutoServiceBuildDir)\material-shaders.json" />
+      <!-- Yard: same explicit-list rule (PLAN-YARD item 15, 2026-11-21). Its bundles come from U1 (item 16); until then a full
+           (non-DllOnly) client build stops at the first missing file below. -->
+      <ArenaMapPortBundles Include="$(ArenaMapPortYardBuildDir)\arena_yard_scenes.bundle"><MapKey>arena_yard</MapKey></ArenaMapPortBundles>
+      <ArenaMapPortBundles Include="$(ArenaMapPortYardBuildDir)\arena_yard_navmesh.bundle"><MapKey>arena_yard</MapKey></ArenaMapPortBundles>
+      <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_yard_preset.bundle"><MapKey>arena_yard</MapKey></ArenaMapPortBundles>
+      <ArenaMapPortYardShaderSidecarSrc Include="$(ArenaMapPortYardBuildDir)\material-shaders.json" />
     </ItemGroup>
-    <Error Text="[ArenaMapPort] expected bundle missing: %(ArenaMapPortBundles.Identity) -- run tools/build_all.ps1 (full, -MapKey arena_bay5, -MapKey arena_airpit -FullMap, -MapKey arena_bowl -FullMap, -MapKey arena_iceberg -FullMap and -MapKey arena_autoservice -FullMap) and tools/preset/patch_preset.py (all six maps) first"
+    <Error Text="[ArenaMapPort] expected bundle missing: %(ArenaMapPortBundles.Identity) -- run tools/build_all.ps1 (full, -MapKey arena_bay5, -MapKey arena_airpit -FullMap, -MapKey arena_bowl -FullMap, -MapKey arena_iceberg -FullMap, -MapKey arena_autoservice -FullMap and -MapKey arena_yard -FullMap) and tools/preset/patch_preset.py (all seven maps) first"
            Condition="!Exists('%(ArenaMapPortBundles.Identity)')" />
     <Error Text="[ArenaMapPort] expected Equator material-shaders.json missing: %(ArenaMapPortShaderSidecar.Identity) -- run tools/build_all.ps1 -MapKey arena_equator first"
            Condition="!Exists('%(ArenaMapPortShaderSidecar.Identity)')" />
@@ -477,6 +491,8 @@
            Condition="!Exists('%(ArenaMapPortIcebergShaderSidecarSrc.Identity)')" />
     <Error Text="[ArenaMapPort] expected Autoservice material-shaders.json missing: %(ArenaMapPortAutoServiceShaderSidecarSrc.Identity) -- run tools/build_all.ps1 -MapKey arena_autoservice -FullMap first"
            Condition="!Exists('%(ArenaMapPortAutoServiceShaderSidecarSrc.Identity)')" />
+    <Error Text="[ArenaMapPort] expected Yard material-shaders.json missing: %(ArenaMapPortYardShaderSidecarSrc.Identity) -- run tools/build_all.ps1 -MapKey arena_yard -FullMap first"
+           Condition="!Exists('%(ArenaMapPortYardShaderSidecarSrc.Identity)')" />
     <!-- Stage 2 of the Arena gate: the bundles are not copied, they are ENCRYPTED into dist (AMPB containers, deterministic: an unchanged
          bundle gives identical bytes and an unchanged output is left alone) and the per-map key file keys/<map>.json is written from the
          Arena installation of this machine (found through the launcher's registry entry; ArenaMapPortArena=<folder> overrides). A content
@@ -486,8 +502,8 @@
          a released map whose key file had gone missing would have been recreated silently during Iceberg's first stage. Every other build
          refuses when a map's key file is missing, because a lost key store must be restored from its backup, not recreated: a new key would make
          every released bundle of that map unreadable (integration review, 2026-10-19). A DllOnly build never gets here. -->
-    <Error Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true' And '$(ArenaMapPortCreateKeyMap)'!='arena_equator' And '$(ArenaMapPortCreateKeyMap)'!='arena_bay5' And '$(ArenaMapPortCreateKeyMap)'!='arena_airpit' And '$(ArenaMapPortCreateKeyMap)'!='arena_bowl' And '$(ArenaMapPortCreateKeyMap)'!='arena_iceberg' And '$(ArenaMapPortCreateKeyMap)'!='arena_autoservice'"
-           Text="[ArenaMapPort] -p:ArenaMapPortCreateReleaseKeys=true creates the content key of ONE map and needs -p:ArenaMapPortCreateKeyMap=arena_equator|arena_bay5|arena_airpit|arena_bowl|arena_iceberg|arena_autoservice (got '$(ArenaMapPortCreateKeyMap)'); every other map's key file must already exist in work/release-keys" />
+    <Error Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true' And '$(ArenaMapPortCreateKeyMap)'!='arena_equator' And '$(ArenaMapPortCreateKeyMap)'!='arena_bay5' And '$(ArenaMapPortCreateKeyMap)'!='arena_airpit' And '$(ArenaMapPortCreateKeyMap)'!='arena_bowl' And '$(ArenaMapPortCreateKeyMap)'!='arena_iceberg' And '$(ArenaMapPortCreateKeyMap)'!='arena_autoservice' And '$(ArenaMapPortCreateKeyMap)'!='arena_yard'"
+           Text="[ArenaMapPort] -p:ArenaMapPortCreateReleaseKeys=true creates the content key of ONE map and needs -p:ArenaMapPortCreateKeyMap=arena_equator|arena_bay5|arena_airpit|arena_bowl|arena_iceberg|arena_autoservice|arena_yard (got '$(ArenaMapPortCreateKeyMap)'); every other map's key file must already exist in work/release-keys" />
     <PropertyGroup>
       <ArenaMapPortArenaArg Condition="'$(ArenaMapPortArena)'==''">auto</ArenaMapPortArenaArg>
       <ArenaMapPortArenaArg Condition="'$(ArenaMapPortArena)'!=''">$(ArenaMapPortArena)</ArenaMapPortArenaArg>
@@ -497,6 +513,7 @@
       <ArenaMapPortCreateKey_arena_bowl Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true' and '$(ArenaMapPortCreateKeyMap)'=='arena_bowl'">--create-key</ArenaMapPortCreateKey_arena_bowl>
       <ArenaMapPortCreateKey_arena_iceberg Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true' and '$(ArenaMapPortCreateKeyMap)'=='arena_iceberg'">--create-key</ArenaMapPortCreateKey_arena_iceberg>
       <ArenaMapPortCreateKey_arena_autoservice Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true' and '$(ArenaMapPortCreateKeyMap)'=='arena_autoservice'">--create-key</ArenaMapPortCreateKey_arena_autoservice>
+      <ArenaMapPortCreateKey_arena_yard Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true' and '$(ArenaMapPortCreateKeyMap)'=='arena_yard'">--create-key</ArenaMapPortCreateKey_arena_yard>
       <ArenaMapPortStageCommon>--out-dir &quot;$(ArenaMapPortDistDir)&quot; --key-store &quot;$(ArenaMapPortReleaseKeysDir)&quot; --sources &quot;$(ArenaMapPortKeySources)&quot; --arena &quot;$(ArenaMapPortArenaArg)&quot;</ArenaMapPortStageCommon>
     </PropertyGroup>
     <Message Importance="high" Condition="'$(ArenaMapPortCreateReleaseKeys)'!='true'"
@@ -518,12 +535,16 @@
     <!-- Autoservice's FIRST staging creates its content key (PLAN-AUTOSERVICE item 14): -p:ArenaMapPortCreateReleaseKeys=true
          -p:ArenaMapPortCreateKeyMap=arena_autoservice once, then back up work/release-keys at once -->
     <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_autoservice @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_autoservice')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_autoservice)" StandardOutputImportance="high" />
+    <!-- Yard's FIRST staging creates its content key (PLAN-YARD item 17): -p:ArenaMapPortCreateReleaseKeys=true
+         -p:ArenaMapPortCreateKeyMap=arena_yard once, then back up work/release-keys at once -->
+    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_yard @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_yard')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_yard)" StandardOutputImportance="high" />
     <Copy SourceFiles="@(ArenaMapPortShaderSidecar)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_equator.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortBay5ShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_bay5.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortAirPitShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_airpit.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortBowlShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_bowl.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortIcebergShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_iceberg.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortAutoServiceShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_autoservice.json" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(ArenaMapPortYardShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_yard.json" SkipUnchangedFiles="false" />
     <Message Importance="high"
              Text="[ArenaMapPort] staged %(ArenaMapPortBundles.Filename)%(ArenaMapPortBundles.Extension) from work/build ENCRYPTED into dist/.../bundles/ (key files in dist/.../keys/)" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_equator.json from $(ArenaMapPortFullBuildDir) into dist/.../ArenaMapPort/" />
@@ -532,6 +553,7 @@
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_bowl.json from $(ArenaMapPortBowlBuildDir) into dist/.../ArenaMapPort/" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_iceberg.json from $(ArenaMapPortIcebergBuildDir) into dist/.../ArenaMapPort/" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_autoservice.json from $(ArenaMapPortAutoServiceBuildDir) into dist/.../ArenaMapPort/" />
+    <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_yard.json from $(ArenaMapPortYardBuildDir) into dist/.../ArenaMapPort/" />
   </Target>
 
   <!-- Parked map outputs remain recoverable under work; they never enter this release. -->

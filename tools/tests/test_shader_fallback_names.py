@@ -26,8 +26,8 @@ AUTOSERVICE_NAMES = [
     "Cloth/ClothShader_backface",
     "p0/Reflective/Bumped Specular SMap Baked",
 ]
-# Yard (PLAN-YARD item 13, 2026-11-20): AutoService's four plus the two names EFT 0.16.9.5 carries in no file. Item 15 writes the list into the
-# descriptor and the sidecar; until then yard.json has no key (test_yard_shaders_lighting.py pins both states).
+# Yard (PLAN-YARD item 13, 2026-11-20): AutoService's four plus the two names EFT 0.16.9.5 carries in no file. Since item 15 the list is in the
+# descriptor and the sidecar (test_yard_shaders_lighting.py pins both).
 YARD_NAMES = [
     "Custom/Billboard_FogSheet_Simple",
     "Cloth/ClothShader",
@@ -63,11 +63,9 @@ class ShaderFallbackNamesSidecarTests(unittest.TestCase):
                 continue
             self.assertNotIn("shader_fallback_names", json.loads(path.read_text(encoding="utf-8")), path.name)
 
-    def test_yard_has_no_list_yet_or_exactly_the_decided_six(self):
-        names = sidecar("yard").get("shader_fallback_names")
-        self.assertTrue(names is None or names == YARD_NAMES, names)
-        if names is not None:
-            self.assertEqual(VD.shader_fallback_errors(sidecar("yard")), [])
+    def test_yard_has_exactly_the_decided_six(self):
+        self.assertEqual(sidecar("yard")["shader_fallback_names"], YARD_NAMES)
+        self.assertEqual(VD.shader_fallback_errors(sidecar("yard")), [])
 
     def test_the_shipped_sidecars_and_registry_agree(self):
         # The full validator run covers every map; this pins that the new field is part of it.

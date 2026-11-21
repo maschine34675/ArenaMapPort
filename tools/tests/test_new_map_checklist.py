@@ -19,8 +19,8 @@ lists are NOT an exemption mechanism for a missing row: a map in a has-list stil
 What this test cannot see (honest limits):
   * it checks that a row EXISTS, never that its numbers are right (ZeroLevel, ambient mix, bounds, pins of the native contract);
   * the five client foreach arrays are read by their text (the `ArenaMapRegistry.<Name>` tokens on the foreach line), not run;
-  * prose, config descriptions and comments that spell out the map names are not checked (a grep-based "names the registry maps" check is a
-    separate item of the promotion, PLAN-YARD item 15);
+  * prose, config descriptions and comments that spell out the map names are not checked (a grep-based "names the registry maps" check is NOT built, decided at the item 15 fix pass 2026-11-21:
+    history comments name maps on purpose and would make it noisy; the sweep is manual);
   * count pins that go from six to seven live in the tests that own them and fail there;
   * the Unity editor side is read only for the audio importer (the one per-map switch found there);
   * tables NOT covered (a new map still needs them by hand; PLAN-YARD item 15 lists them): extract_ai_anchors bounds and born/mine pins,
@@ -47,9 +47,9 @@ import validate_map_descriptors as VD  # noqa: E402
 # Written decisions. Each entry is a fact about a released map that this test cannot derive; changing one is a deliberate edit.
 # ---------------------------------------------------------------------------------------------------------------------------------
 # Optional features: the map is in the real has-list, or here.
-NO_FLARES = frozenset({"arena_airpit", "arena_iceberg"})                # no active flare lamps in the play space (CROWDLESS-style decision list)
-NO_WATER = frozenset({"arena_equator", "arena_airpit", "arena_bowl", "arena_autoservice"})   # no sea mesh (NATIVE_WATER_MAP_KEYS is the has-list)
-NO_OVERVIEW = frozenset()                                               # all six released maps ship a DynamicMaps overview
+NO_FLARES = frozenset({"arena_airpit", "arena_iceberg", "arena_yard"})              # no active flare lamps in the play space (CROWDLESS-style decision list)
+NO_WATER = frozenset({"arena_equator", "arena_airpit", "arena_bowl", "arena_autoservice", "arena_yard"})   # no sea mesh (NATIVE_WATER_MAP_KEYS is the has-list)
+NO_OVERVIEW = frozenset({"arena_yard"})                                  # Yard has no DynamicMaps overview (plan: none); the other six ship one
 NO_OFFICIAL_DESCRIPTION = frozenset({"arena_iceberg"})                  # Arena's locales carry none; the port's own LocaleDescription is used
 # Maps that take an older path than the table the checklist asks about (their rows predate the table, listed so that the exemption is visible).
 LEGACY_AMBIENT_EXPORT = frozenset({"arena_equator", "arena_bay5"})      # native_features.AUDIO_EXPORTERS: ambient audio through Equator's / Bay5's own driver

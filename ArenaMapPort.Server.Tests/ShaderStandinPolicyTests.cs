@@ -25,7 +25,7 @@ public sealed class ShaderStandinPolicyTests
     }
 
     [Fact]
-    public void TheAllowListsMirrorTheSidecarsAndOnlyBay5AirPitBowlAndAutoServiceHaveOne()
+    public void TheAllowListsMirrorTheSidecarsAndOnlyBay5AirPitBowlAutoServiceAndYardHaveOne()
     {
         foreach (var map in ArenaMapRegistry.Catalog)
         {
@@ -33,14 +33,14 @@ public sealed class ShaderStandinPolicyTests
             var hasKey = doc.RootElement.TryGetProperty("shader_fallback_names", out var names);
             var expected = hasKey ? names.EnumerateArray().Select(e => e.GetString()).ToArray() : new string[0];
             Assert.Equal(expected, map.ShaderFallbackNames);
-            if (map == ArenaMapRegistry.Yard) continue;   // pending until PLAN-YARD item 15: YardListIsPendingOrTheDecidedSix pins it
-            Assert.Equal(map == ArenaMapRegistry.Bay5 || map == ArenaMapRegistry.AirPit || map == ArenaMapRegistry.Bowl || map == ArenaMapRegistry.AutoService,
+            Assert.Equal(map == ArenaMapRegistry.Bay5 || map == ArenaMapRegistry.AirPit || map == ArenaMapRegistry.Bowl || map == ArenaMapRegistry.AutoService || map == ArenaMapRegistry.Yard,
                 map.ShaderFallbackNames.Length > 0);
         }
         Assert.Equal(ShippedRows.Select(r => r.Original).Order(), ArenaMapRegistry.Bay5.ShaderFallbackNames.Order());
         Assert.Equal(AirPitNames.Order(), ArenaMapRegistry.AirPit.ShaderFallbackNames.Order());
         Assert.Equal(BowlNames, ArenaMapRegistry.Bowl.ShaderFallbackNames);
         Assert.Equal(AutoServiceNames, ArenaMapRegistry.AutoService.ShaderFallbackNames);
+        Assert.Equal(YardNames, ArenaMapRegistry.Yard.ShaderFallbackNames);
         // Every listed name has a substitute row for its map, and the policy reads the same list.
         foreach (var map in ArenaMapRegistry.Catalog)
         {
@@ -111,34 +111,28 @@ public sealed class ShaderStandinPolicyTests
     };
 
     // Yard (PLAN-YARD item 13, 2026-11-20): the four of AutoService plus the two names EFT carries nowhere (the SpeedTree 7 leaf shader and the Amplify
-    // trunk shader). The descriptor list and the sidecar row are item 15's; the policy rows below are decided now and pinned here.
+    // trunk shader). The descriptor list and the sidecar row came with item 15 (2026-11-21); the policy rows below were decided at item 13 and are pinned here.
     static readonly string[] YardNames =
     {
         "Custom/Billboard_FogSheet_Simple", "Cloth/ClothShader", "Cloth/ClothShader_backface", "p0/Reflective/Bumped Specular SMap Baked",
         "Nature/SpeedTree", "Impostors/Examples/StandardCrossfade",
     };
 
-    // The maps that have decided shader rows of their own or are Yard (Catalog-only, pending): every OTHER map is never active and never substitutes.
+    // The maps that have decided shader rows of their own (Yard's came with PLAN-YARD item 15): every OTHER map is never active and never substitutes.
     static IEnumerable<string> OtherMapKeys() =>
         ArenaMapRegistry.Catalog.Select(m => m.Key)
             .Where(k => k != ArenaMapRegistry.Bay5.Key && k != ArenaMapRegistry.AirPit.Key && k != ArenaMapRegistry.Bowl.Key &&
                         k != ArenaMapRegistry.AutoService.Key && k != ArenaMapRegistry.Yard.Key);
 
     [Fact]
-    public void YardListIsPendingOrTheDecidedSixAndItsRowsAreDecided()
+    public void YardListIsTheDecidedSixAndItsRowsAreDecided()
     {
-        // The descriptor list (item 15) is either still empty (Catalog-only) or exactly the decided six, in this order.
-        var listed = ArenaMapRegistry.Yard.ShaderFallbackNames;
-        Assert.True(listed.Length == 0 || listed.SequenceEqual(YardNames), string.Join(", ", listed));
-        // The policy rows do not depend on the list being present: with the list empty TryGetFallback is false (allow-list first), so nothing is reached;
-        // the rows are read through the allow-list only when item 15 has written it, so they are asserted via the targets of the names the list will hold.
+        // Yard is a released map since PLAN-YARD item 15: the descriptor list is exactly the decided six, in this order, and the policy reads the same list.
         var yard = ArenaMapRegistry.Yard.Key;
-        if (listed.Length == 0)
-        {
-            foreach (var name in YardNames) Assert.False(ShaderStandinPolicy.TryGetFallback(yard, name, out _), name);
-            Assert.False(ShaderStandinPolicy.UsesFallbackTable(yard));
-            return;
-        }
+        Assert.Contains(ArenaMapRegistry.Yard, ArenaMapRegistry.All);
+        Assert.Equal(YardNames, ArenaMapRegistry.Yard.ShaderFallbackNames);
+        Assert.Equal(YardNames, ShaderStandinPolicy.AllowedNames(yard));
+        Assert.True(ShaderStandinPolicy.UsesFallbackTable(yard));
         Assert.Equal("Unlit/Transparent Colored", Target(yard, "Custom/Billboard_FogSheet_Simple"));
         Assert.Equal("p0/Cutout/Bumped Diffuse", Target(yard, "Cloth/ClothShader"));
         Assert.Equal(ShaderStandinPolicy.TwoSidedClothShader, Target(yard, "Cloth/ClothShader_backface"));
@@ -148,7 +142,7 @@ public sealed class ShaderStandinPolicyTests
     }
 
     [Fact]
-    public void YardTargetRowsArePinnedBeforeThePromotion()
+    public void YardTargetRowsArePinned()
     {
         var t = ShaderStandinPolicy.YardFallbackTable;
         Assert.Equal(3, t.Count);
@@ -233,8 +227,10 @@ public sealed class ShaderStandinPolicyTests
     [Fact]
     public void NoReleasedMapsFallbackActiveTargetOrFixChangedWithYardsRows()
     {
-        var released = ArenaMapRegistry.All.Select(m => m.Key).ToArray();
+        // the six maps released before Yard (Yard is the seventh, with rows of its own: the tests above); this table says what none of them changed
+        var released = ArenaMapRegistry.All.Where(m => m != ArenaMapRegistry.Yard).Select(m => m.Key).ToArray();
         Assert.Equal(6, released.Length);
+        Assert.Equal(7, ArenaMapRegistry.All.Count);
         foreach (var key in released)
         {
             Assert.True(ExpectedExtended(key) == ShaderStandinPolicy.UsesExtendedStandins(key), key);
@@ -268,7 +264,7 @@ public sealed class ShaderStandinPolicyTests
         Assert.Equal(6, ShaderStandinPolicy.FallbackTable.Count);
         Assert.False(ShaderStandinPolicy.FallbackTable.ContainsKey("Nature/SpeedTree"));
         Assert.False(ShaderStandinPolicy.FallbackTable.ContainsKey("Impostors/Examples/StandardCrossfade"));
-        foreach (var map in ArenaMapRegistry.All)
+        foreach (var map in ArenaMapRegistry.All.Where(m => m != ArenaMapRegistry.Yard))
         {
             Assert.DoesNotContain("Nature/SpeedTree", map.ShaderFallbackNames);
             Assert.DoesNotContain("Impostors/Examples/StandardCrossfade", map.ShaderFallbackNames);
@@ -282,6 +278,7 @@ public sealed class ShaderStandinPolicyTests
         Assert.True(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.AirPit.Key));
         Assert.True(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.Bowl.Key));
         Assert.True(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.AutoService.Key));
+        Assert.True(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.Yard.Key));
         Assert.False(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.Equator.Key));
         foreach (var key in OtherMapKeys())
             Assert.False(ShaderStandinPolicy.UsesFallbackTable(key), key);

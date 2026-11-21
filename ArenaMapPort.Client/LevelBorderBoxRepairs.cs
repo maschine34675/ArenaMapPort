@@ -29,7 +29,7 @@ namespace ArenaMapPort.Client
     /// yard at its edges and cut off 0.00 m2 for every row, so no row gets a carver and the bake takes no source from the sidecar
     /// (LevelBorderBoxModel). The rows are a descriptor literal, mirrored number for number by validate_map_descriptors.py and YardMapTests.
     ///
-    /// Host test pending: Catalog-only until PLAN-YARD item 15, so no raid reaches it. Walking into the walls at several edges, the log line below
+    /// Host test pending: Yard has been registered since PLAN-YARD item 15, but its bundles are not built yet. Walking into the walls at several edges, the log line below
     /// (created 104, layer 29 'LevelBorder'), the F10 report of one wall (layer LevelBorder, ballistic none) and the walls gone after the raid
     /// are the checks of the host stage.
     /// </summary>
@@ -38,7 +38,7 @@ namespace ArenaMapPort.Client
         const string Tag = "[RaidFix]";
         static readonly Dictionary<string, ConfigEntry<bool>> _enabled = new Dictionary<string, ConfigEntry<bool>>();
 
-        /// <summary>One developer key per map that has rows, bound like AuthoredBorders' (None of the six released maps has rows, so they bind nothing.)</summary>
+        /// <summary>One developer key per map that has rows, bound like AuthoredBorders' (Yard is the one map with rows; the six older maps have none and bind nothing.)</summary>
         internal static void BindConfig()
         {
             foreach (var map in ArenaMapRegistry.All)

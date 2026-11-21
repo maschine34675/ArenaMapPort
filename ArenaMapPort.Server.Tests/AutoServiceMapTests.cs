@@ -54,8 +54,8 @@ public sealed class AutoServiceMapTests
         using var server = JsonDocument.Parse(File.ReadAllText(BaseJsonPath));
         var map = ArenaMapRegistry.AutoService;
         Assert.Contains(map, ArenaMapRegistry.All);
-        Assert.Equal(ArenaMapRegistry.Iceberg, ArenaMapRegistry.All[^2]);          // joined after Iceberg, last in the release order
-        Assert.Equal(map, ArenaMapRegistry.All[^1]);
+        Assert.Equal(ArenaMapRegistry.Iceberg, ArenaMapRegistry.All[^3]);          // joined after Iceberg (Yard followed it)
+        Assert.Equal(map, ArenaMapRegistry.All[^2]);
         Assert.Equal("Arena: Chop Shop", map.LocaleName);
         Assert.Equal(sidecar.RootElement.GetProperty("locale_name").GetString(), map.LocaleName);
         Assert.Equal(sidecar.RootElement.GetProperty("locale_description").GetString(), map.LocaleDescription);

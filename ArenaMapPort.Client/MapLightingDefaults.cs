@@ -19,7 +19,7 @@ namespace ArenaMapPort.Client
     /// Equator's later changes live in the DefaultsRevision migrations of WeatherRig. A map that was never
     /// released with saved keys, like AirPit (grep of both test installs, 2026-10-12: no "arena_airpit"
     /// section), Bowl (PLAN-BOWL item 9, 2026-10-18: no "arena_bowl" section exists) and Iceberg (PLAN-ICEBERG item 12, 2026-10-30:
-    /// none either) and Autoservice (PLAN-AUTOSERVICE item 12, 2026-11-11: none either) and Yard (PLAN-YARD item 13, 2026-11-20: a Catalog-only map, so
+    /// none either) and Autoservice (PLAN-AUTOSERVICE item 12, 2026-11-11: none either) and Yard (PLAN-YARD item 13, 2026-11-20: a Catalog-only map until its promotion on 2026-11-21, so
     /// no section can exist), needs no migration for its first set of defaults.
     ///
     /// Host evidence: Equator (docs/progress/donor-settings-camera-weather.md section 20), Bay5 (sections
@@ -52,7 +52,7 @@ namespace ArenaMapPort.Client
         }
 
         /// <summary>
-        /// Defaults for <c>Lighting (&lt;mapKey&gt;)</c>. Rig-active maps (Equator, Bay5, AirPit, Bowl, Iceberg, AutoService and, pending its promotion, Yard) get the
+        /// Defaults for <c>Lighting (&lt;mapKey&gt;)</c>. Rig-active maps (Equator, Bay5, AirPit, Bowl, Iceberg, AutoService and Yard) get the
         /// Reserve donor set; every other key gets Donor "Off" with neutral values, a complete no-op.
         /// The tuned values below the donor set are map-specific on purpose: Equator's were accepted on the
         /// host (ambient 0.5, reflection 0.85, indoor reflection 0.95, specular cap 0.3, cover 30 percent for
@@ -67,7 +67,7 @@ namespace ArenaMapPort.Client
             bool bowl = mapKey == ArenaMapRegistry.Bowl.Key; // PLAN-BOWL item 9, 2026-10-18
             bool iceberg = mapKey == ArenaMapRegistry.Iceberg.Key; // PLAN-ICEBERG item 12, 2026-10-30
             bool autoService = mapKey == ArenaMapRegistry.AutoService.Key; // PLAN-AUTOSERVICE item 12, 2026-11-11
-            bool yard = mapKey == ArenaMapRegistry.Yard.Key; // PLAN-YARD item 13, 2026-11-20 (Catalog-only until item 15: no raid reaches this row before the promotion)
+            bool yard = mapKey == ArenaMapRegistry.Yard.Key; // PLAN-YARD item 13, 2026-11-20 (promoted with item 15, 2026-11-21)
             bool rig = bay5 || equator || airPit || bowl || iceberg || autoService || yard;
             return new RigValues
             {

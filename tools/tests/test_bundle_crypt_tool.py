@@ -984,8 +984,8 @@ class KeySourcesTests(unittest.TestCase):
               "arena_yard": (3, 639_778_432)}
     # maps with a row but not yet in the released set (their package or their promotion is pending); a map leaves this set when it joins RELEASE_MAP_KEYS
     # (Autoservice left it at its promotion, PLAN-AUTOSERVICE item 12, 2026-11-11; the set is empty and stays as the place for the next map's row)
-    # Yard (PLAN-YARD item 7) is pending until its promotion (item 15): the row exists, the map is Catalog-only; it leaves this tuple then
-    PENDING_MAPS: tuple = ("arena_yard",)
+    # Yard (PLAN-YARD item 7) left it at its promotion (item 15, 2026-11-21): the key-source row stays, no content key exists until item 17
+    PENDING_MAPS: tuple = ()
     # maps whose accepted package carries more scenes than the key lists (the script, sound, ai and culling roles of the plan): the key scenes must be in it
     ROLE_SCENE_MAPS = ("arena_autoservice", "arena_yard")
 

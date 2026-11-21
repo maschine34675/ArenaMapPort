@@ -531,7 +531,7 @@ class SidecarTests(unittest.TestCase):
         for name, entry in entries.items():
             if name not in ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService", "Yard"):
                 self.assertIsNone(entry.get("ScoreMonitors"), name)
-        # Yard (Catalog only until item 15) carries its eight rows since PLAN-YARD item 10 part 2, 2026-11-21, mirrored by the validator like the released maps'
+        # Yard (registered by item 15) carries its eight rows since PLAN-YARD item 10 part 2, 2026-11-21, mirrored by the validator like the released maps'
         self.assertEqual(VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), entries["Yard"].get("ScoreMonitors")), [])
         self.assertEqual(len(entries["Yard"]["ScoreMonitors"]), 8)
         # exactly the released maps and Yard have a sidecar (the scaffolding that lets a sidecar exist ahead of its promotion,
@@ -540,7 +540,7 @@ class SidecarTests(unittest.TestCase):
         staged = ["yard"]
         self.assertEqual(sorted(p.name.removesuffix(".monitors.json") for p in (REPO / "tools" / "maps").glob("*.monitors.json")), sorted(STEMS + tuple(staged)))
         self.assertEqual(len(entries["AutoService"]["ScoreMonitors"]), 4)
-        self.assertEqual(sorted(KEYS.values()), sorted(VD.RELEASE_MAP_KEYS))
+        self.assertEqual(sorted([*KEYS.values(), "arena_yard"]), sorted(VD.RELEASE_MAP_KEYS))   # Yard joined with PLAN-YARD item 15 (STEMS stays the six older maps)
 
     def test_the_validator_run_passes(self):
         done = subprocess.run([sys.executable, str(REPO / "tools" / "validate" / "validate_map_descriptors.py")],
@@ -1084,7 +1084,7 @@ class RealAutoserviceMonitorTests(unittest.TestCase):
 
 # ---------------------------------------------------------------------------------------------------------------
 # Yard (2026-11-20, PLAN-YARD item 9): eight holders in the TeamFight design scene (level 317), five timers and three alive boards, all active.
-# Catalog-only until item 15; the descriptor row carries the ScoreMonitors literals since PLAN-YARD item 10 part 2 (2026-11-21), so the registry mirror is judged.
+# Registered since item 15; the descriptor row carries the ScoreMonitors literals since PLAN-YARD item 10 part 2 (2026-11-21), so the registry mirror is judged.
 # ---------------------------------------------------------------------------------------------------------------
 
 YARD = "arena_yard"
@@ -1161,7 +1161,7 @@ class YardMonitorSidecarTests(unittest.TestCase):
         registry_rows = [VD.parse_cs_value(line.strip().rstrip(",")) for line in literals]
         self.assertEqual(registry_rows, [{k: r[k] for k in VD.SCORE_MONITOR_MIRRORED} for r in self.rows])
         self.assertNotIn(YARD, VD.PENDING_MIRROR_KEYS)
-        self.assertNotIn(YARD, VD.RELEASE_MAP_KEYS)
+        self.assertIn(YARD, VD.RELEASE_MAP_KEYS)                 # promoted by PLAN-YARD item 15
         # the descriptor row carries the rows since item 10 part 2 (2026-11-21): the registry's own literals equal the sidecar's, and no registry rows is a mirror error
         registered = registry()["Yard"]["ScoreMonitors"]
         self.assertEqual(VD.score_monitor_errors(map_json("yard"), sidecar_path("yard"), registered), [])

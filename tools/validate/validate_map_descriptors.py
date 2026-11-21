@@ -1246,8 +1246,9 @@ def registry_entries(text: str) -> dict[str, dict]:
 # Bowl joined with PLAN-BOWL item 8 (2026-10-18) and shipped with 0.3.0; Iceberg joined with PLAN-ICEBERG item 12 (2026-10-30), registered and
 # staged on feature/iceberg, not released yet (its bundles wait for the first Unity build).
 # Autoservice joined with PLAN-AUTOSERVICE item 12 (2026-11-11) in the same state (its bundles wait for U1, item 13).
-RELEASE_MAP_NAMES = ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService")
-RELEASE_MAP_KEYS = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice")
+# Yard joined with PLAN-YARD item 15 (2026-11-21) in the same state (bundles at item 16, key at item 17).
+RELEASE_MAP_NAMES = ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService", "Yard")
+RELEASE_MAP_KEYS = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice", "arena_yard")
 # Released maps that have NO spectator crowd (Iceberg only since Autoservice's crowd, PLAN-AUTOSERVICE phase C, 2026-11-11; PLAN-ICEBERG "No spectator crowd and no murmur bed", 2026-10-30: Iceberg's scenes hold no crowd objects,
 # only 12 FansAmbient sound entries). They get no spectators/<key>/ package and no crowd murmur: everything that would otherwise demand a crowd
 # for every released map (the packer's rules and required files, the distribution validator) reads this one list; the crowd maps themselves are

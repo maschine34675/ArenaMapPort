@@ -1,5 +1,5 @@
 """Yard data contract (docs/PLAN-YARD.md item 8, 2026-11-20): tools/maps/yard.bots.json, yard.exits.json, yard.modes.json and yard.ai.json
-against each other, against Arena's own NavMesh and against the port's colliders. Yard is Catalog-only: nothing here reads the descriptor
+against each other, against Arena's own NavMesh and against the port's colliders. Yard is registered since item 15 but not built: nothing here reads the descriptor
 mirror, the registry or a built bundle (no Yard NavMesh is built before plan item 16; spawn_coverage.py on the built bundle and
 test_spawn_layout_rules for Yard are plan item 20).
 

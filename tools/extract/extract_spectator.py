@@ -28,14 +28,14 @@ MAP_SCENES = {
     'bay5': 'Arena_Bay5_DesignStuff',
     'bowl': 'Arena_Bowl_DesignStuff',
     'autoservice': 'Arena_AutoService_TeamFight_DesignStuff',
-}
-# PENDING crowd maps (PLAN-YARD item 14, 2026-11-20): a Catalog-only map whose crowd is extracted and validated but not yet staged. stage_spectators and the
-# client csproj read MAP_SCENES only, so a Release or DllOnly client build neither requires nor stages these. Yard's 27 fans live in its TeamFight design scene
-# (level317, root SCAV_SPECTATORS, DISABLED in the source, like Air Pit's). PLAN-YARD item 15 moves the row into MAP_SCENES and empties this dict in the same
-# commit (test_spectator pins both).
-PENDING_MAP_SCENES = {
+    # Yard (PLAN-YARD item 14 extracted it, item 15 promoted it, 2026-11-21): 27 fans in its TeamFight design scene (level317, root SCAV_SPECTATORS, DISABLED in the
+    # source, like Air Pit's); package work/extract/spectator-yard.
     'yard': 'Arena_Yard_TeamFight_DesignStuff',
 }
+# PENDING crowd maps: a Catalog-only map whose crowd is extracted and validated but not yet staged. stage_spectators and the client csproj read MAP_SCENES only,
+# so a Release or DllOnly client build neither requires nor stages these. The dict is empty since PLAN-YARD item 15 (2026-11-21); the seam stays for the next map
+# (the promotion moves the row into MAP_SCENES and empties the dict in the same commit; test_spectator pins both).
+PENDING_MAP_SCENES: dict[str, str] = {}
 # Every map the extractor, the verifier and validate() know: the staged crowd maps plus the pending ones.
 ALL_MAP_SCENES = {**MAP_SCENES, **PENDING_MAP_SCENES}
 CLIPS = ('ArenaFan_Idle_000_loop', 'ArenaFan_Idle_Cheer_001')

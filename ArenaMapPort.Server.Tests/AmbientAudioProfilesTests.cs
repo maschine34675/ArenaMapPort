@@ -40,7 +40,7 @@ public sealed class AmbientAudioProfilesTests
 
     static int Total(JsonElement census) => census.EnumerateObject().Sum(p => p.Value.GetInt32());
 
-    // The released profiles plus the staged ones (Yard's since PLAN-YARD item 6; none between Autoservice's promotion and then): the generic
+    // The released profiles plus the staged ones (none since Yard's promotion, PLAN-YARD item 15; Yard's waited there from item 6 on): the generic
     // contract and consistency tests cover both, the released-set tests below see only AmbientAudioProfiles.All.
     static IEnumerable<AmbientAudioProfile> Everything => AmbientAudioProfiles.All.Concat(AmbientAudioProfiles.Staged);
 
@@ -54,17 +54,18 @@ public sealed class AmbientAudioProfilesTests
         Assert.Equal(ArenaMapRegistry.All.Select(m => m.Key).Order().ToArray(),
             AmbientAudioProfiles.All.Select(p => p.MapKey).Order().ToArray());
         Assert.Equal(AmbientAudioProfiles.All.Count, AmbientAudioProfiles.All.Select(p => p.MapKey).Distinct().Count());
-        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice" }, AmbientAudioProfiles.All.Select(p => p.MapKey).ToArray());
+        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice", "arena_yard" }, AmbientAudioProfiles.All.Select(p => p.MapKey).ToArray());
     }
 
     [Fact]
     public void StagedProfilesAreCatalogOnlyMapsOutsideTheReleasedTable()
     {
         // A profile written ahead of its map's promotion must not be reachable through the released table (the driver binds config keys for
-        // every entry of All and would find the map through TryGet). Autoservice's item 12 emptied Staged; Yard's profile waits there since
-        // PLAN-YARD item 6 and leaves with its promotion (item 15).
-        Assert.Equal(new[] { "arena_yard" }, AmbientAudioProfiles.Staged.Select(p => p.MapKey).ToArray());
+        // every entry of All and would find the map through TryGet). Autoservice's item 12 emptied Staged; Yard's profile waited there from
+        // PLAN-YARD item 6 and left with its promotion (item 15), which emptied Staged again: the seam stays for the next map.
+        Assert.Empty(AmbientAudioProfiles.Staged);
         Assert.True(AmbientAudioProfiles.TryGet("arena_autoservice", out _));
+        Assert.True(AmbientAudioProfiles.TryGet("arena_yard", out _));
         foreach (var staged in AmbientAudioProfiles.Staged)
         {
             Assert.Contains(ArenaMapRegistry.Catalog, m => m.Key == staged.MapKey);

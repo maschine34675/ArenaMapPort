@@ -8,10 +8,11 @@ namespace ArenaMapPort.Server.Tests;
 /// <summary>
 /// PLAN-YARD item 10 part 2 (docs/progress/yard-release.md, 2026-11-21): tools/maps/yard.json, yard.exits.json, yard.doors.json, yard.monitors.json and
 /// yard.borders.json are the single sources of Yard's identity, bake inputs, exits, gate poses, score monitors and level-border walls, and the compiled
-/// descriptor (what the client reads) must say exactly what they say. Yard is Catalog only until item 15: it is not in <see cref="ArenaMapRegistry.All"/>,
-/// so no raid reaches any of it. Modelled on AutoServiceMapTests; the sidecar numbers themselves are pinned on the Python side (test_yard_bake_inputs,
+/// descriptor (what the client reads) must say exactly what they say. Yard joined <see cref="ArenaMapRegistry.All"/> with PLAN-YARD item 15 (2026-11-21), last
+/// in the release order, and db/arena_yard/base.json is what make_base_json.py generated from the same sidecars: the second half of this file checks it the way
+/// AutoServiceMapTests checks Autoservice's. Modelled on AutoServiceMapTests; the sidecar numbers themselves are pinned on the Python side (test_yard_bake_inputs,
 /// test_yard_spawns, test_door_poses, test_score_monitors, test_level_borders). The door-pose and score-monitor rows are also covered by the Theories of
-/// DoorPoseSidecarTests and ScoreMonitorSidecarTests (Yard is one of their maps). The pending pins of item 15 (Yard in All, base.json regenerated) stay pending here.
+/// DoorPoseSidecarTests and ScoreMonitorSidecarTests (Yard is one of their maps).
 /// </summary>
 public sealed class YardMapTests
 {
@@ -63,21 +64,117 @@ public sealed class YardMapTests
         Assert.False(Yard.UsesFixedStartTimes);
     }
 
-    [Fact]
-    public void YardIsInTheCatalogButNotReleasedUntilItem15()
+    private static string BaseJsonPath => Path.Combine(AppContext.BaseDirectory, "db", "arena_yard", "base.json");
+
+    private static float[] PositionOf(JsonElement spawnPoint)
     {
+        var p = spawnPoint.GetProperty("Position");
+        return new[] { p.GetProperty("x").GetSingle(), p.GetProperty("y").GetSingle(), p.GetProperty("z").GetSingle() };
+    }
+
+    [Fact]
+    public void YardIsInTheReleasedSetLastAndItsBaseJsonSaysTheDescriptor()
+    {
+        using var server = JsonDocument.Parse(File.ReadAllText(BaseJsonPath));
+        Assert.Contains(Yard, ArenaMapRegistry.All);
         Assert.Contains(Yard, ArenaMapRegistry.Catalog);
-        Assert.DoesNotContain(Yard, ArenaMapRegistry.All);                           // item 15 inverts this and every pin below that says "Catalog only"
-        Assert.DoesNotContain("arena_yard", ArenaMapRegistry.All.Select(m => m.Key));
-        Assert.Equal(6, ArenaMapRegistry.All.Count);
-        // The shipped placeholder base.json is item 15's (make_base_json.py regenerates it with the 22 spawn points, the waves and the exits): until then it still carries the
-        // spike name, afterwards the descriptor's.
-        string baseJson = Path.Combine(AppContext.BaseDirectory, "db", "arena_yard", "base.json");
-        if (File.Exists(baseJson))
+        Assert.Contains("arena_yard", ArenaMapRegistry.All.Select(m => m.Key));
+        Assert.Equal(7, ArenaMapRegistry.All.Count);
+        Assert.Equal(Yard, ArenaMapRegistry.All[^1]);                                // joined after Autoservice, last in the release order
+        Assert.Equal(ArenaMapRegistry.AutoService, ArenaMapRegistry.All[^2]);
+        // the regenerated base.json carries the descriptor's identity, not the spike's placeholder
+        Assert.Equal(Yard.LocaleName, server.RootElement.GetProperty("Name").GetString());
+        Assert.Equal(Yard.Key, server.RootElement.GetProperty("Id").GetString());
+        Assert.Equal(Yard.IconX, server.RootElement.GetProperty("IconX").GetInt32());
+        Assert.Equal(Yard.IconY, server.RootElement.GetProperty("IconY").GetInt32());
+        Assert.DoesNotContain("spike", server.RootElement.GetProperty("Name").GetString()!, StringComparison.OrdinalIgnoreCase);
+        // never loot, never scavs
+        Assert.True(server.RootElement.GetProperty("DisabledForScav").GetBoolean());
+        Assert.Empty(server.RootElement.GetProperty("Loot").EnumerateArray());
+    }
+
+    [Fact]
+    public void ExitTransformsMatchTheSidecarAndServerEligibility()
+    {
+        using var sidecar = Load("yard.exits.json");
+        using var server = JsonDocument.Parse(File.ReadAllText(BaseJsonPath));
+        var authored = sidecar.RootElement.GetProperty("exits").EnumerateArray().ToArray();
+        var shipped = server.RootElement.GetProperty("exits").EnumerateArray().ToArray();
+        Assert.Equal(Yard.Exits.Length, authored.Length);
+        Assert.Equal(Yard.Exits.Length, shipped.Length);
+        foreach (var expected in Yard.Exits)
         {
-            using var server = JsonDocument.Parse(File.ReadAllText(baseJson));
-            Assert.Contains(server.RootElement.GetProperty("Name").GetString(), new[] { "Arena: Yard (spike)", Yard.LocaleName });
+            var point = authored.Single(e => e.GetProperty("name").GetString() == expected.Name);
+            var exit = shipped.Single(e => e.GetProperty("Name").GetString() == expected.Name);
+            Assert.Equal(Yard.InfiltrationName, exit.GetProperty("EntryPoints").GetString());
+            Assert.Equal("Individual", exit.GetProperty("ExfiltrationType").GetString());
+            Assert.Equal("None", exit.GetProperty("PassageRequirement").GetString());
+            Assert.Equal(100, exit.GetProperty("Chance").GetDouble());
+            Assert.Equal(point.GetProperty("exfiltration_time").GetDouble(), exit.GetProperty("ExfiltrationTime").GetDouble());
+            Assert.Equal(8.0, exit.GetProperty("ExfiltrationTime").GetDouble());
         }
+        Assert.Empty(ArenaMapRegistration.ExitNameMismatches(shipped.Select(e => e.GetProperty("Name").GetString()), Yard));
+    }
+
+    [Fact]
+    public void SpawnPointsWavesAndSquadsMatchTheBotsSidecar()
+    {
+        using var sidecar = Load("yard.bots.json");
+        using var server = JsonDocument.Parse(File.ReadAllText(BaseJsonPath));
+        var bots = sidecar.RootElement;
+        var zone = bots.GetProperty("zone").GetString();
+        var shipped = server.RootElement.GetProperty("SpawnPointParams").EnumerateArray().ToArray();
+        var players = bots.GetProperty("player_spawns").EnumerateArray().ToArray();
+        var botSpawns = bots.GetProperty("bot_spawns").EnumerateArray().ToArray();
+
+        // Four player rows (an All and a side row at each end of the two pockets) and eighteen bot rows from the AI scene's points; no ArenaMode donor row
+        // exists for Yard, so no id is pinned by exact floats here (rule R6: the mirror below is the pin)
+        Assert.Equal(4, players.Length);
+        Assert.Equal(18, botSpawns.Length);
+        Assert.Equal(22, shipped.Length);
+        Assert.Equal(players.Length + botSpawns.Length, shipped.Length);
+        Assert.Equal(shipped.Length, shipped.Select(p => p.GetProperty("Id").GetString()).Distinct().Count());
+        Assert.DoesNotContain(botSpawns, b => b.GetProperty("id").GetString()!.Contains("tdm-v1"));
+        Assert.All(botSpawns, b => Assert.StartsWith("arena_yard-bot-", b.GetProperty("id").GetString()));
+        Assert.All(botSpawns, b => Assert.Equal(25, b.GetProperty("radius").GetInt32()));
+
+        foreach (var expected in players)
+        {
+            var point = shipped.Single(p => p.GetProperty("Id").GetString() == expected.GetProperty("id").GetString());
+            Assert.Equal(Floats(expected.GetProperty("position")), PositionOf(point));
+            Assert.Equal(expected.GetProperty("rotation").GetDouble(), point.GetProperty("Rotation").GetDouble());
+            Assert.Equal(expected.GetProperty("sides").EnumerateArray().Select(s => s.GetString()),
+                         point.GetProperty("Sides").EnumerateArray().Select(s => s.GetString()));
+            Assert.Equal(new[] { "Player" }, point.GetProperty("Categories").EnumerateArray().Select(c => c.GetString()));
+            Assert.Equal(Yard.InfiltrationName, point.GetProperty("Infiltration").GetString());
+        }
+        foreach (var expected in botSpawns)
+        {
+            var point = shipped.Single(p => p.GetProperty("Id").GetString() == expected.GetProperty("id").GetString());
+            Assert.Equal(Floats(expected.GetProperty("position")), PositionOf(point));
+            Assert.Equal(zone, point.GetProperty("BotZoneName").GetString());
+            Assert.Equal(expected.GetProperty("categories").EnumerateArray().Select(c => c.GetString()),
+                         point.GetProperty("Categories").EnumerateArray().Select(c => c.GetString()));
+            Assert.Contains("BotPmc", point.GetProperty("Categories").EnumerateArray().Select(c => c.GetString()));
+            Assert.Equal("", point.GetProperty("Infiltration").GetString());
+        }
+
+        var root = server.RootElement;
+        Assert.Equal(bots.GetProperty("max_bots").GetInt32(), root.GetProperty("BotMax").GetInt32());
+        Assert.Equal(8, root.GetProperty("BotMax").GetInt32());
+        Assert.Equal("BotZone_Main", zone);
+        Assert.Equal(zone, root.GetProperty("OpenZones").GetString());
+        Assert.Equal(5, bots.GetProperty("waves").GetArrayLength());
+        Assert.Equal(bots.GetProperty("waves").GetArrayLength(), root.GetProperty("waves").GetArrayLength());
+        Assert.All(root.GetProperty("waves").EnumerateArray(), w => Assert.Equal(zone, w.GetProperty("SpawnPoints").GetString()));
+
+        var squads = root.GetProperty("BossLocationSpawn").EnumerateArray().ToArray();
+        Assert.Equal(bots.GetProperty("boss_waves").GetArrayLength(), squads.Length);
+        Assert.Equal(4, squads.Length);
+        Assert.All(squads, b => Assert.Contains(b.GetProperty("BossName").GetString(), new[] { "pmcUSEC", "pmcBEAR" }));
+        Assert.All(squads, b => Assert.Equal(zone, b.GetProperty("BossZone").GetString()));
+        Assert.Equal(2, squads.Count(b => b.GetProperty("BossName").GetString() == "pmcUSEC"));
+        Assert.Equal(2, squads.Count(b => b.GetProperty("BossName").GetString() == "pmcBEAR"));
     }
 
     [Fact]

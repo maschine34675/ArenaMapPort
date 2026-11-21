@@ -9,8 +9,8 @@ namespace ArenaMapPort.Server;
 /// Arena's locales carry a map description for only some maps (Equator, Bay5, AirPit and Bowl among the released ones;
 /// Iceberg has no Name or Description row at all, PLAN-ICEBERG item 10). The pack
 /// (<c>locales/map-descriptions.json</c>, written by <c>tools/extract/extract_map_descriptions.py</c>) must cover exactly
-/// the released maps that HAVE an official text (<see cref="OfficialTextMapKeys"/>), plus, optionally, the entries of official-text
-/// maps that are not released yet (Autoservice before its promotion, Yard until PLAN-YARD item 15); a map without one is not in the pack
+/// the released maps that HAVE an official text (<see cref="OfficialTextMapKeys"/>: Equator, Bay5, AirPit, Bowl, Autoservice and, since PLAN-YARD item 15, Yard), plus, optionally, the entries of official-text
+/// maps that are not released yet (the seam stays: it is empty now); a map without one is not in the pack
 /// and answers with its descriptor's <see cref="ArenaMapDescriptor.LocaleDescription"/> (the port's own words, one
 /// English string for every language). A damaged, stale or over-complete pack is still discarded as a whole, so the
 /// official texts are never half-applied.
@@ -32,8 +32,8 @@ public sealed class ArenaMapDescriptions
         ArenaMapRegistry.AirPit.Key,
         ArenaMapRegistry.Bowl.Key,
         ArenaMapRegistry.AutoService.Key,
-        // PLAN-YARD item 11 (2026-11-20): Arena's location id 64b7d7f2... has Name ("Block") and Description rows; the map is pending
-        // (Catalog-only) until item 15, so Load accepts but does not require its entry.
+        // PLAN-YARD item 11 (2026-11-20): Arena's location id 64b7d7f2... has Name ("Block") and Description rows; the map joined All with
+        // item 15 (2026-11-21), so Load now requires its entry.
         ArenaMapRegistry.Yard.Key,
     };
 

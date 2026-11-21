@@ -57,10 +57,10 @@ namespace ArenaMapPort.Client
                 // SCAV_SPECTATORS; the plain Arena_AutoService_DesignStuff holds none). That scene is in the descriptor's AllSceneNames, so IsOwnedScene finds it.
                 // The original root is ACTIVE there and is disabled after the replacement is built (the Bay5 path below). PLAN-AUTOSERVICE phase C, 2026-11-11.
                 case "arena_autoservice": return "Arena_AutoService_TeamFight_DesignStuff";
-                // Yard (Catalog-only until PLAN-YARD item 15; ArenaMapRaid.CurrentMap is never Yard before then, so this row is dormant): its 27 fans are the same rigs
+                // Yard (PLAN-YARD item 15, 2026-11-21: registered): its 27 fans are the same rigs
                 // and live in its TeamFight design scene (level317), under a root SCAV_SPECTATORS that is already INACTIVE in the source (like Air Pit's): the loop below
                 // counts it in OriginalGroupsDisabled only when it is active, and SetActive(false) on an inactive root changes nothing. The scene is in the descriptor's AllSceneNames.
-                // extract_spectator.PENDING_MAP_SCENES holds the same pair until item 15 moves it into MAP_SCENES (test_crowdless_maps pins both).
+                // extract_spectator.MAP_SCENES holds the same pair (test_crowdless_maps pins both).
                 case "arena_yard": return "Arena_Yard_TeamFight_DesignStuff";
                 default: return null;
             }

@@ -70,6 +70,7 @@ namespace ArenaMapPort.Client
         static ConfigEntry<bool> _airPitStandins;
         static ConfigEntry<bool> _bowlStandins;
         static ConfigEntry<bool> _autoServiceStandins;
+        static ConfigEntry<bool> _yardStandins;
         static ConfigEntry<FogSheetMode> _fogSheetMode;
         static ConfigEntry<float> _fogSheetOpacity;
 
@@ -88,10 +89,8 @@ namespace ArenaMapPort.Client
         internal static bool AutoServiceStandinsEnabled =>
             _autoServiceStandins != null ? _autoServiceStandins.Value : ShaderStandinPolicy.AutoServiceStandinsDefault;
 
-        // Yard (PLAN-YARD item 13): Catalog-only until item 15, so no config key is bound yet (a Bind would put "MaterialFixes/YardShaderStandins" into every
-        // user's developer archive although no raid of the map can run). Until then the switch is the policy default; item 15 adds the field, the Bind
-        // ("YardShaderStandins", ShaderStandinPolicy.YardStandinsDefault) and passes this property as the sixth argument of FallbacksActive in ShaderRebind.
-        internal static bool YardStandinsEnabled => ShaderStandinPolicy.YardStandinsDefault;
+        internal static bool YardStandinsEnabled =>
+            _yardStandins != null ? _yardStandins.Value : ShaderStandinPolicy.YardStandinsDefault;
 
         internal static FogSheetMode FogMode =>
             _fogSheetMode != null ? _fogSheetMode.Value : ShaderStandinPolicy.FogSheetModeDefault;
@@ -121,6 +120,15 @@ namespace ArenaMapPort.Client
                 "Legacy Shaders/Transparent/Cutout/Bumped Diffuse 2 side, Baked: p0/Reflective/Bumped Specular SMap; inferred, not " +
                 "verified against Arena's look); false = leave them on the magenta stand-in. The map bundle keeps rebound materials " +
                 "cached: restart EFT after switching this back to false.");
+            _yardStandins = settings.Bind("MaterialFixes", "YardShaderStandins", ShaderStandinPolicy.YardStandinsDefault,
+                "Yard only (arena_yard). Six of its Arena shaders are not in SPT's global shader bundle: the fog sheet " +
+                "(Custom/Billboard_FogSheet_Simple), the cloth shaders (Cloth/ClothShader, Cloth/ClothShader_backface), " +
+                "p0/Reflective/Bumped Specular SMap Baked, Nature/SpeedTree (2 renderers, the leaves of two trees) and " +
+                "Impostors/Examples/StandardCrossfade (2 renderers, their trunks). true = substitute SPT shaders where EFT's own copy is " +
+                "not loaded (fog: Unlit/Transparent Colored with a generated soft texture, cloth: p0/Cutout/Bumped Diffuse, the backface " +
+                "cloth and the SpeedTree leaves: a two-sided cutout, the trunks: Diffuse, Baked: p0/Reflective/Bumped Specular SMap; " +
+                "inferred, not verified against Arena's look); false = leave them on the magenta stand-in. The map bundle keeps rebound " +
+                "materials cached: restart EFT after switching this back to false.");
             _fogSheetMode = settings.Bind("MaterialFixes", "AirPitFogSheets", ShaderStandinPolicy.FogSheetModeDefault,
                 "AirPit only. StandIn = fog-sheet quads use the substitute shader (needs AirPitShaderStandins = true, " +
                 "otherwise they stay magenta). Hidden = their renderers are disabled at raid start, whatever " +

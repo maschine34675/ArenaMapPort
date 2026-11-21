@@ -47,11 +47,11 @@ namespace ArenaMapPort.Client
     /// would vanish from behind). The fog sheet gets the generated soft texture exactly as on AirPit (the capture is not map-gated). Its
     /// fourth name keeps the table row <c>p0/Reflective/Bumped Specular SMap</c>. Like AirPit's, the fog sheet and cloth are expected to
     /// resolve in process (the rows are the safety net); the Baked shader (sharedassets216) is inferred NOT loaded, so its row is the live one.</item>
-    /// <item>Yard (PLAN-YARD item 13, 2026-11-20; Catalog-only until item 15, so nothing here is reached by a released raid): the four names of
+    /// <item>Yard (PLAN-YARD item 13, 2026-11-20; promoted with item 15, 2026-11-21): the four names of
     /// AutoService (the same rows and the same extended cloth handling), plus the two names EFT 0.16.9.5 carries nowhere: the SpeedTree 7 leaf shader
     /// <c>Nature/SpeedTree</c> (2 renderers, the leaves of two trees in the yard: the two-sided cutout, the cutoff stays the material's 0.5) and the
     /// Amplify <c>Impostors/Examples/StandardCrossfade</c> trunk shader (2 renderers, plain <c>Diffuse</c>: no cutoff, no keyword, no alpha to misread).
-    /// Both substitutes are inferred, not Arena's look; the switch <c>YardShaderStandins</c> (item 15) turns them off. The octahedron impostor shader
+    /// Both substitutes are inferred, not Arena's look; the switch <c>YardShaderStandins</c> (MaterialFixes, developer key) turns them off. The octahedron impostor shader
     /// (<c>sharedassets5</c>, loaded in process like the cloth) and <c>Custom/WireNetting</c> (EFT's shader bundle) need no row.</item>
     /// <item>Every other map, Equator included: an empty list, no fallback table. A name not allowed keeps the
     /// stand-in and is logged as unresolved (Error).</item>
@@ -94,7 +94,7 @@ namespace ArenaMapPort.Client
         internal const bool AirPitStandinsDefault = true;
         internal const bool BowlStandinsDefault = true;   // first-run default of BowlShaderStandins (new key, no migration)
         internal const bool AutoServiceStandinsDefault = true;   // first-run default of AutoServiceShaderStandins (new key, no migration)
-        internal const bool YardStandinsDefault = true;          // first-run default of YardShaderStandins (the key is bound by item 15; no saved key can exist before)
+        internal const bool YardStandinsDefault = true;          // first-run default of YardShaderStandins (new key bound by item 15, no migration)
         internal const FogSheetMode FogSheetModeDefault = FogSheetMode.StandIn;
         internal const float FogSheetOpacityDefault = 1f;
         internal const float FogSheetOpacityMin = 0f;

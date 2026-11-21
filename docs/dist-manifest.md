@@ -1,5 +1,28 @@
 # Current distribution contract: Equator, Bay5, AirPit, Bowl, Iceberg and Chop Shop (0.6.0, published 2026-11-14; encrypted bundles; the 0.5.0 five-map and 0.4.0 four-map contracts below are kept as history)
 
+2026-11-21 (Yard joined the release lists, PENDING: NOT built, NOT staged as bundles, NOT keyed, NOT released; PLAN-YARD item 15, record
+[progress/yard-release.md](progress/yard-release.md)): `ArenaMapRegistry.All`, `RELEASE_MAP_KEYS`, the csproj rows and the packer now expect a **seventh** map,
+`arena_yard` (Arena's `Arena_Yard`, called "Block" in Arena's locale and in the port's name "Arena: Block"; the packer's prose name is "Block"). The published
+0.6.0 contract below stays the published one. Once its bundles exist (U1, item 16) and are staged with its content key (item 17), the files of the Yard part are:
+`bundles/arena_yard_{scenes,navmesh,preset}.bundle` (3, AMPB, encrypted), `keys/arena_yard.json` (1; the first staging creates the content key with
+`-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_yard` and the key store is backed up off the VM at once), `acoustics/arena_yard/`
+(`spatial-audio.json`, `source.audiobakedata` and **two** room-tone WAVs, `sharedassets111.assets_40.wav` for the 14 indoor rooms and `sharedassets163.assets_17.wav`
+for the 5 outdoor ones: 4, one more than a one-tone map; the csproj and the packer glob `*.wav`, `validate_acoustics` follows the graph's clip list), `gate-sounds/arena_yard/`
+(`gate-sounds.json` and two WAVs: 3), `spectators/arena_yard/spectator.json.gz` (1; 27 fans, the crowd maps are now six; the shared texture set stays at 135), `ai/yard.ai.json` (1),
+`loadscreens/arena_yard_1..5.jpg` (5), `material-shaders.arena_yard.json` (1), `db/arena_yard/base.json` (1) and `banners/arena_yard.jpg` (1): 21 files. Yard has no flare
+package (0 of 14 flare lights are active; it is not in `FLARE_MAP_KEYS`), no native water (`NATIVE_WATER_MAP_KEYS`), no DynamicMaps overview (`OVERVIEW_MAP_NAMES`) and no
+crowdless entry (it has a crowd: `CROWDLESS_MAP_KEYS` stays Iceberg only). The core part does not change (the score-monitor sprites, the crowd audio and the shared textures are shared).
+`validate_distribution.py` also checks the staged acoustics files against the stage-2 key-source files (the same byte-copy check as for the spectator audio; the first map with a
+second room tone made the check worth adding; measured on 2026-11-20: no room-tone WAV of any map is a copy of one).
+
+State on the day of the promotion (a DllOnly client build and a server build from this tree, nothing built by Unity): dist holds **408 files**, the 10 Yard files that need no
+bundle (`acoustics/arena_yard/` 4, `ai/yard.ai.json`, `gate-sounds/arena_yard/` 3, `spectators/arena_yard/spectator.json.gz`, `db/arena_yard/base.json`); the 11 missing ones are the
+three bundles, the key file, the shader sidecar, the banner and the five loading screens (the last two come from `extract_banners.py` and `extract_loadscreens.py`, whose output for
+Yard waits under `work/extract/yard-identity`, and from item 16/17). With them dist reads **419 files** (estimate: 408 plus 11, not run). `make_release_zips.py --plan` stops with "incomplete dist: part 'yard' lacks" the
+seven named files (it requires the first loading screen only), and `validate_distribution.py` ends in `DISTRIBUTION_FAILED: Banner file set mismatch: missing=['arena_yard.jpg']` until the art
+is in and then fails on the missing bundles until U1 and the first stage exist. `tools/deploy-to-spt.ps1` refuses the whole-dist deploy while the server mod holds `db/arena_yard` and
+the client plugin lacks the map's bundles and key file (Iceberg rule 6); nothing deploys before item 17.
+
 2026-11-13: the six-map 0.6.0 contract is the last section, "Release 0.6.0 contract". The two paragraphs below (2026-11-11) describe the state of the promotion day, when Chop Shop was pending; that state is superseded (its bundles, key and shader sidecar exist and are staged, `--plan` reads 396 files).
 
 2026-11-11 (Autoservice joined the release lists, PENDING: NOT built, NOT staged as bundles, NOT released; PLAN-AUTOSERVICE item 12, record

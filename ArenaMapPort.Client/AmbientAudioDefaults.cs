@@ -23,7 +23,7 @@ namespace ArenaMapPort.Client
     /// and flattens the interior balance, while offset 0.2 gives about 0.30 against 0.37 to 0.48 (computed from the authored volumes, not heard).
     /// Offset 0 (Iceberg's row) would keep the authored 1:3 balance, with the 0.07 drops at about 0.10. Range 3 is the plan's value and untried: it carries
     /// the drops (20 m) to 60 m through an 80 m map, which may be too much for a quiet interior sound. Its keys are new, so no migration step touches them.
-    /// Yard (PLAN-YARD item 6, 2026-11-20) is STAGED (no released profile yet, see <see cref="AmbientAudioProfiles.Staged"/>) and starts with gain 3 dB,
+    /// Yard (PLAN-YARD item 6, 2026-11-20) is in the profile table since PLAN-YARD item 15 (2026-11-21) and starts with gain 3 dB,
     /// offset 0.1 and range 2, a start value until a listening pass, computed from the authored volumes and not heard: 31 of its 36 active players are
     /// exterior (CommonAmbientOutGroup, median volume 0.10, range 0.03 to 0.25) and the two loop hums <c>fridge</c> (0.05, reach 7 m) and <c>electricity</c>
     /// (0.03, reach 10 m) author minDistance 0 like Iceberg's lamps. The volume is <c>volume * gain + offset</c>: Bowl's offset 0.4 would put the hums at about
