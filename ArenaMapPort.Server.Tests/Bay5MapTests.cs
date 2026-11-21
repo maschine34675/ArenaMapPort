@@ -56,9 +56,9 @@ public sealed class Bay5MapTests
         Assert.Equal(3, paths.Length);
         Assert.Equal(paths, ArenaMapRegistry.Equator.DistantShadowCasterPaths);
         Assert.All(paths, path => Assert.EndsWith("_SHADOW_LOD0", path));
-        // Chop Shop and Iceberg joined on 2026-11-12 (DistantShadowCasterTests); every other map still enrols nothing.
+        // Chop Shop and Iceberg joined on 2026-11-12, Yard on 2026-11-21 (DistantShadowCasterTests); every other map still enrols nothing.
         foreach (var map in ArenaMapRegistry.Catalog.Where(m => m != ArenaMapRegistry.Equator && m != ArenaMapRegistry.AutoService
-                     && m != ArenaMapRegistry.Iceberg))
+                     && m != ArenaMapRegistry.Iceberg && m != ArenaMapRegistry.Yard))
             Assert.Empty(map.DistantShadowCasterPaths);
     }
 

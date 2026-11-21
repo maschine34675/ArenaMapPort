@@ -514,3 +514,7 @@ Client` (dry run, then `-Confirm`), host hash equal, `gpu-run restart`: `16/16 i
 `registered` lines, list 1574, `shadowDistance` 80.0 (shadow quality 3), `warnings 0; errors 0`; the hideout opened in 4.2 s; no Warning from
 ArenaMapPort. Equator and Chop Shop were not run again on this rebuild (same source as the build checked above). The server DLL was not
 rebuilt: nothing on the server reads the rows. Nothing is pushed.
+
+## 2026-11-21 - Yard rows
+
+Yard (`arena_yard`) has 15 distant-shadow rows (one-sided, chosen with the census on the package; host A/B pending). See [yard-release.md](yard-release.md) "Item 21, offline half".

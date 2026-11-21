@@ -212,7 +212,7 @@ public sealed class YardMapTests
         Assert.Equal(0f, Yard.EmissionFloor);
         Assert.False(Yard.HasNativeWater);
         Assert.Empty(Yard.AuthoredBorders);
-        Assert.Empty(Yard.DistantShadowCasterPaths);
+        Assert.Equal(15, Yard.DistantShadowCasterPaths.Length); // PLAN-YARD item 21 offline half; the rows are pinned in DistantShadowCasterTests
         Assert.Empty(Yard.RestoredShadowCasterRoots);
         Assert.Null(Yard.Dust);
         Assert.Null(Yard.LampFill);

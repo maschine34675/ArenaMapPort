@@ -315,6 +315,7 @@ class SunModelTests(unittest.TestCase):
 ICEBERG = WORK / "extract" / "iceberg-native-v2"
 AUTOSERVICE = WORK / "extract" / "autoservice-native-v2"
 EQUATOR = WORK / "extract" / "equator-native-v5"
+YARD = WORK / "extract" / "yard-native-v2"
 
 
 def sidecar_paths(stem):
@@ -409,6 +410,90 @@ class AutoServiceTests(unittest.TestCase):
         self.assertEqual(fixed.draw_records, bare.draw_records + 2)
         rows = ds.Coverage(fixed, min_edge=5.0).at(sun)
         self.assertLess(max(r["uncovered_m2"] for r in rows), 1.0)
+
+
+@unittest.skipUnless(YARD.is_dir(), "work/extract/yard-native-v2 is not available (set ARENAMAPPORT_WORK_DIR)")
+class YardTests(unittest.TestCase):
+    """PLAN-YARD item 21, offline half (2026-11-21): census model, measured on the package; the host half (the _renderList.Count
+    of 1,113 on a real raid, the A/B with Lighting (arena_yard)/RoofDistantShadows, a short cascade) is open."""
+    HOURS = (8.0, 12.0, 17.0)
+    FLOOR = "Yard_courtyard_01_SHADOW_LOD0"
+    HULLS = ("Benya_House_01_SHADOW_LOD0", "Mansion_05_SHADOW_LOD0", "Building_Panel_Devastated_01_SHADOW_LOD0",
+             "Respawn_Outdoor_SHADOW_LOD0", "Building_factory_brick_03_SHADOW_LOD0", "Mansion_02_SHADOW_LOD0")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rows = sidecar_paths("yard")
+        cls.bare = ds.census(YARD)                                          # no row: the state of the U1 plan
+        cls.fixed = ds.census(YARD, cls.rows)
+        cls.two = ds.census(YARD, cls.rows, two_sided=True)
+        cov = {k: ds.Coverage(v, min_edge=3.0) for k, v in (("bare", cls.bare), ("fixed", cls.fixed), ("two", cls.two))}
+        cls.at = {(k, h): {r["record"]["name"]: r["uncovered_m2"] for r in c.at(ds.sun_direction(h))}
+                  for k, c in cov.items() for h in cls.HOURS}
+
+    @staticmethod
+    def non_floor(rows):
+        return sum(v for k, v in rows.items() if k != YardTests.FLOOR)
+
+    def test_the_list_without_and_with_the_sidecar(self):
+        self.assertEqual(len(self.rows), 15)
+        self.assertEqual(self.bare.draw_records, 1113)                      # the number the host's _renderList.Count should show (open)
+        self.assertEqual(len(self.bare.native), 1018)
+        self.assertEqual(len(self.bare.unreferenced), 81)
+        self.assertEqual(self.fixed.skipped_paths, [])
+        self.assertEqual(sum(1 for r in self.fixed.native if r.get("enrolled")), 15)
+        self.assertEqual(self.fixed.draw_records, 1128)                     # one single-submesh proxy per row
+        self.assertEqual(len(self.fixed.unreferenced), 66)
+        self.assertEqual({r["sides"] for r in self.fixed.native if r.get("enrolled")}, {"front"})
+
+    def test_the_candidates(self):
+        free = self.bare.unreferenced
+        self.assertEqual({r["cast"] for r in free}, {"ShadowsOnly"})
+        self.assertEqual(sum(1 for r in free if r["size"].max() >= 3.0), 59)
+        names = {r["name"] for r in free}
+        self.assertEqual({r["name"] for r in self.fixed.native if r.get("enrolled")}, {p.rsplit("/", 1)[1] for p in self.rows})
+        # the largest candidate is the 307 x 278 m courtyard plane, which is deliberately not listed
+        plane = [r for r in free if r["name"] == self.FLOOR][0]
+        self.assertGreater(plane["size"][0], 300.0)
+        self.assertGreater(plane["size"][2], 270.0)
+        self.assertNotIn(self.FLOOR, {r["name"] for r in self.fixed.native if r.get("enrolled")})
+        for moving in ("Construction_Cradle_02_A_SHADOW_LOD0", "Construction_Cradle_02_B_SHADOW_LOD0"):
+            self.assertIn(moving, names)
+            self.assertNotIn(moving, {r["name"] for r in self.fixed.native if r.get("enrolled")})
+
+    def test_the_building_hulls_are_the_defect(self):
+        for hour in self.HOURS:
+            with self.subTest(hour=hour):
+                bare = self.at["bare", hour]
+                for hull in self.HULLS:
+                    self.assertGreater(bare[hull], 300.0, hull)             # each hull's shadow ends at the cascade without a row
+                self.assertGreater(bare["Yard_STENCIL"], 700.0)
+                self.assertGreater(self.non_floor(bare), 8000.0)
+
+    def test_the_rows_close_what_they_are_meant_to_close(self):
+        for hour in self.HOURS:
+            with self.subTest(hour=hour):
+                fixed = self.at["fixed", hour]
+                for name in self.HULLS + ("Yard_STENCIL",):
+                    self.assertNotIn(name, fixed)                           # listed now, no candidates any more
+                self.assertLess(self.non_floor(fixed), 0.03 * self.non_floor(self.at["bare", hour]))
+                self.assertLess(max(v for k, v in fixed.items() if k != self.FLOOR), 120.0)
+
+    def test_what_deliberately_stays_open(self):
+        # the courtyard plane: the visual floor is coplanar with it (within 1 mm over 95 percent of its area; acne risk inferred) and the sun it "keeps" falls on nothing, so no row
+        for hour in self.HOURS:
+            with self.subTest(hour=hour):
+                self.assertGreater(self.at["fixed", hour][self.FLOOR], 5000.0)
+        # an impostor hull of a listed building is a duplicate: Mansion_05_Imposters_front keeps about 107 m2 at 08:00
+        self.assertTrue(50.0 < self.at["fixed", 8.0]["Mansion_05_Imposters_front_SHADOW_LOD0"] < 200.0)
+        self.assertIn("Construction_Cradle_02_B_SHADOW_LOD0", {r["name"] for r in self.fixed.unreferenced})
+
+    def test_one_sided_blocking_is_enough(self):
+        # Arena's one-sided material against both sides (the flag DistantShadowTwoSided): the proxies are closed outward shells
+        for hour in self.HOURS:
+            with self.subTest(hour=hour):
+                one, both = self.non_floor(self.at["fixed", hour]), self.non_floor(self.at["two", hour])
+                self.assertLess(abs(one - both), 15.0)
 
 
 @unittest.skipUnless(EQUATOR.is_dir(), "work/extract/equator-native-v5 is not available (set ARENAMAPPORT_WORK_DIR)")

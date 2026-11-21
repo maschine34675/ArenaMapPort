@@ -55,6 +55,23 @@
   "puddle_water_material_names": [
     "0877f2335044042e"
   ],
+  "distant_shadow_caster_paths": [
+    "SBG_Arena_Yard/SOO_LOD0/Yard_Building_03/Benya_House_01_SHADOW_LOD0",
+    "SBG_Arena_Yard/SOO_LOD0/Mansion_05/Mansion_05_SHADOW_LOD0",
+    "SBG_Arena_Yard/SOO_LOD0/Primorskiy_43 (2) Group/Building_Panel_Devastated_01/Building_Panel_Devastated_01_SHADOW_LOD0",
+    "SBG_Arena_Yard/SOO_LOD0/Respawn_Outdoor/Respawn_Outdoor_SHADOW_LOD0",
+    "SBG_Arena_Yard/SOO_LOD0/Building_factory_brick_03/Building_factory_brick_03_SHADOW_LOD0",
+    "SBG_Arena_Yard/SOO_LOD0/Mansion_02/Mansion_02_SHADOW_LOD0",
+    "STENCILS/Yard_STENCIL",
+    "SBG_Arena_Yard/SOO_LOD0/Building_factory_brick_02/Building_factory_brick_02_SHADOW_LOD0",
+    "SBG_Arena_Yard/SOO_LOD0/Primorskiy_43 (2) Group/Garage_array_02_outdoor/Garage_array_02_outdoor_SHADOW_LOD0",
+    "SBG_Arena_Yard/SOO_LOD0/Mansion_01/Mansion_01_SHADOW_LOD0",
+    "SBG_Arena_Yard/SOO_LOD0/Mansion_04/Mansion_04_SHADOW_LOD0",
+    "SBG_Arena_Yard/SOO_LOD0/Primorskiy_43 (2) Group/Garage_array_04_outdoor/Garage_array_04_outdoor_SHADOW_LOD0",
+    "SBG_Arena_Yard/SOO_LOD0/Garage_array_03/Garage_array_03_SHADOW_LOD0",
+    "SBG_Arena_Yard/SOO_LOD0/Garage_array_05/Garage_array_05_SHADOW_LOD0",
+    "SBG_Arena_Yard/SOO_LOD0/Boiler_room_brick/Boiler_room_brick_SHADOW_LOD0"
+  ],
   "shader_fallback_names": [
     "Custom/Billboard_FogSheet_Simple",
     "Cloth/ClothShader",

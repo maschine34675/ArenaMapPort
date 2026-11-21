@@ -1652,6 +1652,33 @@ namespace ArenaMapPort.Shared
             KeepLevelBorders: true,
             // Puddle footsteps: the rain-driven puddle decal material of the other maps (0877f2335044042e). Mirrors tools/maps/yard.json puddle_water_material_names.
             PuddleWaterMaterialNames: new[] { "0877f2335044042e" },
+            // Distant sun shadows (PLAN-YARD item 21, offline half; docs/progress/lighting-followup.md, 2026-11-21; mirrors tools/maps/yard.json distant_shadow_caster_paths).
+            // Arena's visual meshes of the yard's buildings cast Off; the building shadows are ShadowsOnly SHADOW_LOD0 proxies that no LODGroup references, so EFT's
+            // DistantShadow never draws them and every building shadow on the yard floor and the facades ends at the cascade distance. The 15 rows were chosen with
+            // tools/validate/distant_shadow_census.py on the package yard-native-v2 (census model, measured on the package, NOT host-verified; the host A/B is pending):
+            // the six building hulls (Benya house, Mansion 05, Panel Devastated, Respawn Outdoor, factory brick 03, Mansion 02) remove 88 percent of the sun leak that
+            // lands in the play volume or on facades (the proposal's landing-filtered metric, 11 hours), the stencil boxes, three more hulls and the five garage and boiler hulls bring it to 98 percent (the tool's unfiltered residual is 1.5 percent of its baseline, mostly impostor hulls). Arena's one-sided
+            // material is enough (closed outward shells, DistantShadowTwoSided stays false). Left out on purpose: the 307 x 278 m courtyard plane (it is coplanar with the
+            // visual floor, within 1 mm over 95 percent of its area; 99.6 percent of its uncovered sun lands on nothing, and a coplanar occluder risks acne), the moving gondola parts (DistantShadow freezes a draw
+            // transform at list build), the impostor and indoor hulls (duplicates of a listed hull), parts under a LODGroup (the client never nests) and every prop under 3 m.
+            DistantShadowCasterPaths: new[]
+            {
+                "SBG_Arena_Yard/SOO_LOD0/Yard_Building_03/Benya_House_01_SHADOW_LOD0",
+                "SBG_Arena_Yard/SOO_LOD0/Mansion_05/Mansion_05_SHADOW_LOD0",
+                "SBG_Arena_Yard/SOO_LOD0/Primorskiy_43 (2) Group/Building_Panel_Devastated_01/Building_Panel_Devastated_01_SHADOW_LOD0",
+                "SBG_Arena_Yard/SOO_LOD0/Respawn_Outdoor/Respawn_Outdoor_SHADOW_LOD0",
+                "SBG_Arena_Yard/SOO_LOD0/Building_factory_brick_03/Building_factory_brick_03_SHADOW_LOD0",
+                "SBG_Arena_Yard/SOO_LOD0/Mansion_02/Mansion_02_SHADOW_LOD0",
+                "STENCILS/Yard_STENCIL",
+                "SBG_Arena_Yard/SOO_LOD0/Building_factory_brick_02/Building_factory_brick_02_SHADOW_LOD0",
+                "SBG_Arena_Yard/SOO_LOD0/Primorskiy_43 (2) Group/Garage_array_02_outdoor/Garage_array_02_outdoor_SHADOW_LOD0",
+                "SBG_Arena_Yard/SOO_LOD0/Mansion_01/Mansion_01_SHADOW_LOD0",
+                "SBG_Arena_Yard/SOO_LOD0/Mansion_04/Mansion_04_SHADOW_LOD0",
+                "SBG_Arena_Yard/SOO_LOD0/Primorskiy_43 (2) Group/Garage_array_04_outdoor/Garage_array_04_outdoor_SHADOW_LOD0",
+                "SBG_Arena_Yard/SOO_LOD0/Garage_array_03/Garage_array_03_SHADOW_LOD0",
+                "SBG_Arena_Yard/SOO_LOD0/Garage_array_05/Garage_array_05_SHADOW_LOD0",
+                "SBG_Arena_Yard/SOO_LOD0/Boiler_room_brick/Boiler_room_brick_SHADOW_LOD0"
+            },
             // Native advancing server time (user, 2026-11-20): no Directional light exists in the imported scenes, the WeatherRig supplies it.
             UsesServerTime: true,
             // PLAN-YARD item 8 (docs/progress/yard-release.md): one exit per team pocket (rule R3), mirrors tools/maps/yard.exits.json. South: the raised platform of the

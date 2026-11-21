@@ -15,6 +15,7 @@ public sealed class DistantShadowCasterTests
 {
     private const string AutoServicePackageScene = "work/extract/autoservice-native-v2/scenes/Arena_AutoService.json";
     private const string IcebergPackageScene = "work/extract/iceberg-native-v2/scenes/Arena_Sanatorium.json";
+    private const string YardPackageScenes = "work/extract/yard-native-v2/scenes";
 
     private static readonly string[] CafePaths =
     {
@@ -27,6 +28,26 @@ public sealed class DistantShadowCasterTests
     {
         "SBG_Arena_AutoService/SOO_LOD0/Autoservice_Main_Building/Arena_AutoService_OUTDOOR/AutoService_Building_OUTDOOR_SHADOW_LOD0",
         "SBG_Arena_AutoService/SOO_LOD0/Autoservice_Main_Building/Arena_AutoService_INDOOR/AutoService_Building_INDOOR_SHADOW_LOD0",
+    };
+
+    // Yard (PLAN-YARD item 21, offline half, 2026-11-21): 15 hulls chosen with the census on work/extract/yard-native-v2, not host-verified.
+    private static readonly string[] YardPaths =
+    {
+        "SBG_Arena_Yard/SOO_LOD0/Yard_Building_03/Benya_House_01_SHADOW_LOD0",
+        "SBG_Arena_Yard/SOO_LOD0/Mansion_05/Mansion_05_SHADOW_LOD0",
+        "SBG_Arena_Yard/SOO_LOD0/Primorskiy_43 (2) Group/Building_Panel_Devastated_01/Building_Panel_Devastated_01_SHADOW_LOD0",
+        "SBG_Arena_Yard/SOO_LOD0/Respawn_Outdoor/Respawn_Outdoor_SHADOW_LOD0",
+        "SBG_Arena_Yard/SOO_LOD0/Building_factory_brick_03/Building_factory_brick_03_SHADOW_LOD0",
+        "SBG_Arena_Yard/SOO_LOD0/Mansion_02/Mansion_02_SHADOW_LOD0",
+        "STENCILS/Yard_STENCIL",
+        "SBG_Arena_Yard/SOO_LOD0/Building_factory_brick_02/Building_factory_brick_02_SHADOW_LOD0",
+        "SBG_Arena_Yard/SOO_LOD0/Primorskiy_43 (2) Group/Garage_array_02_outdoor/Garage_array_02_outdoor_SHADOW_LOD0",
+        "SBG_Arena_Yard/SOO_LOD0/Mansion_01/Mansion_01_SHADOW_LOD0",
+        "SBG_Arena_Yard/SOO_LOD0/Mansion_04/Mansion_04_SHADOW_LOD0",
+        "SBG_Arena_Yard/SOO_LOD0/Primorskiy_43 (2) Group/Garage_array_04_outdoor/Garage_array_04_outdoor_SHADOW_LOD0",
+        "SBG_Arena_Yard/SOO_LOD0/Garage_array_03/Garage_array_03_SHADOW_LOD0",
+        "SBG_Arena_Yard/SOO_LOD0/Garage_array_05/Garage_array_05_SHADOW_LOD0",
+        "SBG_Arena_Yard/SOO_LOD0/Boiler_room_brick/Boiler_room_brick_SHADOW_LOD0",
     };
 
     private static string? FindUp(string relative)
@@ -54,12 +75,13 @@ public sealed class DistantShadowCasterTests
         File.ReadAllText(FindUp(relative) ?? throw new FileNotFoundException(relative));
 
     [Fact]
-    public void OnlyEquatorIcebergAndAutoServiceEnrolProxies()
+    public void OnlyEquatorIcebergAutoServiceAndYardEnrolProxies()
     {
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             if (map != ArenaMapRegistry.Equator) Assert.False(map.DistantShadowTwoSided);
-            if (map == ArenaMapRegistry.Equator || map == ArenaMapRegistry.AutoService || map == ArenaMapRegistry.Iceberg) continue;
+            if (map == ArenaMapRegistry.Equator || map == ArenaMapRegistry.AutoService || map == ArenaMapRegistry.Iceberg
+                || map == ArenaMapRegistry.Yard) continue;
             Assert.Empty(map.DistantShadowCasterPaths);
         }
     }
@@ -119,21 +141,83 @@ public sealed class DistantShadowCasterTests
         Assert.Equal(ArenaMapRegistry.Iceberg.DistantShadowCasterPaths, paths);
     }
 
+    [Fact]
+    public void YardListsTheFifteenBuildingHullsWithArenasOwnMaterial()
+    {
+        var map = ArenaMapRegistry.Yard;
+        Assert.Equal(YardPaths, map.DistantShadowCasterPaths);
+        Assert.Equal(15, map.DistantShadowCasterPaths.Length);
+        Assert.Equal(map.DistantShadowCasterPaths.Length, map.DistantShadowCasterPaths.Distinct().Count());
+        // Census model on the package (2026-11-21): the proxies are closed outward shells, so Arena's one-sided material is enough and the
+        // distant map draws what the cascades draw. A change needs tools/validate/distant_shadow_census.py and a host A/B.
+        Assert.False(map.DistantShadowTwoSided);
+        Assert.Contains(ArenaMapRegistry.Yard, ArenaMapRegistry.All);
+        Assert.All(map.DistantShadowCasterPaths, p => Assert.True(p.EndsWith("_SHADOW_LOD0", StringComparison.Ordinal) || p == "STENCILS/Yard_STENCIL", p));
+    }
+
+    [Fact]
+    public void YardNeverEnrolsAMovingPartTheFloorPlaneOrAPropUnderThreeMetres()
+    {
+        var map = ArenaMapRegistry.Yard;
+        // DistantShadow freezes a draw transform at list build: nothing SpawnGates moves (the DOORS barriers) may be listed.
+        foreach (var path in map.DistantShadowCasterPaths)
+        {
+            Assert.DoesNotContain(map.OpenedBarriers, b => path == b || path.StartsWith(b + "/", StringComparison.Ordinal));
+            Assert.DoesNotContain("Cradle", path);
+            Assert.DoesNotContain("YARD_Floor", path);   // the 307 x 278 m courtyard plane stays out (acne risk, nothing to shade)
+            Assert.DoesNotContain("Imposter", path);     // simplified copies of a listed hull
+            Assert.DoesNotContain("inposter", path);
+            Assert.DoesNotContain("Cloth", path);        // no native pass-0 precedent for the cloth shader
+            Assert.False(path.StartsWith("VARIANT/", StringComparison.Ordinal), path); // props under 3 m
+        }
+    }
+
+    [Fact]
+    public void YardSidecarMirrorsTheDescriptor()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(FindUp("tools/maps/yard.json")!));
+        var paths = doc.RootElement.GetProperty("distant_shadow_caster_paths").EnumerateArray().Select(e => e.GetString()).ToArray();
+        Assert.Equal(ArenaMapRegistry.Yard.DistantShadowCasterPaths, paths);
+    }
+
     private sealed record Node(string Id, string? Parent, string Name, bool Active, JsonElement Components);
 
     [RealAutoServicePackageFact]
     public void EachHallPathExistsOnceAsAnActiveShadowsOnlyRendererNoLodGroupReferences() =>
         AssertEnrollable(AutoServicePackageScene, ArenaMapRegistry.AutoService.DistantShadowCasterPaths);
 
+    [RealYardPackageFact]
+    public void EachYardPathExistsOnceInOneSceneAsAnActiveShadowsOnlyRendererNoLodGroupReferences()
+    {
+        // The client resolves a path in every owned scene, so it must exist in exactly one of the scenes of the package.
+        var dir = Path.GetDirectoryName(FindWork(YardPackageScenes + "/Arena_Yard.json")!)!;
+        var scenes = Directory.GetFiles(dir, "*.json").Select(f => (Name: Path.GetFileNameWithoutExtension(f), File: f)).ToList();
+        Assert.Contains(scenes, s => s.Name == "Arena_Yard_Light");
+        foreach (var path in ArenaMapRegistry.Yard.DistantShadowCasterPaths)
+        {
+            var found = scenes.Where(s => AssertEnrollable(s.File, new[] { path }, mustExist: false)).Select(s => s.Name).ToList();
+            Assert.True(found.Count == 1, path + " resolves in " + found.Count + " scenes: " + string.Join(", ", found));
+        }
+        // Yard_STENCIL is the one row outside Arena_Yard; the Light scene is among the descriptor's owned scenes.
+        Assert.Contains("Arena_Yard_Light", ArenaMapRegistry.Yard.AllSceneNames);
+    }
+
     [RealIcebergPackageFact]
     public void EachCafePathExistsOnceAsAnActiveShadowsOnlyRendererNoLodGroupReferences() =>
         AssertEnrollable(IcebergPackageScene, ArenaMapRegistry.Iceberg.DistantShadowCasterPaths);
 
     // What RoofShadowRepairs.Apply demands of a path: one object of that hierarchy path, active up the chain, an enabled ShadowsOnly
-    // MeshRenderer with a MeshFilter, no LODGroup on it or above it, and no LODGroup of the scene referencing it.
-    private static void AssertEnrollable(string packageScene, string[] paths)
+    // MeshRenderer with a MeshFilter, no LODGroup on it or above it, and no LODGroup of the scene referencing it. Its Find takes the FIRST
+    // root of the first name and then Transform.Find, so every step of the path must be the only sibling of its name (order-independent:
+    // a repeated name is refused here even where the first sibling would happen to be the right one).
+    private static void AssertEnrollable(string packageScene, string[] paths) =>
+        AssertEnrollable(FindWork(packageScene)!, paths, mustExist: true);
+
+    // Returns true when every path was found in this scene (mustExist false: a path that is absent here is not a failure, a path that is
+    // present must still satisfy every rule). Several hits of one path in a scene always fail.
+    private static bool AssertEnrollable(string sceneFile, string[] paths, bool mustExist)
     {
-        using var doc = JsonDocument.Parse(File.ReadAllText(FindWork(packageScene)!));
+        using var doc = JsonDocument.Parse(File.ReadAllText(sceneFile));
         var nodes = doc.RootElement.GetProperty("objects").EnumerateArray().Select(o => new Node(
             o.GetProperty("id").GetString()!,
             o.TryGetProperty("parent_id", out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null,
@@ -160,15 +244,19 @@ public sealed class DistantShadowCasterTests
         }
 
         Assert.NotEmpty(paths);
+        bool all = true;
         foreach (var path in paths)
         {
             var hits = nodes.Where(n => PathOf(n) == path).ToList();
+            if (hits.Count == 0 && !mustExist) { all = false; continue; }
             Assert.Single(hits);
             var node = hits[0];
             for (Node? cur = node; cur != null; cur = Up(cur))
             {
                 Assert.True(cur.Active, path + " is inactive at " + cur.Name);
                 Assert.DoesNotContain(cur.Id, lodGroupOwners); // GetComponentInParent<LODGroup> would skip the path
+                int sameName = nodes.Count(n => n.Parent == cur.Parent && n.Name == cur.Name);
+                Assert.True(sameName == 1, path + ": " + sameName + " siblings are named '" + cur.Name + "'");
             }
             Assert.DoesNotContain(node.Id, referenced);
             var renderer = node.Components.EnumerateArray().Single(c => c.GetProperty("type").GetString() == "MeshRenderer");
@@ -176,6 +264,7 @@ public sealed class DistantShadowCasterTests
             Assert.True(renderer.GetProperty("enabled").GetBoolean());
             Assert.Contains(node.Components.EnumerateArray(), c => c.GetProperty("type").GetString() == "MeshFilter");
         }
+        return all;
     }
 
     [Fact]
@@ -191,6 +280,10 @@ public sealed class DistantShadowCasterTests
         Assert.Equal(1, Count(text, ".Bind("));
         Assert.Contains("\"Lighting (\" + map.Key + \")\"", text);
         Assert.Contains("\"RoofDistantShadows\", true", text);
+        // Yard's text is its own (an outdoor map; the hall wording would be wrong), the other maps' texts are untouched
+        Assert.Contains("map == ArenaMapRegistry.Yard", text);
+        Assert.Contains("so the buildings keep casting sun shadows beyond the cascade distance.", text);
+        Assert.Contains("not light the interior through the roof beyond the cascade distance. Keeps Arena's own shadow material. ", text);
         // Equator's config text is unchanged since the first release of the key
         Assert.Contains("Make Equator's original solid ceiling shadows two-sided and include them in the native sun-shadow cache. ", text);
         Assert.Contains("Retains the original atrium openings. Live toggle; the native cache takes a few seconds to refresh.", text);
@@ -251,5 +344,19 @@ internal sealed class RealIcebergPackageFactAttribute : FactAttribute
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
             if (File.Exists(Path.Combine(dir.FullName, relative))) return;
         Skip = relative + " is absent (BSG-derived, ignored by git; run the Iceberg extraction)";
+    }
+}
+
+/// <summary>Runs only when the ignored extracted Yard package is present (checkout work folder or ARENAMAPPORT_WORK_DIR).</summary>
+internal sealed class RealYardPackageFactAttribute : FactAttribute
+{
+    public RealYardPackageFactAttribute()
+    {
+        const string relative = "work/extract/yard-native-v2/scenes/Arena_Yard.json";
+        string? env = Environment.GetEnvironmentVariable("ARENAMAPPORT_WORK_DIR");
+        if (!string.IsNullOrWhiteSpace(env) && File.Exists(Path.Combine(env, relative.Substring(5)))) return;
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+            if (File.Exists(Path.Combine(dir.FullName, relative))) return;
+        Skip = relative + " is absent (BSG-derived, ignored by git; run the Yard extraction)";
     }
 }

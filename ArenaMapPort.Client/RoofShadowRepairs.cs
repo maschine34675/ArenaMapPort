@@ -35,7 +35,8 @@ namespace ArenaMapPort.Client
     /// restores captured material slots and removes only owned groups; collision is untouched.
     /// Host-verified for Equator (GPU-2, 2026-09-28, docs/progress/lighting-followup.md) and, with the
     /// live key as control, for Chop Shop and Iceberg (same document, 2026-11-12; Iceberg at shadow
-    /// quality Low, where the cascades end before the cafe). Which proxies a map needs:
+    /// quality Low, where the cascades end before the cafe). Yard (2026-11-21) lists 15 building and stencil hulls chosen offline with the census; its host A/B is pending.
+    /// Which proxies a map needs:
     /// tools/validate/distant_shadow_census.py.
     /// </summary>
     internal static class RoofShadowRepairs
@@ -64,7 +65,12 @@ namespace ArenaMapPort.Client
             {
                 if (map.DistantShadowCasterPaths.Length == 0) continue;
                 // Equator's text is unchanged since 2026-09-28 (a config comment; the key's meaning is the same).
-                string description = map.DistantShadowTwoSided
+                // Yard (2026-11-21): an outdoor map whose rows are houses, garages and the courtyard stencil, so the hall wording below would be wrong for it.
+                string description = map == ArenaMapRegistry.Yard
+                    ? "Include this map's original building shadow proxies (houses, garages, the courtyard stencil) in the native sun-shadow cache, " +
+                      "so the buildings keep casting sun shadows beyond the cascade distance. Keeps Arena's own shadow material. " +
+                      "Live toggle; the native cache takes a few seconds to refresh."
+                    : map.DistantShadowTwoSided
                     ? "Make Equator's original solid ceiling shadows two-sided and include them in the native sun-shadow cache. " +
                       "Retains the original atrium openings. Live toggle; the native cache takes a few seconds to refresh."
                     : "Include this map's original building shadow proxies in the native sun-shadow cache, so the sun does " +
