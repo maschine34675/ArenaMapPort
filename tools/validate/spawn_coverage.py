@@ -1297,6 +1297,10 @@ DONOR_ROWS = {
     "autoservice": {"arena_autoservice-bot-core-03": ([-367.44, -3.79, 492.11], 25)},
 }
 DONOR_IDS = {k: list(v) for k, v in DONOR_ROWS.items()}
+# Maps registered here that ArenaMode has NOT compiled a donor row for yet: DONOR_ROWS keeps meaning "rows ArenaMode pins" (it refuses a changed row),
+# so a map without that hand-off is listed here instead and its check tests no donor row. Yard (plan item 28 is the user's hand-off): when ArenaMode
+# adopts a row, move the stem to DONOR_ROWS with the exact sidecar floats; from then on the row is append-only.
+PENDING_DONOR_MAPS = ("yard",)
 FORBIDDEN_ID_PART = "-tdm-v1-"        # ArenaMode's own row ids ("arena-<map>-tdm-v1-..."): no row of this repository may carry one
 EXPECTED_BOX = [4.0, 3.0, 4.0]
 
@@ -1597,7 +1601,7 @@ def format_text(rep: dict) -> str:
 
 def build_parser():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--stem", required=True, help="map stem: equator, bay5, airpit, bowl, iceberg, autoservice (tools/maps/<stem>*.json)")
+    ap.add_argument("--stem", required=True, help="map stem: equator, bay5, airpit, bowl, iceberg, autoservice, yard (tools/maps/<stem>*.json)")
     ap.add_argument("--maps-dir", default=str(REPO / "tools" / "maps"), help="folder of the sidecars")
     ap.add_argument("--navmesh", help="built NavMesh bundle (default work/build/<stem>/arena_<stem>_navmesh.bundle; equator: work/build/full)")
     ap.add_argument("--package", help="extracted package folder (colliders: gate footprints, standing room, exit solid check)")

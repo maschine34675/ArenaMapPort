@@ -1,4 +1,4 @@
-"""The spawn layout rules (R1 rows, R3 exits) of the six registered maps, checked on real data with tools/validate/spawn_coverage.py --check.
+"""The spawn layout rules (R1 rows, R3 exits) of the seven registered maps, checked on real data with tools/validate/spawn_coverage.py --check.
 
 What it pins are RULES, not coordinates (a later host-driven nudge of an exit touches only the sidecar and the descriptor):
   R1  every Bot and Player row lies on the play component of the BUILT NavMesh; ids are unique; ArenaMode's pinned donor row of the map is
@@ -44,6 +44,10 @@ LAYOUTS = {
     "bowl": ("bowl", "bowl-native-v2", "arena_bowl-bot-born-16", (), ()),
     "iceberg": ("iceberg", "iceberg-native-v2", "arena_iceberg-bot-stage-bear-46", (), ()),
     "autoservice": ("autoservice", "autoservice-native-v2", "arena_autoservice-bot-lasthero-04", (), ()),
+    # Yard (unpublished, no appended rows): the "first new" id is its first Bot row, so ALL 18 Bot rows must keep the clearance (the strict reading;
+    # measured on the built mesh); its two south Player rows (1.29 and 1.32 m, Arena's own markers) need membership only, as everywhere.
+    # At publication, or when rows are appended, move the first-new id to the first appended row, as the released maps do.
+    "yard": ("yard", "yard-native-v2", "arena_yard-bot-core-01", (), ()),
 }
 
 
@@ -93,8 +97,19 @@ class SpawnLayoutRuleTests(unittest.TestCase):
     def test_autoservice(self):
         self.check("autoservice")
 
+    def test_yard(self):
+        rep = self.check("yard")
+        self.assertEqual(rep["rows_checked_for_clearance"], 18)
+        self.assertEqual(len(rep["exits"]), 2)
+
     def test_the_table_names_every_registered_map(self):
-        self.assertEqual(sorted(LAYOUTS), sorted(sc.DONOR_IDS))
+        # a map has either a donor row that ArenaMode pinned, or is listed as pending (no hand-off yet), never both
+        self.assertFalse(set(sc.DONOR_IDS) & set(sc.PENDING_DONOR_MAPS))
+        self.assertEqual(sorted(LAYOUTS), sorted(set(sc.DONOR_IDS) | set(sc.PENDING_DONOR_MAPS)))
+
+    def test_a_pending_map_tests_no_donor_row(self):
+        for stem in sc.PENDING_DONOR_MAPS:
+            self.assertNotIn(stem, sc.DONOR_ROWS)
 
 
 if __name__ == "__main__":
