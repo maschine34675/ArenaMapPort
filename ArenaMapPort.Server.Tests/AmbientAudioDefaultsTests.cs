@@ -15,7 +15,7 @@ public class AmbientAudioDefaultsTests
     [InlineData("arena_bowl", 3f, .4f, 3f)] // provisional like AirPit's first mix (PLAN-BOWL item 9, 2026-10-18)
     [InlineData("arena_iceberg", 3f, 0f, 2f)] // provisional (PLAN-ICEBERG item 12): NOT Bowl's offset .4 / range 3, which would lift the 20 lamp loops (0.25, 3 m) to about 0.75 and 9 m
     [InlineData("arena_autoservice", 3f, .2f, 3f)] // start value (PLAN-AUTOSERVICE item 4): Bowl's offset .4 would lift the nine 0.07 water_drops to about 0.50
-    [InlineData("arena_yard", 3f, .1f, 2f)] // start value (PLAN-YARD item 13)
+    [InlineData("arena_yard", 5f, .1f, 3f)] // the author's values by ear (PLAN-YARD item 24, 2026-11-21); the start value was 3 / 0.1 / 2
     public void AcceptedMixIsTheDefault(string map, float gain, float offset, float range)
     {
         AmbientAudioDefaults.Values(map, out float defaultGain, out float defaultOffset, out float defaultRange);
@@ -36,7 +36,7 @@ public class AmbientAudioDefaultsTests
         var range = config.Bind(section, "AmbientRangeMultiplier", 1f, "");
         AmbientAudioDefaults.Migrate(config, map, gain, offset, range);
         Assert.Equal((expectedGain, expectedOffset, expectedRange), (gain.Value, offset.Value, range.Value));
-        Assert.Equal(3, config.Get<int>(section, "AmbientDefaultsRevision").Value);
+        Assert.Equal(4, config.Get<int>(section, "AmbientDefaultsRevision").Value);
         gain.Value = 0; offset.Value = 0; range.Value = 1;
         AmbientAudioDefaults.Migrate(config, map, gain, offset, range);
         Assert.Equal((0f, 0f, 1f), (gain.Value, offset.Value, range.Value));
@@ -59,7 +59,7 @@ public class AmbientAudioDefaultsTests
         var range = config.Bind(section, "AmbientRangeMultiplier", oldRange, "");
         AmbientAudioDefaults.Migrate(config, map, gain, offset, range);
         Assert.Equal((newGain, oldOffset, oldRange), (gain.Value, offset.Value, range.Value));
-        Assert.Equal(3, config.Get<int>(section, "AmbientDefaultsRevision").Value);
+        Assert.Equal(4, config.Get<int>(section, "AmbientDefaultsRevision").Value);
         gain.Value = oldGain;
         AmbientAudioDefaults.Migrate(config, map, gain, offset, range);
         Assert.Equal(oldGain, gain.Value);
@@ -80,7 +80,7 @@ public class AmbientAudioDefaultsTests
     [InlineData("arena_autoservice", 3f, .2f, 3f)] // Autoservice's previous default equals its default: nothing may move
     [InlineData("arena_autoservice", 0f, 0f, 1f)]
     [InlineData("arena_autoservice", -6f, .1f, 2f)]
-    [InlineData("arena_yard", 3f, .1f, 2f)] // Yard's previous default equals its default: nothing may move
+    [InlineData("arena_yard", 5f, .1f, 3f)] // Yard's new default stays
     [InlineData("arena_yard", 0f, 0f, 1f)]
     [InlineData("arena_yard", -6f, .1f, 2f)]
     [InlineData("arena_equator", 2f, .4f, 2.5f)]
@@ -96,7 +96,7 @@ public class AmbientAudioDefaultsTests
         var range = config.Bind(section, "AmbientRangeMultiplier", savedRange, "");
         AmbientAudioDefaults.Migrate(config, map, gain, offset, range);
         Assert.Equal((savedGain, savedOffset, savedRange), (gain.Value, offset.Value, range.Value));
-        Assert.Equal(3, config.Get<int>(section, "AmbientDefaultsRevision").Value);
+        Assert.Equal(4, config.Get<int>(section, "AmbientDefaultsRevision").Value);
     }
 
     [Theory]
@@ -121,12 +121,100 @@ public class AmbientAudioDefaultsTests
         var range = config.Bind(section, "AmbientRangeMultiplier", savedRange, "");
         AmbientAudioDefaults.Migrate(config, map, gain, offset, range);
         Assert.Equal((savedGain, savedOffset, savedRange), (gain.Value, offset.Value, range.Value));
-        Assert.Equal(3, config.Get<int>(section, "AmbientDefaultsRevision").Value);
+        Assert.Equal(4, config.Get<int>(section, "AmbientDefaultsRevision").Value);
         // A value equal to Bay5's unrounded legacy offset is not rewritten either.
         offset.Value = .399061f;
         config.Get<int>(section, "AmbientDefaultsRevision").Value = 0;
         AmbientAudioDefaults.Migrate(config, map, gain, offset, range);
         Assert.Equal(.399061f, offset.Value);
+    }
+
+    static readonly string[] AllMaps = { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_autoservice", "arena_yard" };
+
+    static (ConfigFile config, ConfigEntry<float> gain, ConfigEntry<float> offset, ConfigEntry<float> range, string section) Saved(string map, int revision, float g, float o, float r)
+    {
+        var config = new ConfigFile();
+        string section = "Audio (" + map + ")";
+        if (revision >= 0) config.Bind(section, "AmbientDefaultsRevision", revision, "");
+        return (config, config.Bind(section, "AmbientGainDb", g, ""), config.Bind(section, "AmbientVolumeOffset", o, ""), config.Bind(section, "AmbientRangeMultiplier", r, ""), section);
+    }
+
+    // Revision 4 (2026-11-21): Yard's saved start mix (3 / 0.1 / 2, stamped 3 since its first bind, or any earlier stamp) moves once, as a whole.
+    [Theory]
+    [InlineData(3)]
+    [InlineData(2)]
+    [InlineData(1)]
+    [InlineData(0)]
+    public void YardStartMixMovesOnceToTheAuthorsMix(int revision)
+    {
+        var (config, gain, offset, range, section) = Saved("arena_yard", revision, 3f, .1f, 2f);
+        AmbientAudioDefaults.Migrate(config, "arena_yard", gain, offset, range);
+        Assert.Equal((5f, .1f, 3f), (gain.Value, offset.Value, range.Value));
+        Assert.Equal(4, config.Get<int>(section, "AmbientDefaultsRevision").Value);
+        // a second start changes nothing, also after a later tuning that happens to return to the start mix
+        gain.Value = 3f; offset.Value = .1f; range.Value = 2f;
+        AmbientAudioDefaults.Migrate(config, "arena_yard", gain, offset, range);
+        Assert.Equal((3f, .1f, 2f), (gain.Value, offset.Value, range.Value));
+        Assert.Equal(4, config.Get<int>(section, "AmbientDefaultsRevision").Value);
+    }
+
+    [Theory]
+    [InlineData(3, 5f, .1f, 3f)] // already the new mix
+    [InlineData(3, 0f, 0f, 1f)] // deliberately neutral
+    [InlineData(0, 0f, 0f, 1f)]
+    [InlineData(3, -6f, .1f, 2f)] // tuned
+    [InlineData(3, 3f, .1f, 2.5f)] // one component differs: custom mix, kept as a whole
+    [InlineData(3, 3f, .2f, 2f)]
+    [InlineData(3, 4f, .1f, 2f)]
+    [InlineData(2, 6f, .3f, 4f)]
+    public void AnyOtherSavedYardMixStays(int revision, float g, float o, float r)
+    {
+        var (config, gain, offset, range, section) = Saved("arena_yard", revision, g, o, r);
+        AmbientAudioDefaults.Migrate(config, "arena_yard", gain, offset, range);
+        Assert.Equal((g, o, r), (gain.Value, offset.Value, range.Value));
+        Assert.Equal(4, config.Get<int>(section, "AmbientDefaultsRevision").Value);
+    }
+
+    // The hazard: a saved mix equal to a map's PreviousValues at revision 3 was chosen after the 2026-10-14 migration; the Yard-only step must not move it.
+    [Theory]
+    [InlineData("arena_equator", 5f, .4f, 2.5f)]
+    [InlineData("arena_bay5", 4f, .4f, 4f)]
+    [InlineData("arena_airpit", 4f, .4f, 3f)]
+    [InlineData("arena_bowl", 3f, .4f, 3f)]
+    [InlineData("arena_iceberg", 3f, 0f, 2f)]
+    [InlineData("arena_autoservice", 3f, .2f, 3f)]
+    [InlineData("arena_equator", 3f, .1f, 2f)] // Yard's start mix on another map is just a custom mix
+    [InlineData("arena_bay5", 3f, .1f, 2f)]
+    [InlineData("arena_airpit", 3f, .1f, 2f)]
+    [InlineData("arena_bowl", 3f, .1f, 2f)]
+    [InlineData("arena_iceberg", 3f, .1f, 2f)]
+    [InlineData("arena_autoservice", 3f, .1f, 2f)]
+    [InlineData("arena_equator", 5f, .1f, 3f)]
+    [InlineData("arena_bay5", 0f, 0f, 1f)]
+    public void NoOtherMapIsMovedByRevisionFour(string map, float g, float o, float r)
+    {
+        var (config, gain, offset, range, section) = Saved(map, 3, g, o, r);
+        AmbientAudioDefaults.Migrate(config, map, gain, offset, range);
+        Assert.Equal((g, o, r), (gain.Value, offset.Value, range.Value));
+        Assert.Equal(4, config.Get<int>(section, "AmbientDefaultsRevision").Value);
+        AmbientAudioDefaults.Migrate(config, map, gain, offset, range);
+        Assert.Equal((g, o, r), (gain.Value, offset.Value, range.Value));
+    }
+
+    // A fresh install binds the defaults and a first Migrate only stamps the revision.
+    [Fact]
+    public void FreshInstallGetsTheDefaultsAndTheStampOnEveryMap()
+    {
+        foreach (var map in AllMaps)
+        {
+            AmbientAudioDefaults.Values(map, out float g, out float o, out float r);
+            var (config, gain, offset, range, section) = Saved(map, -1, g, o, r);
+            AmbientAudioDefaults.Migrate(config, map, gain, offset, range);
+            Assert.Equal((g, o, r), (gain.Value, offset.Value, range.Value));
+            Assert.Equal(4, config.Get<int>(section, "AmbientDefaultsRevision").Value);
+        }
+        AmbientAudioDefaults.Values("arena_yard", out float yg, out float yo, out float yr);
+        Assert.Equal((5f, .1f, 3f), (yg, yo, yr));
     }
 
     [Fact]
@@ -161,7 +249,7 @@ public class AmbientAudioDefaultsTests
         var range = config.Bind(section, "AmbientRangeMultiplier", savedRange, "");
         AmbientAudioDefaults.Migrate(config, "arena_equator", gain, offset, range);
         Assert.Equal((savedGain, savedOffset, savedRange), (gain.Value, offset.Value, range.Value));
-        Assert.Equal(3, config.Get<int>(section, "AmbientDefaultsRevision").Value);
+        Assert.Equal(4, config.Get<int>(section, "AmbientDefaultsRevision").Value);
     }
 
     [Theory]

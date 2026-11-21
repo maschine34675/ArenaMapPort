@@ -158,17 +158,18 @@ public sealed class YardAmbientAudioTests
     }
 
     [Fact]
-    public void TheStartMixKeepsTheHumsBelowBowlsLiftAndTheirReachShort()
+    public void TheAuthorsMixKeepsTheHumsBelowBowlsLiftAndBelowTheMedian()
     {
-        // volume * gain + offset: Bowl's offset 0.4 would put the authored 0.05 and 0.03 hums at about 0.47 and 0.44; the start row keeps them near 0.17 and 0.14.
+        // 2026-11-21 (PLAN-YARD item 24): the author's values by ear (gain 5, offset 0.1, range 3) replace the computed start mix 3 / 0.1 / 2.
+        // volume * gain + offset: Bowl's offset 0.4 would put the authored 0.05 and 0.03 hums at about 0.49 and 0.45; this row keeps them near 0.19 and 0.15.
         AmbientAudioDefaults.Values(Key, out float gainDb, out float offset, out float range);
-        Assert.Equal((3f, .1f, 2f), (gainDb, offset, range));
+        Assert.Equal((5f, .1f, 3f), (gainDb, offset, range));
         double gain = Math.Pow(10, gainDb / 20.0);
-        Assert.InRange(.05 * gain + offset, .16, .18);
-        Assert.InRange(.03 * gain + offset, .13, .15);
-        Assert.InRange(.05 * gain + .4, .46, .48);
-        // The exterior median (0.10) lands near 0.24, so the hums stay below it; their reach is 7 and 10 m times the range multiplier.
-        Assert.InRange(.10 * gain + offset, .23, .25);
-        Assert.Equal((14d, 20d), (7 * range, 10 * range));
+        Assert.InRange(.05 * gain + offset, .18, .20);
+        Assert.InRange(.03 * gain + offset, .14, .16);
+        Assert.InRange(.05 * gain + .4, .48, .50);
+        // The exterior median (0.10) lands near 0.28, so the hums stay below it; their reach is 7 and 10 m times the range multiplier.
+        Assert.InRange(.10 * gain + offset, .27, .29);
+        Assert.Equal((21d, 30d), (7 * range, 10 * range));
     }
 }

@@ -31,7 +31,15 @@ namespace ArenaMapPort.Client
     /// the whole exterior mix; offset 0 (Iceberg's row) keeps the authored balance but leaves the 0.10 majority at 0.14. Offset 0.1 gives the majority about 0.24, the
     /// 0.25 players 0.45, the five interior players 0.24 to 0.52 and the hums 0.17 and 0.14, which keeps the hums below the median (0.71 and 0.59 of it against the authored 0.5
     /// and 0.3). Range 2 (Iceberg's, not Bowl's 3) carries the hums to 14 and 20 m instead of 21 and 30 m: a refrigerator and a power hum should not reach across the yard,
-    /// while the exterior sources (7 to 300 m) already outlast the 80 x 150 m map at range 2. Its keys are new, so no migration step touches them.</summary>
+    /// while the exterior sources (7 to 300 m) already outlast the 80 x 150 m map at range 2. Its keys were new, so revisions 1 to 3 never touch them.
+    /// 2026-11-21 (PLAN-YARD item 24, the author's pass on the built map): the author looked and listened on his own PC and wrote "sieht gut aus, auch nachts, ist dann halt wie die anderen
+    /// maps im außenbereich recht dunkel. hört sich gut an, ambient sounds können etwas lauter sein (gain auf 5, range auf 3)". Yard's default is therefore gain 5 dB, offset 0.1
+    /// (unchanged, the author named none) and range 3: the author's values by ear, replacing the computed start mix. By the formula above (gain 5 dB = x1.778, 3 dB = x1.413) the 0.10 majority
+    /// goes from 0.24 to 0.28, the 0.25 players from 0.45 to 0.54, the fridge (0.05) from 0.17 to 0.19 and the electricity hum (0.03) from 0.14 to 0.15, so the hums stay below the median
+    /// (0.68 and 0.55 of it); the reach goes from 2x to 3x the authored maxDistance: the fridge from 14 to 21 m and the electricity hum from 20 to 30 m (the author asked for range 3; the hums reaching 21 and 30 m is the computed
+    /// consequence, not a separately heard item). Revision 4 of <see cref="Migrate"/> moves a saved Yard mix that still equals the start mix (3 / 0.1 / 2, saved at any revision 0 to 3) to the new default once and as a whole;
+    /// every other saved Yard mix and every other map stay as they are (a saved Equator, Bay5 or Air Pit mix equal to its <c>PreviousValues</c> at revision 3 is a mix the user chose after
+    /// the 2026-10-14 migration, so revision 4 never reuses the generic rule). Not host-checked yet.</summary>
     internal static class AmbientAudioDefaults
     {
         internal static void Values(string mapKey, out float gainDb, out float offset, out float range)
@@ -44,7 +52,7 @@ namespace ArenaMapPort.Client
                 case "arena_bowl": gainDb = 3f; offset = .4f; range = 3f; return; // provisional, PLAN-BOWL item 9
                 case "arena_iceberg": gainDb = 3f; offset = 0f; range = 2f; return; // provisional, PLAN-ICEBERG item 12 (see the class comment)
                 case "arena_autoservice": gainDb = 3f; offset = .2f; range = 3f; return; // start value, PLAN-AUTOSERVICE item 4 (see the class comment)
-                case "arena_yard": gainDb = 3f; offset = .1f; range = 2f; return; // start value, PLAN-YARD item 6 (see the class comment)
+                case "arena_yard": gainDb = 5f; offset = .1f; range = 3f; return; // the author's values by ear, 2026-11-21 (PLAN-YARD item 24, see the class comment); the start value was 3 / 0.1 / 2
                 default: throw new ArgumentException("No accepted ambience mix for " + mapKey, nameof(mapKey));
             }
         }
@@ -62,7 +70,7 @@ namespace ArenaMapPort.Client
                 case "arena_bowl": gainDb = 3f; offset = .4f; range = 3f; return;
                 case "arena_iceberg": gainDb = 3f; offset = 0f; range = 2f; return; // likewise: no earlier default
                 case "arena_autoservice": gainDb = 3f; offset = .2f; range = 3f; return; // likewise: no earlier default
-                case "arena_yard": gainDb = 3f; offset = .1f; range = 2f; return; // likewise: no earlier default
+                case "arena_yard": gainDb = 3f; offset = .1f; range = 2f; return; // revision 3 only: Yard's start mix is the first default; the revision-4 step names it too (YardStartGainDb/Offset/Range)
                 default: throw new ArgumentException("No ambience mix history for " + mapKey, nameof(mapKey));
             }
         }
@@ -90,33 +98,47 @@ namespace ArenaMapPort.Client
         {
             bool legacy = HasLegacyMix(mapKey);
             var revision = config.Bind("Audio (" + mapKey + ")", "AmbientDefaultsRevision", 0,
-                new ConfigDescription("Internal migration of the original ambience mix, rounded release offsets and the 2026-10-14 accepted gains. Custom mixes are preserved.",
+                new ConfigDescription("Internal migration of the original ambience mix, rounded release offsets, the 2026-10-14 accepted gains and (revision 4) Yard's 2026-11-21 mix. Custom mixes are preserved.",
                     null, BrowsableAttribute.No));
-            if (revision.Value >= 3) return;
-            if (revision.Value < 2 && legacy)
+            if (revision.Value >= 4) return;
+            if (revision.Value < 3)
             {
-                // Treat the three controls as one mix. A deliberately neutral component in a
-                // custom mix must not be independently raised by the migration.
-                if (revision.Value < 1 && gain.Value == 0f && offset.Value == 0f && range.Value == 1f)
+                if (revision.Value < 2 && legacy)
                 {
-                    // The pre-2026-10-14 accepted mix: revision 3 below then carries it on to today's default.
-                    PreviousValues(mapKey, out float newGain, out float newOffset, out float newRange);
-                    gain.Value = newGain; offset.Value = newOffset; range.Value = newRange;
+                    // Treat the three controls as one mix. A deliberately neutral component in a
+                    // custom mix must not be independently raised by the migration.
+                    if (revision.Value < 1 && gain.Value == 0f && offset.Value == 0f && range.Value == 1f)
+                    {
+                        // The pre-2026-10-14 accepted mix: revision 3 below then carries it on to today's default.
+                        PreviousValues(mapKey, out float newGain, out float newOffset, out float newRange);
+                        gain.Value = newGain; offset.Value = newOffset; range.Value = newRange;
+                    }
+                    // Round only the previously accepted offset; preserve independently customized
+                    // gains, ranges and every other offset (including a deliberate zero).
+                    float oldOffset = mapKey == "arena_equator" ? .4037559f : .399061f;
+                    if (offset.Value == oldOffset) offset.Value = .4f;
                 }
-                // Round only the previously accepted offset; preserve independently customized
-                // gains, ranges and every other offset (including a deliberate zero).
-                float oldOffset = mapKey == "arena_equator" ? .4037559f : .399061f;
-                if (offset.Value == oldOffset) offset.Value = .4f;
+                // Revision 3 (2026-10-14): a mix still at the previous default (the user never touched it) follows the
+                // accepted gains; anything else is a custom mix and stays as a whole.
+                PreviousValues(mapKey, out float prevGain, out float prevOffset, out float prevRange);
+                if (gain.Value == prevGain && offset.Value == prevOffset && range.Value == prevRange)
+                {
+                    Values(mapKey, out float acceptedGain, out float acceptedOffset, out float acceptedRange);
+                    gain.Value = acceptedGain; offset.Value = acceptedOffset; range.Value = acceptedRange;
+                }
             }
-            // Revision 3 (2026-10-14): a mix still at the previous default (the user never touched it) follows the
-            // accepted gains; anything else is a custom mix and stays as a whole.
-            PreviousValues(mapKey, out float prevGain, out float prevOffset, out float prevRange);
-            if (gain.Value == prevGain && offset.Value == prevOffset && range.Value == prevRange)
+            // Revision 4 (2026-11-21, Yard only): the author's 5 / 0.1 / 3 replaces Yard's computed start mix 3 / 0.1 / 2, but only
+            // where that start mix is still saved untouched, whatever the saved revision (Migrate stamped 3 on Yard at its first bind).
+            // Every other map only advances its stamp: its PreviousValues at revision 3 is a mix chosen after 2026-10-14.
+            if (mapKey == "arena_yard" && gain.Value == YardStartGainDb && offset.Value == YardStartOffset && range.Value == YardStartRange)
             {
-                Values(mapKey, out float acceptedGain, out float acceptedOffset, out float acceptedRange);
-                gain.Value = acceptedGain; offset.Value = acceptedOffset; range.Value = acceptedRange;
+                Values(mapKey, out float yardGain, out float yardOffset, out float yardRange);
+                gain.Value = yardGain; offset.Value = yardOffset; range.Value = yardRange;
             }
-            revision.Value = 3;
+            revision.Value = 4;
         }
+
+        // Yard's computed start mix of 2026-11-21 (PLAN-YARD item 6), named explicitly for the revision-4 step.
+        const float YardStartGainDb = 3f, YardStartOffset = .1f, YardStartRange = 2f;
     }
 }
