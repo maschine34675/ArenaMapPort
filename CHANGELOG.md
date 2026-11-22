@@ -23,23 +23,26 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
   and no scav raids. **Block has no per-light flares, no native water, no winter or snow look and no ArenaMode entry from
   this project** (whether and when ArenaMode offers it is ArenaMode's decision; no ArenaMode match was run on it). The author looked at and
   listened to the map on 21 November 2026 and approved it as a whole ("sieht gut aus, auch nachts, ist dann halt wie die anderen maps im außenbereich recht dunkel. hört sich gut an, ambient sounds können etwas lauter sein (gain auf 5, range auf 3)"; the statement names no
-  single item), and chose its ambient mix by ear: 5 dB, offset 0.1, range 3.
+  single item), and chose its ambient mix by ear: 5 dB, offset 0.1, range 3. On 22 November the author looked at the game again: "Block passt, Regentropfen auch, mir fiel aber gerade auf dass das Gras sich nicht im Wind bewegt, bekommen wir das auch noch hin? beim drüberlaufen wird es zumindest platt gedrückt" (Block as a whole; no single item, not the marker or the overview).
 - **Arena's own grass on Bowl, Iceberg and Block, on by default** (113,643, 15,410 and 10,132 clumps), from a fourth encrypted bundle per map
-  (`arena_bowl_grass.bundle`, `arena_iceberg_grass.bundle`, `arena_yard_grass.bundle`) that opens with the map's own key. No collision, no footstep or bullet effect, no trampling and no wind motion; no player
-  setting. About 0.13 to 0.27 ms per frame at 1080p with the frame limiter lifted (one sample per view, test host). The texts that said no grass
-  is ported on Bowl and Iceberg no longer hold. **The author has not seen the grass.**
+  (`arena_bowl_grass.bundle`, `arena_iceberg_grass.bundle`, `arena_yard_grass.bundle`) that opens with the map's own key. No collision and no footstep or bullet effect; EFT's own trampling presses it flat when walked over. **It sways
+  in the wind** (22 November, after the author saw it standing still): EFT's grass shader has wind code but a ported map has no wind calculator to advance
+  its phase, so the port advances it as EFT's `WindCalculator` would (strength and direction follow the weather's wind); developer key `Map (<key>)/GrassWind`
+  (live, default on, needs `General/DeveloperMode`). Checked on the test host on Block, Bowl and Iceberg by a frame comparison at strong wind (development state, build
+  `0.7.0+0ee4442`). No player setting. About 0.13 to 0.27 ms per frame at 1080p with the frame limiter lifted (one sample per view, test host, measured before the sway). The texts that said no grass
+  is ported on Bowl and Iceberg no longer hold. **The author has seen the grass (still, on 22 November) and has not seen the sway.**
 - **Rain drops on the screen on every map, on by default.** The game's "camera under rain" flag was false for ever on a ported map; the repair
   answers it from the rain-cover depth photo, so drops run down the screen in rain in the open and not under a roof. The same flag also drives
   the water on glasses, the ripples on wet ground and the rain on wet props (not looked at). Host-run on Block and Equator; it changes the six
   older maps in rain outdoors too. Developer key `Lighting (<key>)/RainUnderRoofCheck` (live, default on, needs `General/DeveloperMode`).
-  **The author has not seen the drops.**
+  **The author has seen the drops and found them fine** ("Block passt, Regentropfen auch", 22 November; the sentence names no map).
 - **Chop Shop has a DynamicMaps overview** (one ground view with both exit markers; two files in the plugin's own `dynamicmaps` folder;
   tested in game on 14 November with DynamicMaps 1.2.1, before the 1.3.0 loader change).
 - **Block has a DynamicMaps overview:** one north-up view of both team pockets and the connected raised routes, with both exit markers.
   Its two files stay in ArenaMapPort's own `dynamicmaps/ArenaMapPort_Yard` folder. Tested on GPU-2 with DynamicMaps 1.3.0 using candidate
   `8a1ec4e`: five marker positions and headings, including a raised route and the western edge; no MapPort or DynamicMaps warning.
   On 22 November the merged build (`0.7.0+3dcf98d`, development state) opened all seven overviews once each in a raid on the test host with
-  DynamicMaps 1.3.0, Block at two positions, with no MapPort or DynamicMaps warning. The author has not looked at the overview.
+  DynamicMaps 1.3.0, Block at two positions, with no MapPort or DynamicMaps warning.
 - **DynamicMaps 1.3.0 support:** the owned-map loader recognizes both 1.3.0 and 1.2.1 APIs, registers maps before preferences and retains
   unchanged map instances so scans preserve the current view. The 1.2.1 adapter has offline checks for this update, not a fresh native raid.
 
@@ -75,10 +78,11 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
   bullets against one, the band south of the play area, the banner, description and loading images on the test host, the 15 distant sun-shadow
   rows at shadow quality Low and at other hours, a respawn that lands on an in-box marker, any ArenaMode match and any Team Deathmatch,
   Domination, Deathmatch, Tactical or Zombies match with its rows. The selection marker is shown at a spot that does not cover another region's
-  label (read back on the test host); the author has not looked at it.
+  label (read back on the test host).
 - Grass: run on the test host on the three maps by day; not checked: a really missing or damaged grass bundle (unit tests only), a scope view,
   grass shadows off, texture quality Low, TAA off or DLSS and FSR, a respawn in ArenaMode, Bowl and Iceberg at night and in rain, the graphics
-  memory, wind motion (none exists).
+  memory, the sway by the author's eye and at calm weather (measured only), in a scope view (it runs faster there, as in EFT) and in the grass
+  shadows, and a respawn or camera replacement (the sway phase restarts).
 - Rain drops: host-run on Block and Equator only; not checked: the other five maps, light rain, glasses, ripples and wet props by eye, the
   outdoor season footstep layer outside the test host's season, a respawn in ArenaMode.
 - DynamicMaps 1.3.0 in game: the loader on Iceberg and Factory (`b7fb819`, 20 November), Block at five positions (`8a1ec4e`, 21 November) and

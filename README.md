@@ -34,16 +34,21 @@ etwas lauter sein (gain auf 5, range auf 3)"): the statement covers the look and
 whole and names no single item, and the ambient sound mix of Block (gain 5 dB, range 3) is the
 author's own by ear. Like the other maps outdoors, it is rather dark at night. Block's gate sounds, crowd calls and
 reactions were not listened to one by one. The map was raided on the test host with and without
-bots and with a gate hold and release; the author has not looked at its selection marker.
+bots and with a gate hold and release. The author looked at it again on 22 November 2026 and
+found it fine ("Block passt"); that sentence names no single item either.
 
 Native grass is new in 0.7.0 on Bowl, Iceberg and Block (Equator, Bay5, Air Pit and Chop Shop have
 none in Arena). It shows Arena's own tufts with seed stalks along walls, kerbs and lawns and is on by default;
 there is no setting for it. It comes from a fourth encrypted file per map next to the map's three
 bundles (`bundles/<map>_grass.bundle`, 12 to 19 MB) and the grass code itself reads no file from your Arena folder; the file opens with the same map key as the map's other
-bundles, so the installed Arena is still required. The grass has no collision and no footstep or bullet effect, and it neither bends under
-a player nor moves in the wind. On the test host (1920 x 1080, the game's frame limiter lifted)
-it cost about 0.13 to 0.27 ms per frame; with the 120 fps limiter the frame rate stayed at the baseline.
-The author has not seen the grass; it was looked at on the test host only. If you replace only the DLLs
+bundles, so the installed Arena is still required. The grass has no collision and no footstep or bullet effect;
+it is pressed flat when a player walks over it, and it sways with the weather's wind: the port
+advances the wind phase that EFT's own wind calculator would advance, and strength and direction
+follow the weather. On the test host (1920 x 1080, the game's frame limiter lifted)
+it cost about 0.13 to 0.27 ms per frame (measured before the sway was added); with the 120 fps limiter the frame rate stayed at the baseline.
+The author has seen the grass; the first version stood still in the wind, and the sway was added at the
+author's request on 22 November 2026. It was checked on the test host by a frame comparison on Block,
+Bowl and Iceberg at strong wind, and the author has not seen the sway. If you replace only the DLLs
 of an older installation, the log warns about the missing grass file and no grass appears:
 extract the whole ZIP.
 
@@ -53,8 +58,9 @@ map. The repair answers it from the same depth picture the falling rain already 
 drops and streaks agree (under a roof or inside a hall there are no drops; under Equator's open
 roof lattice there are). It needs real rain and a camera that does not look steeply down, and
 there is no setting for it. The same answer also drives the water on glasses, the ripples on wet ground and
-the rain on wet props, which nobody has looked at. Checked on the test host on Block and Equator only; the
-author has not seen it.
+the rain on wet props, which nobody has looked at. Checked on the test host on Block and Equator only. The
+author has seen the drops on the screen and found them fine ("Block passt, Regentropfen auch", 22 November 2026; the
+sentence names no map).
 
 Chop Shop is new in 0.6.0 (Arena's `Arena_AutoService`, shown in the game as "Arena: Chop Shop").
 Its ambient sound mix is a computed start value; the author listened to the map on
@@ -298,16 +304,17 @@ choices (the lamp limits were set by the author by eye on his PC; the 0.6.0 valu
 Iceberg raid on the test host on 14 November 2026, the log line of the one-time move
 from 4.8 and 1.9 was not captured). It has no spectators
 and no per-light flares, and it is a server-time map
-without a winter or snow look. Its grass (since 0.7.0) and the rain drops on the screen were looked at on the test host only (the rain drops
-on Block and Equator only); the author has not seen them.
+without a winter or snow look. Its grass (since 0.7.0) and its grass sway were looked at on the test host only; the
+rain drops on the screen were checked there on Block and Equator only. The author's remarks of 22 November 2026 on
+the grass and the rain drops name no map.
 
 Chop Shop has had raids on the test host with and without bots, and the hideout opened
 afterwards, with no ArenaMapPort warning, but fewer than the older maps. The author
 listened to the map on 14 November 2026 and said everything fits (no single item named;
 the ambient mix stays a computed start value). Not listened to: the louder roar beds. Not checked: whether a player can climb the tribune decks above the hall,
 the rain-depth readback and a raid with ArenaMode from this project. It is a server-time map with a
-summer set only (no winter or snow look). Its grass and the rain drops on the screen
-(since 0.7.0) were not looked at by the author. The appended spawn rows and the exits in the
+summer set only (no winter or snow look). It has no grass in Arena, and its rain drops on the screen
+(since 0.7.0) were not checked on the test host. The appended spawn rows and the exits in the
 team start areas ran in plain raids on all six older maps and in two ArenaMode Team Deathmatch
 runs (Bowl and Iceberg); not checked are a respawn onto an in-box marker, Team Deathmatch
 on Chop Shop, Air Pit and Bay5 with the new exits, any Domination, Deathmatch, Zombies or
@@ -315,7 +322,7 @@ Tactical match with the new rows, and the flares seen from across a map.
 
 Block has had raids on the test host with and without bots, a gate hold and release, and PMC squads at the
 game's frame limit, with no ArenaMapPort warning, but fewer than the older maps. The author approved the
-look and the sound of the map as a whole (see above); not listened to one by one: the gate sounds, the crowd
+look and the sound of the map as a whole and looked at it again on 22 November (see above); not listened to one by one: the gate sounds, the crowd
 calls, the murmur, the reactions and the room acoustics. Not checked: the north gate leaves seen and heard
 from the north pocket, a long raid with every wave, a player touching one of the invisible border walls
 or a bullet against one, the area south of the south pocket, the look of its two tree stand-ins, the sun shadows of its houses at the lowest
@@ -324,7 +331,8 @@ ambient mix's one-time move for a saved start value (unit-tested only). Nobody h
 ran with its spawn rows). The grass of Bowl, Iceberg and Block was checked on the test host by day (about 0.13 to 0.27 ms
 per frame at 1080p with the frame limiter lifted, one sample per view); not checked: a missing or damaged grass file, a scope view, grass
 shadows off, the lowest texture quality, TAA off or DLSS/FSR, a respawn in ArenaMode, Bowl and Iceberg at night and
-in rain, GPU memory, and wind (none is implemented). The rain drops ran on Block and Equator only; not checked: glasses,
+in rain, GPU memory, the sway by the author's eye or at calm weather (by the code it runs faster in a scope view, as the game's own grass wind does; not looked at), and the sway of the grass shadows.
+The rain drops ran on Block and Equator only; not checked: glasses,
 ripples and wet props by eye, light rain, and the other maps in rain.
 
 EFT's own sound bundle has no impact sounds for the Books and CardBoard

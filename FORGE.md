@@ -43,15 +43,18 @@ Block is new in 0.7.0 (Arena's `Arena_Yard`). The author looked at the map and l
 night included, and approved it ("sieht gut aus, auch nachts, ist dann halt wie die anderen maps im außenbereich
 recht dunkel. hört sich gut an, ambient sounds können etwas lauter sein (gain auf 5, range auf 3)"); the statement
 covers the look and the sound as a whole and names no single item, and Block's ambient mix (gain 5 dB, range 3) is the
-author's own by ear.
+author's own by ear. The author looked at it again on 22 November 2026 and found it fine ("Block passt"; no single
+item named).
 
 Native grass is new in 0.7.0 on Bowl, Iceberg and Block: Arena's own tufts with seed stalks along walls, kerbs and
 lawns, on by default (no setting), from a fourth encrypted file per map (the grass code reads no file from your Arena folder; the file opens with the map's key, so the installed
-Arena is still required). It has no collision, no footstep or bullet effect and no wind motion, and it cost about 0.13 to 0.27 ms
-per frame on the test host (1080p, frame limiter lifted). Rain on the screen is new in 0.7.0 on every map: in rain, in
+Arena is still required). It has no collision, no footstep or bullet effect, is pressed flat when walked over and sways with the weather's wind, and it cost
+about 0.13 to 0.27 ms per frame on the test host (1080p, frame limiter lifted; measured before the sway was added). Rain on the screen is new in 0.7.0 on every map: in rain, in
 the open and not under a roof, drops run down the screen (it was missing on every ported map before; under a roof there
-are none; no setting). The author has not seen the grass or the rain drops; both were checked on the test host
-(the drops on Block and Equator only).
+are none; no setting). The author has seen the rain drops and found them fine ("Block passt, Regentropfen auch",
+22 November 2026); they were checked on the test host on Block and Equator only. The author has seen the grass, which first
+stood still in the wind, and asked for the sway; the sway was checked on the test host by a frame comparison on the
+three grass maps and the author has not seen it.
 
 Chop Shop is new in 0.6.0 (Arena's `Arena_AutoService`, shown in the game as "Arena: Chop Shop"). Its
 ambient mix is a computed start value; the author listened to the map on 14 November 2026 and asked for no change (he said everything
@@ -167,13 +170,13 @@ stays unchanged. Equator Day, Bay5, Air Pit, Bowl, Iceberg, Chop Shop and Block 
   have not been listened to; whether a player can climb
   the tribune decks, the rain readback and a raid with ArenaMode from this project are not checked.
 - Block has had raids on the test host with and without bots, a gate hold and release, and PMC squads, with no warning, but
-  fewer than the older maps. The author approved its look and sound as a whole; its gate sounds, crowd calls and reactions
+  fewer than the older maps. The author approved its look and sound as a whole and looked at it again on 22 November 2026; its gate sounds, crowd calls and reactions
   were not listened to one by one. Not checked: the north gate leaves seen from the north pocket, a long raid with every
   wave, a player at one of its invisible border walls, its sun shadows at the lowest shadow quality, and any ArenaMode match
   (no ArenaMode match ran on it).
 - Grass (Bowl, Iceberg, Block) and the rain drops on the screen (all maps) were checked on the test host only, the drops
-  on Block and Equator; the author has not seen either. Not checked: a missing or damaged grass file, a scope view, the lowest
-  texture quality, DLSS/FSR, Bowl and Iceberg at night and in rain, and the glasses and wet ground in rain.
+  on Block and Equator. The author has seen the rain drops and the still grass, not the sway. Not checked: a missing or damaged grass file, a scope view, the lowest
+  texture quality, DLSS/FSR, Bowl and Iceberg at night and in rain, the sway at calm weather and by the author's eye, and the glasses and wet ground in rain.
 - The appended spawn rows and the exits in the team start areas ran in plain raids on all six older maps and in two ArenaMode Team
   Deathmatch runs (Bowl, Iceberg); a respawn onto an in-box marker, other ArenaMode modes with the new rows and the flares seen
   from across a map are not checked.
