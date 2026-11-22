@@ -209,6 +209,7 @@ namespace ArenaMapPort.Client
             NativeDecalRepairs.Install();
             SeaPlaceholderRepairs.Install();
             NativeWaterRepairs.Install();
+            NativeGrassWind.Install(); // Map (<key>)/GrassWind, default ON, none public; armed and released by NativeGrassRepairs
             NativeGrassRepairs.Install(); // native grass of Bowl, Iceberg and Yard (Map (<key>)/Grass, default ON, none public) and its scene events; the build runs from Plugin.LateUpdate
             NativeSpatialAudio.Install(_harmony);
             PrecipitationAudio.Install(); // missing native rain beds, owned independently of local scenery ambience

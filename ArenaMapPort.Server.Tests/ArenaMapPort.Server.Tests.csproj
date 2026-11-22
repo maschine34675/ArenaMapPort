@@ -44,6 +44,7 @@
     <Compile Include="..\ArenaMapPort.Client\NativeGrassArtModel.cs" Link="Client\NativeGrassArtModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\NativeGrassColorModel.cs" Link="Client\NativeGrassColorModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\NativeGrassPackModel.cs" Link="Client\NativeGrassPackModel.cs" />
+    <Compile Include="..\ArenaMapPort.Client\NativeGrassWindModel.cs" Link="Client\NativeGrassWindModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\NativeGrassArtSource.cs" Link="Client\NativeGrassArtSource.cs" />
     <Compile Include="..\ArenaMapPort.Client\DoorPoseModel.cs" Link="Client\DoorPoseModel.cs" />
     <!-- Level border walls (PLAN-YARD item 10 part 2): the Unity-free rules of LevelBorderBoxRepairs (names, layer, usable rows, world bounds, the idempotent pass). -->

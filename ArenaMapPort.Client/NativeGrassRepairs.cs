@@ -545,6 +545,7 @@ namespace ArenaMapPort.Client
             {
                 BuildCore(start);
                 _state.BuildSucceeded();
+                NativeGrassWind.Arm(_owned != null ? _owned.Key : _lastMapKey);
             }
             catch (Exception e)
             {
@@ -1228,6 +1229,7 @@ namespace ArenaMapPort.Client
         {
             Build b = _build;
             _build = null;
+            NativeGrassWind.Release(); // every teardown reason; safe when not armed
             DropPreparation();
             if (b == null)
             {
