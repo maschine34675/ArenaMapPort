@@ -122,7 +122,16 @@ namespace ArenaMapPort.Client
             EquatorProfiles.Install(_harmony); // capture the chosen profile before owned scenes load
             HarmonyPatches.InstallAll(_harmony);
             LightingModCompatibility.Install(_harmony);
-            DynamicMapsIntegration.Install(_harmony);
+            try
+            {
+                // Optional third-party integration: nothing it does may stop the installs below (review of 2026-11-22: the type and
+                // method lookups and the unpatch calls of its own fallback run outside its inner guards).
+                DynamicMapsIntegration.Install(_harmony);
+            }
+            catch (Exception e)
+            {
+                Log.LogWarning($"[DynamicMaps] Optional overview integration could not be installed ({e.GetType().Name}: {e.GetBaseException().Message}); the maps themselves are not affected.");
+            }
             ArenaModeMapPositionIntegration.Install(_harmony);
             SelectionMapArtwork.Install(_harmony);
 
