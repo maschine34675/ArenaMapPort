@@ -163,7 +163,7 @@ the gondola overshoots its open pose a little, as Arena's does.
 - Fika compatibility has not been verified.
 
 The release ZIP contains the built maps. Players do not need to run the export
-tools or install Unity. It is larger than before, about <zip-gib> GiB, and nothing needs to be installed by hand besides it.
+tools or install Unity. It is larger than before, about 7.3 GiB, and nothing needs to be installed by hand besides it.
 
 ## Installation
 

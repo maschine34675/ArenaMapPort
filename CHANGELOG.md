@@ -51,7 +51,7 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
   untouched start mix moves once; any other saved mix stays (hidden revision key `Audio (arena_yard)/AmbientDefaultsRevision`, now at 4; every
   other map only advances its stamp). The move is covered by unit tests; its in-game check was waived.
 - README, FORGE page and the generated package README name seven maps, grass, rain and the key checks.
-- The ZIP grows to about <zip-gib> GiB (<file-count> distribution files; 0.6.0: about 5.9 GiB, 396 files).
+- The ZIP grows to about 7.3 GiB (424 distribution files; 0.6.0: about 5.9 GiB, 396 files).
 
 ### Changed (internal)
 

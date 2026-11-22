@@ -131,7 +131,7 @@ Close EFT and the SPT server, then extract the whole release ZIP into your SPT d
 Merge both `BepInEx` and `SPT_Runtime`, then restart the server and game. The release's
 `.sha256` file lists the checksum of the ZIP.
 
-The ZIP is about <zip-gib> GiB. Upgrading from 0.6.0: extract the whole ZIP over the
+The ZIP is about 7.3 GiB. Upgrading from 0.6.0: extract the whole ZIP over the
 installation the same way (keep `BepInEx/config`); it replaces both DLLs and adds Block's files, the grass files of Bowl, Iceberg and Block and
 the overview files for Chop Shop and Block, so take everything from the ZIP (replacing only the DLLs gives a missing-file warning and no grass).
 Upgrading from 0.5.0: extract the whole ZIP over the installation the same way (keep
