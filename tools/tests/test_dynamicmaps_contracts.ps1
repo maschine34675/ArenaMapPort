@@ -55,6 +55,15 @@ function Check($assembly, [string]$version) {
     Method $dropdown 'RegisterMapPreferences' @() 'System.Void' $false
     Method $dropdown 'FilteredMapDefs' @() 'System.Collections.Generic.IEnumerable`1<DynamicMaps.Data.MapDef>' $false
     Method $dropdown 'ChangeAvailableMapDefs' @('System.Collections.Generic.IEnumerable`1<DynamicMaps.Data.MapDef>') 'System.Void' $false
+    # 2026-11-22 (CODE-1): the postfix target, and the screen's failed load is what calls it.
+    Method $dropdown 'RemoveUnavailableMap' @('DynamicMaps.Data.MapDef') 'System.Void' $true
+    $screen = $module.GetType('DynamicMaps.UI.ModdedMapScreen')
+    $change = @($screen.Methods | Where-Object { $_.Name -eq 'ChangeMap' -and $_.HasBody })
+    $removal = @($change.Body.Instructions | Where-Object {
+        $_.Operand -is [Mono.Cecil.MethodReference] -and $_.Operand.Name -eq 'RemoveUnavailableMap' -and
+        $_.Operand.DeclaringType.FullName -eq 'DynamicMaps.UI.Controls.MapSelectDropdown'
+    })
+    Require ($change.Count -eq 1 -and $removal.Count -eq 1) 'ModdedMapScreen.ChangeMap calls RemoveUnavailableMap'
     $load = $dropdown.Methods | Where-Object Name -eq 'LoadMapDefsFromPath'
     $preferences = @($load.Body.Instructions | Where-Object { $_.Operand -is [Mono.Cecil.MethodReference] -and $_.Operand.Name -eq 'RegisterMapPreferences' })
     $refresh = @($load.Body.Instructions | Where-Object { $_.Operand -is [Mono.Cecil.MethodReference] -and $_.Operand.Name -eq 'ChangeAvailableMapDefs' })
@@ -86,6 +95,16 @@ foreach ($item in @(@('1.2.1',$DynamicMaps121), @('1.3.0',$DynamicMaps130))) {
             Require $rejected 'missing preference hook negative control was accepted'
             $call.OpCode = $opcode
             $call.Operand = $operand
+            # In-memory only: without RemoveUnavailableMap the same oracle must reject this DLL.
+            $removal = $assembly.MainModule.GetType('DynamicMaps.UI.Controls.MapSelectDropdown').Methods | Where-Object Name -eq 'RemoveUnavailableMap'
+            $removal.Name = 'RemovedUnavailableNegativeControl'
+            $rejected = $false
+            try { Check $assembly $item[0] } catch {
+                if ($_.Exception.Message -notlike '*contract mismatch*RemoveUnavailableMap*') { throw }
+                $rejected = $true
+            }
+            Require $rejected 'missing unavailable-map hook negative control was accepted'
+            $removal.Name = 'RemoveUnavailableMap'
         }
         # In-memory only: removing the real loader must make the same contract oracle reject this DLL.
         $dropdown = $assembly.MainModule.GetType('DynamicMaps.UI.Controls.MapSelectDropdown')

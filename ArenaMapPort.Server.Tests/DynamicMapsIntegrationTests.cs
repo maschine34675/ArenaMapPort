@@ -75,6 +75,25 @@ namespace ArenaMapPort.Server.Tests
 
         static bool SkipOriginal() => false;
 
+        [Fact]
+        public void InstalledUnavailableHookKeepsARejectedOwnedDefinitionOutUntilItsFilesChange()
+        {
+            var dropdown = new Dropdown();
+            dropdown.LoadMapDefsFromPath("Maps");
+            var path = _assets.DefinitionFor("Equator");
+            var rejected = dropdown.Definitions[path];
+            // 1.3 ModdedMapScreen.ChangeMap after a failed MapView.LoadMap; the installed postfix sees it.
+            dropdown.RemoveUnavailableMap(rejected);
+            Assert.False(dropdown.Definitions.ContainsKey(path));
+            dropdown.LoadMapDefsFromPath("Maps");
+            Assert.False(dropdown.Definitions.ContainsKey(path));
+            Assert.Equal(DynamicMapAssets.Maps.Length - 1, dropdown.Definitions.Count);
+            File.AppendAllText(_assets.ImageFor("Equator"), "<!-- repaired -->");
+            dropdown.LoadMapDefsFromPath("Maps");
+            Assert.NotSame(rejected, dropdown.Definitions[path]);
+            Assert.Equal(DynamicMapAssets.Maps.Length, dropdown.Definitions.Count);
+        }
+
         public void Dispose()
         {
             _harmony.UnpatchSelf();

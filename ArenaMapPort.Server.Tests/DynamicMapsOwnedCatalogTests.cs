@@ -152,6 +152,102 @@ public sealed class DynamicMapsOwnedCatalogTests : IDisposable
     }
 
     [Fact]
+    public void ApiBindingRefusesADropdownWithoutRemoveUnavailableMap()
+    {
+        var error = Assert.Throws<MissingMethodException>(() => new DynamicMapsOwnedCatalog(_assets,
+            typeof(DynamicMaps.UI.Controls.WithoutRemoval.MapSelectDropdown), typeof(Definition), typeof(Layer)));
+        Assert.Contains("RemoveUnavailableMap", error.Message);
+    }
+
+    [Fact]
+    public void AnOwnedDefinitionDynamicMapsCouldNotLoadStaysOutUntilOneOfItsFilesChanges()
+    {
+        foreach (var map in DynamicMapAssets.Maps) WritePack(map);
+        var path = _assets.DefinitionFor("Equator");
+        var dropdown = new Dropdown { Filter = "arena_equator" };
+        var addon = new Definition { DisplayName = "Third party Equator", MapInternalNames = ["arena_equator"] };
+        var vanilla = new Definition { DisplayName = "Vanilla", MapInternalNames = ["bigmap"] };
+        dropdown.Definitions["Addons/Other/Equator.jsonc"] = addon;
+        dropdown.Definitions["Maps/Customs.jsonc"] = vanilla;
+        dropdown.Preferred["arena_equator"] = "Equator";
+        dropdown.Unloadable.Add("Equator"); // the owned SVG is damaged: DynamicMaps' map view cannot load it
+        var warnings = new List<string>();
+
+        // First opening: DynamicMaps fails once, removes the owned object (keeping its write time) and falls back.
+        dropdown.Scan(_catalog, "Maps", (key, _) => warnings.Add(key));
+        Assert.Equal(1, dropdown.LoadFailures);
+        Assert.Same(addon, dropdown.Current);
+        Assert.False(dropdown.Definitions.ContainsKey(path));
+        Assert.True(dropdown.Times.ContainsKey(path));
+        Assert.Equal(new[] { "Equator unavailable" }, warnings);
+
+        // Reopening with unchanged files: the owned definition stays out, as an unchanged native pack would.
+        dropdown.Scan(_catalog, "Maps", (key, _) => warnings.Add(key));
+        Assert.Equal(1, dropdown.LoadFailures);
+        Assert.Same(addon, dropdown.Current);
+        Assert.False(dropdown.Definitions.ContainsKey(path));
+        Assert.False(dropdown.Times.ContainsKey(path));
+        Assert.Equal(DynamicMapAssets.Maps.Length + 1, dropdown.Definitions.Count);
+        Assert.Same(vanilla, dropdown.Definitions["Maps/Customs.jsonc"]);
+        Assert.Same(addon, dropdown.Definitions["Addons/Other/Equator.jsonc"]);
+        foreach (var map in DynamicMapAssets.Maps.Where(m => m != "Equator"))
+            Assert.True(dropdown.Definitions.ContainsKey(_assets.DefinitionFor(map)));
+        Assert.Single(warnings);
+
+        // A changed file clears the mark: the new object is offered again and, while still damaged, fails again.
+        File.AppendAllText(_assets.ImageFor("Equator"), "<!-- revised -->");
+        dropdown.Preferred["arena_equator"] = "Equator"; // the native clamp reset the choice; the player picks it again
+        dropdown.Scan(_catalog, "Maps", (key, _) => warnings.Add(key));
+        Assert.Equal(2, dropdown.LoadFailures);
+        Assert.Same(addon, dropdown.Current);
+        Assert.Equal(new[] { "Equator unavailable", "Equator unavailable" }, warnings);
+
+        // A repaired file is loaded and selected.
+        File.AppendAllText(_assets.ImageFor("Equator"), "<!-- repaired -->");
+        dropdown.Unloadable.Clear();
+        dropdown.Scan(_catalog, "Maps", (key, _) => warnings.Add(key));
+        Assert.Equal(2, dropdown.LoadFailures);
+        Assert.Same(dropdown.Definitions[path], dropdown.Current);
+        Assert.Equal("Equator", dropdown.Current!.DisplayName);
+        Assert.Equal(2, warnings.Count);
+    }
+
+    [Fact]
+    public void ARejectedForeignOrOtherDropdownDefinitionLeavesTheOwnedCatalogueAlone()
+    {
+        foreach (var map in DynamicMapAssets.Maps) WritePack(map);
+        var equator = _assets.DefinitionFor("Equator");
+        var dropdown = new Dropdown();
+        var foreign = new Definition { DisplayName = "Unrelated", MapInternalNames = ["bigmap"] };
+        dropdown.Definitions["Maps/Customs.jsonc"] = foreign;
+        dropdown.Scan(_catalog, "Maps", (_, _) => Assert.Fail("Valid fixture failed"));
+        var other = new Dropdown();
+        other.Scan(_catalog, "Maps", (_, _) => Assert.Fail("Valid fixture failed"));
+        var warnings = new List<string>();
+        Action<string, string> warn = (key, _) => warnings.Add(key);
+
+        // DynamicMaps rejects a native map here and the other dropdown's own Equator object there.
+        dropdown.RemoveUnavailableMap(foreign);
+        _catalog.MarkUnavailable(dropdown, foreign, warn);
+        var otherEquator = other.Definitions[equator];
+        other.RemoveUnavailableMap(otherEquator);
+        _catalog.MarkUnavailable(other, otherEquator, warn);
+        // Objects that are not this dropdown's cached owned object, and dropdowns without a cache, change nothing.
+        _catalog.MarkUnavailable(dropdown, otherEquator, warn);
+        _catalog.MarkUnavailable(new Dropdown(), dropdown.Definitions[equator], warn);
+        _catalog.MarkUnavailable(dropdown, null!, warn);
+        Assert.Equal(new[] { "Equator unavailable" }, warnings);
+
+        dropdown.Scan(_catalog, "Maps", (_, _) => Assert.Fail("Valid fixture failed"));
+        Assert.Equal(DynamicMapAssets.Maps.Length, dropdown.Definitions.Count); // the native rule keeps the foreign map out
+        foreach (var map in DynamicMapAssets.Maps)
+            Assert.True(dropdown.Definitions.ContainsKey(_assets.DefinitionFor(map)));
+        other.Scan(_catalog, "Maps", (_, _) => Assert.Fail("Valid fixture failed"));
+        Assert.False(other.Definitions.ContainsKey(equator));
+        Assert.Equal(DynamicMapAssets.Maps.Length - 1, other.Definitions.Count);
+    }
+
+    [Fact]
     public void OwnedPreferenceSurvivesFirstNativeRebindWhenAnotherAddonSharesTheLocation()
     {
         WritePack("Equator");

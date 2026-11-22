@@ -14,8 +14,13 @@ $faults = @(
     @{Name='lose-definition-identity'; Find='if (cached == null || !cached.Matches(definition, image))'; Replace='if (true)'; Fails='UnchangedOwnedDefinitionRetainsViewportAndFloor'},
     @{Name='register-before-owned-merge'; Find='var definitions = (IDictionary)_definitions.GetValue(dropdown);'; Replace='Preferences.Invoke(dropdown, null); var definitions = (IDictionary)_definitions.GetValue(dropdown);'; Fails='OwnedPreferenceSurvivesFirstNativeRebind'},
     @{Name='leak-scan-scope'; Find='if (scan.Parent == null) _scans.Remove(scan.Dropdown);'; Replace='if (scan.Parent == null) { }'; Fails='NestedOtherScansAndExceptionalNativeRegistration'},
+    # 2026-11-22 (CODE-1): an owned definition DynamicMaps could not load stays out until one of its files changes.
+    @{Name='readd-unavailable-owned-map'; Find='if (cached.Unavailable) continue;'; Replace=''; Fails='AnOwnedDefinitionDynamicMapsCouldNotLoadStaysOut'},
+    @{Name='keep-unavailable-after-file-change'; Find='cached = new CachedDefinition { Value = Read(path, map),'; Replace='cached = new CachedDefinition { Unavailable = cached?.Unavailable == true, Value = Read(path, map),'; Fails='AnOwnedDefinitionDynamicMapsCouldNotLoadStaysOut'},
+    @{Name='mark-any-removed-definition'; Find='!ReferenceEquals(cached.Value, definition)'; Replace='false'; Fails='ARejectedForeignOrOtherDropdownDefinitionLeavesTheOwnedCatalogueAlone'},
     @{Name='install-late-preference-hook'; Integration=$true; Find='harmony.Patch(_catalog.Preferences, prefix:'; Replace='harmony.Patch(_catalog.Preferences, postfix:'; Fails='InstalledPreferencePrefixRunsBeforeTheFirstNativeRebind'},
-    @{Name='omit-installed-finalizer'; Integration=$true; Find='finalizer: new HarmonyMethod(typeof(DynamicMapsIntegration), nameof(CatalogScanFinalizer))'; Replace='finalizer: null'; Fails='InstalledFinalizerClearsTheScopeOnNativeThrowAndSkippedOriginal'}
+    @{Name='omit-installed-finalizer'; Integration=$true; Find='finalizer: new HarmonyMethod(typeof(DynamicMapsIntegration), nameof(CatalogScanFinalizer))'; Replace='finalizer: null'; Fails='InstalledFinalizerClearsTheScopeOnNativeThrowAndSkippedOriginal'},
+    @{Name='omit-unavailable-hook'; Integration=$true; Find='harmony.Patch(_catalog.Unavailable, postfix: new HarmonyMethod(typeof(DynamicMapsIntegration), nameof(CatalogUnavailablePostfix)));'; Replace=''; Fails='InstalledUnavailableHookKeepsARejectedOwnedDefinitionOut'}
 )
 foreach ($fault in $faults) {
     $mutantSource = if ($fault.Integration) { $integration } else { $source }

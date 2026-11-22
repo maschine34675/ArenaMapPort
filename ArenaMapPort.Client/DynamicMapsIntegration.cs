@@ -11,7 +11,8 @@ namespace ArenaMapPort.Client
 {
     /// <summary>
     /// DynamicMaps scans only its own folders. Add our owned packages before its native precache:
-    /// 1.2.1 through its additive loader; 1.3.0 through a scoped merge before native preference registration.
+    /// 1.2.1 through its additive loader; 1.3.0 through a scoped merge before native preference registration
+    /// and a postfix on RemoveUnavailableMap that keeps an owned definition DynamicMaps could not load out of later scans.
     /// No binary dependency or direct config/third-party file writes. Evidence: docs/progress/dynamicmaps-owned.md and dynamicmaps-130.md.
     /// </summary>
     internal static class DynamicMapsIntegration
@@ -47,6 +48,7 @@ namespace ArenaMapPort.Client
                     harmony.Patch(_load, prefix: new HarmonyMethod(typeof(DynamicMapsIntegration), nameof(CatalogScanPrefix)),
                         finalizer: new HarmonyMethod(typeof(DynamicMapsIntegration), nameof(CatalogScanFinalizer)));
                     harmony.Patch(_catalog.Preferences, prefix: new HarmonyMethod(typeof(DynamicMapsIntegration), nameof(CatalogPreferencesPrefix)));
+                    harmony.Patch(_catalog.Unavailable, postfix: new HarmonyMethod(typeof(DynamicMapsIntegration), nameof(CatalogUnavailablePostfix)));
                     Plugin.Log.LogDebug("[DynamicMaps] Optional owned map loader installed (1.3 catalogue): " + _assets.Root);
                 }
                 catch (Exception ex)
@@ -56,7 +58,11 @@ namespace ArenaMapPort.Client
                         harmony.Unpatch(_load, HarmonyPatchType.Prefix, harmony.Id);
                         harmony.Unpatch(_load, HarmonyPatchType.Finalizer, harmony.Id);
                     }
-                    if (_catalog != null) harmony.Unpatch(_catalog.Preferences, HarmonyPatchType.Prefix, harmony.Id);
+                    if (_catalog != null)
+                    {
+                        harmony.Unpatch(_catalog.Preferences, HarmonyPatchType.Prefix, harmony.Id);
+                        harmony.Unpatch(_catalog.Unavailable, HarmonyPatchType.Postfix, harmony.Id);
+                    }
                     _catalog = null;
                     WarnOnce("api", "Optional map loader unavailable; expected DynamicMaps 1.2.1 or 1.3.0 API: " + ex.GetBaseException().Message);
                 }
@@ -104,6 +110,13 @@ namespace ArenaMapPort.Client
         {
             try { _catalog.PreparePreferences(__instance, WarnOnce); }
             catch (Exception ex) { WarnOnce("load", "Could not load owned map data: " + ex.GetBaseException().Message); }
+        }
+
+        // 1.3 ModdedMapScreen.ChangeMap calls RemoveUnavailableMap after a failed load; remember it for owned definitions.
+        static void CatalogUnavailablePostfix(object __instance, object __0)
+        {
+            try { _catalog.MarkUnavailable(__instance, __0, WarnOnce); }
+            catch (Exception ex) { WarnOnce("unavailable", "Could not record an unavailable owned map: " + ex.GetBaseException().Message); }
         }
 
         static void LoadPostfix(object __instance, string __0)

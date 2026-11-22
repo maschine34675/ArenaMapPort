@@ -13,6 +13,10 @@ namespace ArenaMapPort.Client
     /// DynamicMaps 1.3 prunes its catalogue on every scan and validates image paths before returning a definition.
     /// Merge our exact packages before the scan registers preferences, preserving native/addon choices and the active filter.
     /// The native definition type/serializer and UI refresh remain authoritative; no third-party files are written.
+    /// When its map screen fails to load a definition, 1.3 calls RemoveUnavailableMap, which drops it from _mapDefs but
+    /// keeps its write time, so a native pack stays out until its file changes. An owned definition follows the same
+    /// rule: MarkUnavailable (a postfix on that method) flags the cache entry and the merge leaves it out while its
+    /// JSON and SVG stamps are unchanged (2026-11-22, review finding CODE-1; unit-tested, not host-checked).
     /// </summary>
     internal sealed class DynamicMapsOwnedCatalog
     {
@@ -22,7 +26,7 @@ namespace ArenaMapPort.Client
         readonly Type _definition;
         readonly FieldInfo _definitions, _writeTimes;
         readonly PropertyInfo _layers, _image, _bounds, _names, _name, _selection, _addon, _imageBounds, _gameBounds;
-        internal readonly MethodInfo Preferences;
+        internal readonly MethodInfo Preferences, Unavailable;
         readonly Dictionary<object, Scan> _scans = new Dictionary<object, Scan>();
         readonly ConditionalWeakTable<object, Dictionary<string, CachedDefinition>> _caches = new ConditionalWeakTable<object, Dictionary<string, CachedDefinition>>();
 
@@ -38,6 +42,8 @@ namespace ArenaMapPort.Client
             internal object Value;
             internal DateTime DefinitionTime, ImageTime;
             internal long DefinitionLength, ImageLength;
+            // DynamicMaps could not load this object. A changed stamp replaces the entry, which clears the mark.
+            internal bool Unavailable;
             internal bool Matches(FileInfo definition, FileInfo image) => DefinitionTime == definition.LastWriteTimeUtc
                 && DefinitionLength == definition.Length && ImageTime == image.LastWriteTimeUtc && ImageLength == image.Length;
         }
@@ -61,6 +67,7 @@ namespace ArenaMapPort.Client
             _imageBounds = Property(layer, "ImageBounds");
             _gameBounds = Property(layer, "GameBounds");
             Preferences = Method(dropdown, "RegisterMapPreferences", typeof(void), Type.EmptyTypes);
+            Unavailable = Method(dropdown, "RemoveUnavailableMap", typeof(void), new[] { definition }, Public);
         }
 
         internal Scan BeginScan(object dropdown, string request)
@@ -106,6 +113,8 @@ namespace ArenaMapPort.Client
                             DefinitionLength = definition.Length, ImageTime = image.LastWriteTimeUtc, ImageLength = image.Length };
                         cache[path] = cached;
                     }
+                    // DynamicMaps' own rule for a definition its map screen could not load: out until a file changes.
+                    if (cached.Unavailable) continue;
                     definitions[path] = cached.Value;
                     times[path] = cached.DefinitionTime;
                 }
@@ -117,6 +126,24 @@ namespace ArenaMapPort.Client
             }
             // Return to the FIRST native preference registration. Its following native dropdown refresh uses
             // the complete catalogue, so another addon for the same location cannot reset an owned selection.
+        }
+
+        /// <summary>
+        /// Called after DynamicMaps' RemoveUnavailableMap: flags this dropdown's cache entry that holds exactly the removed
+        /// object. Foreign definitions, objects of another dropdown and replaced cache entries are left alone.
+        /// </summary>
+        internal void MarkUnavailable(object dropdown, object definition, Action<string, string> warn)
+        {
+            if (dropdown == null || definition == null || !_caches.TryGetValue(dropdown, out var cache)) return;
+            foreach (var map in DynamicMapAssets.Maps)
+            {
+                if (!cache.TryGetValue(_assets.DefinitionFor(map), out var cached) || !ReferenceEquals(cached.Value, definition))
+                    continue;
+                cached.Unavailable = true;
+                warn(map + " unavailable", "DynamicMaps could not load the owned " + map
+                    + " overview; it stays out of the map list until one of its files changes.");
+                return;
+            }
         }
 
         object Read(string path, string map)
@@ -153,9 +180,9 @@ namespace ArenaMapPort.Client
             return member;
         }
 
-        static MethodInfo Method(Type type, string name, Type returns, Type[] arguments)
+        static MethodInfo Method(Type type, string name, Type returns, Type[] arguments, BindingFlags flags = Private)
         {
-            var member = type?.GetMethod(name, Private, null, arguments, null);
+            var member = type?.GetMethod(name, flags, null, arguments, null);
             if (member?.ReturnType != returns) throw new MissingMethodException(type?.FullName, name);
             return member;
         }
