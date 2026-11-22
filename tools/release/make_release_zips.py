@@ -9,7 +9,7 @@ Two layouts, one classification, one verifier:
   --single   (the release form the user chose for 0.3.0, 0.4.0 and 0.5.0, and the form of 0.6.0 and 0.7.0; about 3.4 GiB with the four encrypted maps of
               0.3.0, about 3.6 GiB for 0.4.0 with the spectators, about 5.0 GiB for 0.5.0 with Iceberg and the crowd
               reactions (359 files), about 5.9 GiB for 0.6.0 with Chop Shop (396 files), about 7.3 GiB planned for 0.7.0 with Block
-              and three grass bundles (422 files; the plan's figure, the real size comes at the cut); hosted on
+              and three grass bundles (424 files with Block's overview pair, 422 in the initial plan; the plan's figure, the real size comes at the cut); hosted on
               Pixeldrain, not GitHub)
       maschine-ArenaMapPort-<version>.zip     EVERY dist file, the generated README.txt and
                                               THIRD-PARTY-NOTICES.txt entries, and the manifest
@@ -831,8 +831,9 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "test host on Block and Equator only; the author has not seen it.\n\n"
             "Optional DynamicMaps integration: overview maps for all seven maps, Equator, Bay5, Air Pit, Bowl, Iceberg,\n"
             "Chop Shop and Block live in this plugin's own dynamicmaps folder and are registered automatically when\n"
-            "DynamicMaps is installed. The loader supports 1.2.1 and 1.3.0. Block's overview was checked in-game with\n"
-            "DynamicMaps 1.3.0; the 1.2.1 adapter was checked offline against the actual DLL. No DynamicMaps files need changing.\n\n"
+            "DynamicMaps is installed. The loader supports 1.2.1 and 1.3.0. All seven overviews were opened in game on the\n"
+            "test host with DynamicMaps 1.3.0; the 1.2.1 adapter was checked offline against the actual DLL and not run in game\n"
+            "since the loader changed. No DynamicMaps files need changing.\n\n"
             "Settings: F12 exposes NaturalEquatorNight for a natural Equator midnight look on the next\n"
             "raid, ArenaInstallPath, the Arena installation folder (empty = automatic), and ShowMapNotices\n"
             "(on by default), the message at the main menu that names why the Arena maps are not available;\n"

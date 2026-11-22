@@ -290,3 +290,15 @@ pre-flight applies the same PNG checks, pixel statistics and usage list to every
 (compiled by `pwsh`, no Python copy), printing each rejected texture with its slots. Exit 0 and `NORMAL_TEXTURE_PREFLIGHT_OK <n> textures` mean
 the import will not stop there. It needs `pwsh` and fails loudly without it. A rejected texture needs a reviewed policy row (and a pin in
 `tools/tests/test_normal_texture_import.ps1` and `tools/tests/test_normal_texture_preflight.py`), never a fallback.
+
+## DynamicMaps overview (optional, the user's call)
+
+A map may ship one north-up DynamicMaps overview: two files, `ArenaMapPort_<Name>.jsonc` and `Layers/Ground.svg`, under the plugin's own `dynamicmaps/ArenaMapPort_<Name>/` (`<Name>` is the canonical package name, `Yard` for Block, `AutoService` for Chop Shop). Generation, the Unity NavMesh export it needs and the per-map notes are in `tools/dynamicmaps/README.md`; the generic command is `python tools/dynamicmaps/export_equator.py --package <accepted package> --descriptor tools/maps/<stem>.json --navmesh <navmesh.json> --output work/dynamicmaps/<stem>`, run with `work/dynamicmaps/venv`. The accepted pair is kept under ignored `work/dynamicmaps/release/ArenaMapPort_<Name>`; nothing game-derived goes into Git. Rows that change in ONE commit (the map's overview is not complete until each exists):
+
+- `MAP_PROFILES` in `tools/dynamicmaps/export_equator.py`;
+- `DynamicMapAssets.Maps` in `ArenaMapPort.Client/DynamicMapAssets.cs` (the exact-path allowlist) and the explicit files of the staging target `ArenaMapPortStageDynamicMaps` in `ArenaMapPort.Client/ArenaMapPort.Client.csproj` (a Release client build, DllOnly included, requires and stages them);
+- the `-DynamicMapsMap` `ValidateSet` of `tools/deploy-to-spt.ps1`;
+- `OVERVIEW_MAP_NAMES` in `tools/validate/validate_distribution.py` (by registry name) with `NO_OVERVIEW` in `tools/tests/test_new_map_checklist.py`, the packer's rules and the pins of `test_crowdless_maps.py` and `test_release_zips.py`;
+- a per-map test in the style of `tools/tests/test_dynamicmaps_yard.py` and, after any DynamicMaps update or adapter change, `tools/verify-dynamicmaps.ps1` with both release DLLs (AGENTS.md, Traps "DynamicMaps adapter").
+
+Block's overview was checked in a native raid on the real DynamicMaps at five positions and headings (record: `docs/progress/yard-dynamicmaps.md`); the project sets no fixed count. The two exit markers in the pack are moved with the exits (see "Changing an exit" above). Deploy of a pack uses the scoped `-DynamicMapsPackage <pack-folder> -DynamicMapsMap <Name>` mode of the deploy script, dry run first.

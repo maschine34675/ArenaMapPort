@@ -816,6 +816,7 @@ class BuildTests(FakeRepoCase):
                 self.assertIn("own dynamicmaps folder", overview)
                 self.assertIn("DynamicMaps 1.3.0", overview)
                 self.assertIn("1.2.1 adapter was checked offline", overview)
+                self.assertIn("All seven overviews were opened in game on the", overview)
                 self.assertIn("No DynamicMaps files need changing", overview)
                 self.assertNotIn("Block has no overview", readme)
                 self.assertNotIn("skips the integration", overview)
@@ -2893,6 +2894,20 @@ class RealDistSmokeTests(unittest.TestCase):
         self.assertEqual(spec.server_dll, f"{SERVER}/maschine-ArenaMapPort.Server.dll")
         print(f"\nreal dist: {len(files)} files, 0 unclassified, parts "
               + ", ".join(f"{p.id}={len(p.files)}" for p in parts), file=sys.stderr)
+
+
+class PlayerTextOverviewPinTests(unittest.TestCase):
+    """README.md and FORGE.md must not say Block has no DynamicMaps overview (a leftover once passed every test)."""
+
+    def test_no_stale_block_overview_sentence(self):
+        root = Path(__file__).resolve().parents[2]
+        for name in ("README.md", "FORGE.md"):
+            text = (root / name).read_text(encoding="utf-8")
+            for stale in ("no DynamicMaps overview", "Block has no overview", "not Block)"):
+                self.assertNotIn(stale, text, f"{name}: {stale}")
+        readme = (root / "README.md").read_text(encoding="utf-8")
+        row = next(line for line in readme.splitlines() if line.startswith("| Block |"))
+        self.assertIn("DynamicMaps overview", row)
 
 
 if __name__ == "__main__":

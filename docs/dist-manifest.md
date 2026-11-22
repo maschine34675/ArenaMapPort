@@ -729,3 +729,5 @@ native 1.2.1 raid. A separate session later installed the parallel `0.7.0+1ad18c
 replacement is not the tested candidate. The combined 0.7.0 source is being prepared after
 merging the release texts/version with this integration. Its final build, plan and gates must
 be recorded separately before cutting or publishing; neither operation is part of this map task.
+
+Addendum, 2026-11-22: the sentences above that say the staged DLLs are 0.6.0 or that `DLL_VERSIONS_OK` stays red describe the state before the version bump (`ca26292`); the staged DLLs are 0.7.0 builds and `DLL_VERSIONS_OK 0.7.0` passes. Measured on the merged tree of 22 November (development state): 424 distribution files, raw 7,867,323,170 B, estimated single ZIP 7,833,789,314 B (7.30 GiB); the multi-part plan reads core 242, Equator 24, Bay5 30, Air Pit 22, Bowl 27, Iceberg 28, Chop Shop 27 and Yard 24 files (Yard part raw 1,457,025,946 B); `DISTRIBUTION_OK 7 maps 21 bundles 3 grass bundles 7 sidecars encrypted`.

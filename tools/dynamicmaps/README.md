@@ -19,7 +19,7 @@ remain unchanged.
 - **1.3.0:** its native scan now removes definitions absent from that scan and validates
   images before returning a definition. After native file collection but **before its
   first preference registration**, ArenaMapPort
-  deserializes only its six allowlisted definitions into the native `MapDef` type,
+  deserializes only its seven allowlisted definitions into the native `MapDef` type,
   validates/resolves their single ground layer, and adds them to the existing catalogue
   once. The native preference/dropdown refresh then sees the complete choices.
   Vanilla and other addon definitions keep their identities. Deleted, malformed or
@@ -30,7 +30,8 @@ remain unchanged.
   mismatch disables the optional integration with one warning.
 
 Offline checks against both actual release DLLs, including catalogue/path regressions
-and source-mutant controls:
+and source-mutant controls (`<1.2.1 release>` is any copy of the 1.2.1 release ZIP's
+`BepInEx/plugins/mpstark-dynamicmaps/DynamicMaps.dll`; no such DLL is tracked):
 
 ```powershell
 pwsh -NoProfile -File tools/verify-dynamicmaps.ps1 `

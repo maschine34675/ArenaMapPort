@@ -116,8 +116,8 @@ are included. Fika compatibility has not been verified.
 
 **DynamicMaps is optional:** overview maps for all seven maps are included and load automatically
 from ArenaMapPort's own `dynamicmaps` folder; DynamicMaps' installation stays untouched.
-Block's overview was tested in game with DynamicMaps 1.3.0. The retained 1.2.1 adapter was checked
-offline for this update; its earlier in-game checks predate Block. Air Pit and Bowl show their
+All seven overviews were opened in game on the test host with DynamicMaps 1.3.0. The 1.2.1 path was checked
+offline against the actual DLL and has not been run in game since the loader changed. Air Pit and Bowl show their
 ground floors; their upper spectator areas are omitted. Block combines its connected raised routes
 and both team pockets in one overview.
 

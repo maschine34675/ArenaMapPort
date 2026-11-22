@@ -103,3 +103,116 @@ The work is on `feature/yard`; local `main` is an ancestor of HEAD (19 commits a
 - **Commit:** `ca26292` ("0.7.0 prepared: version and release texts (not published)") on `feature/yard`; nothing pushed.
 - **A deploy that should not have happened as it did.** The lead deployed the two 0.7.0 DLLs with `-DllOnly` at 23:20 without reading `uibridge_status` first. The test host was in use by ANOTHER session (`codex-h2`, last request five minutes earlier): its EFT instance of 23:11 runs that session's client build `0.6.0+8a1ec4e` (branch `feature/block-dynamicmaps`). The deploy replaced that session's client DLL on the mirror and on the host's disk with `0.7.0+1ad18c3`; the running game keeps the other build loaded. The lead did not restart EFT, started no raid and touched nothing else, and did not put the other DLL back (that session's worktree holds only its client DLL, and no sanctioned deploy mode restores a single foreign DLL). The user was told at once. **Rule taken from it: read `uibridge_status` (other sessions, the loaded build) before EVERY deploy, not only before a raid.** Consequence for this record: the 0.7.0 DLLs are on the host's disk but were never loaded there; no host run of 0.7.0 exists.
 - **Two branches of that other session are not part of this preparation:** `fix/dynamicmaps-130` (three commits on `6a5c8c4`) and `feature/block-dynamicmaps` (two commits on `1ad18c3`). Whether they go into 0.7.0 is the user's decision; the texts then change in README, FORGE, CHANGELOG, the release note, the packer prose and its pins together.
+
+## 2026-11-22 - The two DynamicMaps branches merged, the review, the gates and the host run of the merged build
+
+Everything above this line is the state of 2026-11-21 and stays as written; this section records what changed on 2026-11-22 and supersedes the statements named below. Times are the VM's and GPU-2's local clock. Nothing is pushed, tagged, cut, scanned, uploaded or published: `origin/main` = `main` = `6a5c8c4`, release 0.7.0 stays PREPARED, NOT PUBLISHED, and publication needs the user's explicit word. The number 0.7.0 is still the lead's pick; the user has not commented on it.
+
+### The user's decision, the merge and the one code change
+
+- **User, 2026-11-22, verbatim: "die beiden anderen zweige können gemerged werden, Codex hat dazu auch irgendwas verfasst".** It answers the open question of 2026-11-21 whether the two branches of the other session go into 0.7.0.
+- **`4587e5b`** (2026-11-22): merge of `feature/block-dynamicmaps` (tip `b09bece`) into `feature/yard`, conflict-free. That branch contains `fix/dynamicmaps-130` (tip `647dbc8`) completely. The merge brought 34 files (+1525/-72): the DynamicMaps 1.3.0 adapter (`DynamicMapsOwnedCatalog.cs`, `DynamicMapsIntegration.cs`), Block's overview as the seventh owned pack (`DynamicMapAssets.Maps`, staging, the scoped deploy selector, the validator, the packer rule, tests), the records [dynamicmaps-130.md](dynamicmaps-130.md) and [yard-dynamicmaps.md](yard-dynamicmaps.md), and the other session's edits of README, FORGE, CHANGELOG, the release note, the packer prose, `docs/dist-manifest.md`, AGENTS.md, PLAN-YARD and INDEX.
+- **`3dcf98d`** (2026-11-22), the lead's one code change after the review: `Plugin.Awake` wraps `DynamicMapsIntegration.Install(_harmony)` in try/catch (one Warning `[DynamicMaps] Optional overview integration could not be installed (...)`; the installs after it still run).
+- The other session's branches `feature/block-dynamicmaps` and `fix/dynamicmaps-130` and its worktrees (`work/dynamicmaps-yard/repo`, `work/dynamicmaps130-impl/MapPort`) still exist; the lead deleted nothing. Its working folders `work/dynamicmaps-yard/` and `work/dynamicmaps130-impl/` (ignored) hold its evidence.
+
+### What the merge supersedes in this record (review finding DOC-8)
+
+- The feature matrix cell Block / DynamicMaps overview ("no") is now yes: seven overviews.
+- RISK (3) ("the test host runs DynamicMaps 1.3, so Chop Shop's overview is skipped there") no longer applies to a build of the merged tree: the adapter supports 1.2.1 and 1.3.0, and the host's 1.3.0 loads the owned packs (host run below).
+- The open verification item that logs `DynamicMaps API differs from verified 1.2.1; optional maps integration skipped` and names the fix as "on the unmerged branch `fix/dynamicmaps-130`": the branch is merged; on the merged build the Warning is gone from the host's log (host run below).
+- The decision "Tested with 1.2.1; 1.3 is not promised ... changes if `fix/dynamicmaps-130` ships before the cut": it ships; the DynamicMaps sentence of the texts follows the evidence in "The evidence audit" and the host run below.
+- The plan of 422 files is now 424 files (gates below); the Yard part is 24 files.
+- The USER row "the DynamicMaps 1.3 branch" is answered by the user's sentence above; what remains for the user is to look at Block's overview.
+- The closing statement that the two branches "are not part of this preparation" is the state of 2026-11-21.
+- **Yesterday's stale host state is replaced:** the 23:20 deploy of 2026-11-21 left the host's mirror with `0.7.0+1ad18c3` (no 1.3 adapter, no registration of Block's overview). The deploy of 2026-11-22 09:41 replaced it with `0.7.0+3dcf98d`, which was loaded and run on GPU-2 (host run below).
+
+### Gates (lead, 2026-11-22, VM)
+
+On the merge tree `4587e5b` (09:19 to 09:29):
+- Client Release build WITHOUT DllOnly: 0 warnings, 0 errors (stages and encrypts); server Release build clean.
+- The seven `keys/*.json` byte-identical before and after the staging.
+- `dist/`: 424 files (Block's overview pair `dynamicmaps/ArenaMapPort_Yard/ArenaMapPort_Yard.jsonc` and `Layers/Ground.svg` staged; 14 overview files in 7 packs).
+- `DLL_VERSIONS_OK 0.7.0 client/server source, project and staged binaries`; `validate_map_descriptors.py` OK (14 descriptors).
+- `DISTRIBUTION_OK 7 maps 21 bundles 3 grass bundles 7 sidecars encrypted`; `validate_bundle_names.py` OK (21 bundles); `validate_port.py --map yard --distribution --package work/extract/yard-native-v2`: `PORT_VALIDATED`.
+- `make_release_zips.py --single --plan`: `total: 424 dist files, raw 7,867,323,170 B (7,502.9 MiB), estimated zip 7,833,789,314 B`, `estimated single ZIP: 7.30 GiB`. Multi-part `--plan`: core 242, equator 24, bay5 30, airpit 22, bowl 27, iceberg 28, autoservice 27, yard 24 (= 424); the Yard part is raw 1,457,025,946 B. The plan of 2026-11-21, before the overview, read 422 files, raw 7,867,157,355 B, estimate 7,833,724,745 B; the dist grew by 165,815 raw B: Block's overview pair is 160,183 B (1,685 B JSONC + 158,498 B SVG), the remaining 5,632 B are the two rebuilt DLLs.
+- PowerShell checks: `UNITY_LOG_TESTS_OK 8 cases`; `DYNAMICMAPS_DEPLOY_TESTS_PASSED 168 cases`; `DLL_ONLY_DEPLOY_TESTS_PASSED (49 cases)`; `tools/tests/test_dynamicmaps_mutants.ps1`: eight source faults rejected, `DYNAMICMAPS_SOURCE_MUTANTS_REJECTED`.
+- `tools/tests/test_dynamicmaps_contracts.ps1` against the real DLLs (1.2.1 from the other session's ignored `work/dynamicmaps-130-audit/release-1.2.1/BepInEx/plugins/mpstark-dynamicmaps/DynamicMaps.dll`, 1.3.0 from the mirror `D:\SPT41\BepInEx\plugins\mpstark-dynamicmaps\DynamicMaps.dll`): `DynamicMaps 1.2.1 actual DLL contract passed`, `DynamicMaps 1.3.0 actual DLL contract passed`, `DYNAMICMAPS_REAL_CONTRACTS_PASSED`.
+- `tools/tests/test_dynamicmaps_yard.py` skips under the default python (numpy and shapely missing, the convention of `test_dynamicmaps_export.py`); with `work/dynamicmaps/venv/Scripts/python.exe`: 2 tests OK.
+- .NET on `4587e5b`: 3,826 of 3,827 with five review agents running beside it; the one failure is the load-dependent `CryptoThroughputTests.Cng_ReachesAtLeast300MiBPerSecond_EncryptingAndDecrypting64MiB`.
+
+On `3dcf98d` (09:35 to 09:40, quiet machine): client Release build WITHOUT DllOnly and server build clean, the key files byte-identical, dist 424 files, `.NET: Bestanden! Fehler: 0, erfolgreich: 3827` (3,808 before the merge, +19), `DLL_VERSIONS_OK 0.7.0`. Staged DLLs: `0.7.0+3dcf98d8d870d8575f3d83b8555901f76e82f63b` (client and server). The whole Python suite on `3dcf98d` was still running when this section was written; the lead records its result in a following section.
+
+### The review (workflow `merge-070-review`, 2026-11-22; five read-only reviewers, four skeptics)
+
+Digests: `work/tmp/merge-070/handoff/{adapter-code,tests-pipeline,release-texts,internal-docs,evidence-audit}.md` (ignored).
+
+- **Code:** no blocker. The reflection contract of both versions was checked with Mono.Cecil on the real DLLs; an unknown version (neither API shape) disables the optional integration with one Warning.
+- **CODE-1 (confirmed, not changed, a known limit):** after DynamicMaps 1.3.0 fails to load an OWNED overview and calls its `RemoveUnavailableMap`, the next catalogue scan re-adds the same cached definition (native packs stay removed until their file changes), so a persistently failing owned overview is tried again each time the map screen is opened, with one more DynamicMaps error line each time. No shipped pack fails. Recorded as a limit and flagged as a follow-up.
+- **CODE-2 (note, done as `3dcf98d`):** the try/catch in `Plugin.Awake`.
+- The warning text `DynamicMaps API differs from verified 1.2.1; optional maps integration skipped.` stays: it is reached only in the 1.2.1-shaped branch (a `LoadFromPath(string)` exists but another member differs); a version with neither shape gets `Optional map loader unavailable; expected DynamicMaps 1.2.1 or 1.3.0 API: ...`.
+- **Tests and pipeline:** the counts are confirmed (424 files, Block part 24). `DynamicMapsNoStage.targets` covers every staging target of the client and server projects and is inert for the test project's own build.
+- **TEST-2:** the xunit tests prove the adapter against a MODEL of DynamicMaps 1.3 (`DynamicMapsNativeTestDoubles.cs`); only `test_dynamicmaps_contracts.ps1` (signatures and call order in the real DLLs) and a native raid touch the real DLL. The three PowerShell checks (`test_dynamicmaps_contracts.ps1` and `test_dynamicmaps_mutants.ps1`, both run by `tools/verify-dynamicmaps.ps1`, and `test_dynamicmaps_deploy.ps1`) are run by hand; no automated suite calls them.
+- **TEST-3:** not tested: the 1.2.1 branch THROUGH `Install`, and the fallback path of `Install` (bind failure, unpatch, one warning). No `[Collection]` attribute groups the two test classes that patch the shared dropdown type; by reading it is harmless.
+- **TEST-4:** `tools/tests/test_dynamicmaps_yard.py` reports a skip under the default python; run it with the venv python before calling the exporter row verified (done, above).
+- A 1.2.1 DLL for the contract check is not named by any tracked file; on this VM it is under the other session's ignored `work/dynamicmaps-130-audit/`.
+- **Texts:** the findings TXT-1 (README's Block row still said "no DynamicMaps overview": a real leftover), TXT-2, TXT-3, TXT-4, TXT-6, TXT-7, TXT-8/COUNT-1, M-1 and DOC-1 (`tools/dynamicmaps/README.md` "six" to "seven") are assigned to the player texts and state documents of the same documentation pass (other writers; the lead checks the result); TXT-5 was refuted and is not applied.
+
+### The evidence audit
+
+- The other session's native claims match its evidence files: Block on client `0.6.0+8a1ec4e` (MVID f8a38cc5), DynamicMaps 1.3.0, 2026-11-21 23:13 CET (raid 22:13:48Z to 22:14:40Z), 18 catalogue entries (11 third-party + 7 owned), 26,771 sprite vertices, five positions and headings, 0 MapPort and 0 DynamicMaps warnings. The 1.3 loader run of 2026-11-20 was Iceberg and Factory on `0.6.0+b7fb819` (17 definitions); the other five older maps only registered there. No native run on DynamicMaps 1.2.1 after the loader change exists.
+- The accepted Yard pack (`work/dynamicmaps/release/ArenaMapPort_Yard`) is byte-identical to the other session's final generated pair and to the pair on the mirror; `MapInternalNames` = `arena_yard`; both exit markers lie within 0.01 m of `tools/maps/yard.exits.json`; the SVG is vector-only (9 paths, 10,175 path points, no image, base64, href or script), like the six older packs.
+- **EV-1:** `dynamicmaps-130.md` says the ArenaMode client and BigBrain companion DLLs were deployed to GPU-2 for its test, but not by which path; this project's deploy script has no mode for ArenaMode's files. For the Yard pair and DLL the other session's folder retains only a dry-run log.
+- **EV-2:** that work created git worktrees of the user's ArenaMode repository: `git -C D:/SPT41/Development/ArenaMode worktree list` (read-only, lead, 2026-11-22) lists `D:/ArenaMapPort/work/dynamicmaps130-impl/ArenaMode` on a branch `fix/dynamicmaps-130` and `ArenaMode-vw1` to `-vw6` (detached) under the same folder, beside the user's own entries. Neither record mentions it. The record's first paragraph says the user asked that session for the ArenaMode adaptation too. It is the user's repository and that session's work; the lead changed nothing in the ArenaMode repository and reports it to the user.
+- **EV-5:** the mirror's DynamicMaps config gained DynamicMaps' own comment blocks and the line `arena_yard = Automatic` (DynamicMaps' normal preference registration; no existing value changed).
+
+### Host run of the merged build (lead, GPU-2 = host2, 2026-11-22)
+
+- Before the deploy: `uibridge_status` answered "EFT is not running on host2" (09:18 and again 09:40; `gpu-run hosts`: "host2: EFT not running", no other session). The mirror held `0.7.0+1ad18c3` from the lead's deploy of 2026-11-21 23:20.
+- Deploy: dry run `plan: 424 file(s), 7502.9 MB total -- 0 new, 2 to overwrite, 422 already identical` (the two DLLs; Block's overview pair was already on the mirror, identical); `tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm` at 09:41: `OK -- 424 file(s) copied into D:\SPT41`. `gpu-run deploy-wait --server`: `39 file(s) identical on the host after 79.1 s`, server started; `gpu-run start`: MainMenu after 72 s, `16/16 identical`.
+- EFT instance `57d66d71` (started 09:45:16), `uibridge_status`: `Plugins (maschine-*): 16 — 16 identical (VM build = host disk = loaded)`; client `0.7.0+3dcf98d`; DynamicMaps 1.3.0 on the host; Arena 0.6.1.0.48206 there.
+- Startup lines (BepInEx log):
+  - `09:45:13.221 [Info] [Arena] Escape from Tarkov: Arena 0.6.1.0.48206 at C:\Battlestate Games\Escape from Tarkov Arena (registry; 15,351 files, 76.1 GB verified)`
+  - `09:45:14.608 [Debug] [DynamicMaps] Optional owned map loader installed (1.3 catalogue): C:\SPT41\BepInEx\plugins\maschine-ArenaMapPort\dynamicmaps`
+  - `09:45:14.935 [Info] Version 0.7.0 loaded. Maps: Arena: Equator, Arena: Bay 5, Arena: Air Pit, Arena: Bowl, Arena: Iceberg, Arena: Chop Shop, Arena: Block. Arena: found 0.6.1.0.48206. ...`
+  - The Warning `DynamicMaps API differs from verified 1.2.1; optional maps integration skipped` that every host session logged since the host got DynamicMaps 1.3 is gone.
+- Seven plain PMC raids without bots (noon, clear), ONE EFT process, in this order, each with inventory, then MAP opened once:
+
+| map | raid start line of gpu-run | overview seen (screenshot) |
+|---|---|---|
+| Block (arena_yard), about 09:46 | `location 6.9 s (diff 1.8), game started 35.1 s` | player marker in the south pocket at `Player: -14.86 13.30 7.27` (DynamicMaps prints x, z, y) with the exit marker "Block South Gate"; after a teleport to the raised route (-22.0, 9.2, 48.8), yaw 270: `Player: -22.00 48.80 9.21`, the marker on the raised walkway pointing west |
+| Equator, about 09:48 | `location 4.2 s (diff 1.5), game started 24.9 s` | "EQUATOR / GROUND", compass, player marker in the north booth area, "Equator North Gate" |
+| Bay 5, about 09:50 | `location 5.6 s (diff 1.5), game started 26.9 s` | "BAY 5 / GROUND", player marker, "Bay5 North Loading Bay" |
+| Air Pit, about 09:51 | `location 5.1 s (diff 1.6), game started 26.5 s` | "AIR PIT / GROUND", compass, player marker, "Air Pit North Gate" |
+| Bowl, about 09:53 | `location 5.3 s (diff 1.5), game started 27.1 s` | player marker, "Bowl BTR Gate" |
+| Iceberg, about 09:54 | `location 6.1 s (diff 1.8), game started 26.2 s` | player marker, "Iceberg West Gate" |
+| Chop Shop, about 09:56 | `location 5.0 s (diff 1.7), game started 26.8 s` | player marker, "Chop Shop East Gate" |
+
+  Each `gpu-run raid` line reported `log since start: warnings 0; errors 0` from mods (Equator: `warnings 0 from mods, 4 Unity Log`).
+- DynamicMaps catalogue read in the Block raid (`uibridge_inspect` of `MapSelectDropdown._mapDefs`, a `Dictionary<string, DynamicMaps.Data.MapDef>` of `DynamicMaps, Version=1.3.0.0`): count 18 = 11 definitions under `C:\SPT41\BepInEx\plugins\mpstark-dynamicmaps\Maps\` and 7 under `C:\SPT41\BepInEx\plugins\maschine-ArenaMapPort\dynamicmaps\ArenaMapPort_<Yard|AutoService|Iceberg|Bowl|AirPit|Bay5|Equator>\`.
+- Grass on the three grass maps from their bundles, same process:
+  - `09:46:32.673 [Grass] built in 43.1 ms on the main thread: map=arena_yard instances=10132 x2 managers, art=Pack, upload=SetPixelData, drawing=True`
+  - `09:53:01.741 [Grass] built in 15.2 ms on the main thread: map=arena_bowl instances=113643 x2 managers, art=Pack, upload=SetPixelData, drawing=True`
+  - `09:54:26.207 [Grass] built in 10.8 ms on the main thread: map=arena_iceberg instances=15410 x2 managers, art=Pack, upload=SetPixelData, drawing=True`
+- Iceberg: `09:54:31.332 [EmissionCap] map=arena_iceberg cap=4.60 floor=1.80 (owned scenes loaded): 37 emissive material(s), 5 capped (...), 15 lifted (...), 20 written, 0 left alone (changed elsewhere), 0 gone; 22695 renderer(s) scanned in 20 ms`.
+- Block: `09:46:32.008 [RainUnderRoof] readback orientation probe: AsWritten`, `09:46:32.137 [RainUnderRoof] map=arena_yard cameraUnderRain=False camera=(-14.86, 8.76, 13.35) photoTop=29.46 ...` (clear weather, under the pocket's cover: no rain test in this run).
+- The hideout was opened once after the raids: `screen=Hideout` after 6.4 s; back to the main menu.
+- Warnings of the whole session (log file of the process, `level<=Warning`): 0 lines from the source `maschine-ArenaMapPort`, 0 lines from DynamicMaps. The other lines: three HarmonyX warnings of other mods at start; Unity Log: one `Coroutine couldn't be started because the the game object 'MenuScreen' is inactive!` (09:48:00, leaving the first raid), Equator's `Renderer 'shadow' is registered with more than one LODGroup ('refrigerator_drink (2)' ...)` lines, the hideout's `light_CellPlafonds_holder_LOD0` LODGroup lines and `Can not play a disabled audio source` (all three kinds appear in earlier records of this project).
+- End state: MainMenu, no control lease, test hooks off (`weather override ended: the raid ended`), 16/16 identical, no other session. The map zoom was changed by three wheel steps in the Block raid and put back by three; no config value was set.
+- Screenshots (ignored folder): `analysis/screenshots/merge-070-20261122/01-block-overview-south-pocket.png`, `02-block-overview-raised-route-yaw270.png`, `03-equator-overview.png`, `04-bay5-overview.png`, `05-airpit-overview.png`, `06-bowl-overview.png`, `07-iceberg-overview.png`, `08-chopshop-overview.png`.
+- **Not checked in this run:** any position other than the spawn on the six older maps (one marker each, by eye on a screenshot, no measured comparison); the minimap and peek views; ArenaMode and its Domination overlay; DynamicMaps 1.2.1 in game; rain; bots; a second process or a rescan after a pack file changed; the publication build (the DLL of this run is `0.7.0+3dcf98d`; a later rebuild changes the commit suffix). The author has not looked at any of it.
+
+### What is open
+
+- The full Python result on `3dcf98d`: recorded by the lead in a following section.
+- Everything after it, on the user's word: `verify-keys` on every Arena build at hand, the cut (`make_release_zips.py --single --extract-check`, `--verify-only`), VirusTotal for both DLLs, the Pixeldrain upload (dry run first), the placeholders, the publication commit, the merge, the tag, the push and the GitHub release. The release build and the host run are repeated on the publication tree.
+- User items: the number 0.7.0, looking at the grass, the rain drops, Block's marker and Block's overview, ArenaMode's Block entry and pin (0.6.0), the Forge entry, the stale v0.5.0 body, and the ArenaMode worktrees of EV-2.
+
+### The documentation pass and the lead's acceptance (2026-11-22, 10:00 to 10:15)
+
+- Workflow `merge-070-docs`: three writers with disjoint files (player texts; AGENTS.md, HANDOFF.md, INDEX, MAP-RECIPE, PLAN-YARD; these progress records), each read by an adversarial checker. The text findings named above are applied: README's Block row, the DynamicMaps sentences of README, FORGE, CHANGELOG, the release note and the package README.txt (all seven overviews opened in game on the test host with DynamicMaps 1.3.0; 1.2.1 offline only since the loader changed; no commit id in a player text), the 424-file figures, "The author has not looked at the overview", `tools/dynamicmaps/README.md` (seven definitions, where a 1.2.1 DLL comes from), the packer docstring, the dist-manifest addendum. TXT-5 stays unapplied (refuted).
+- New pin: `PlayerTextOverviewPinTests` in `tools/tests/test_release_zips.py` (README.md and FORGE.md carry none of "no DynamicMaps overview", "Block has no overview", "not Block)"; README's Block row names a DynamicMaps overview): the leftover of TXT-1 had passed because no test read README.md.
+- AGENTS.md: the status note, the paragraph "Block overview and DynamicMaps 1.3", the first paragraph of "Release configuration" (plan of 22 November, the DynamicMaps wording rule, what ran on the merged tree, the open list), a Layout row, two recipe lines and the Traps entry "DynamicMaps adapter" (eight points, CODE-1 as point 7). HANDOFF.md item 21 corrected in place and item 22 added. MAP-RECIPE.md has a section "DynamicMaps overview (optional, the user's call)".
+- The checkers' verdicts: player texts clean; four corrections in the other two sets, applied by the lead: MAP-RECIPE said an overview's acceptance needs "five or more positions" (no such rule exists: Block was checked at five, the project sets no count); AGENTS.md gave the push of `main` as 07:15 (the reflog says 2026-11-21 07:05:22); HANDOFF item 22 said the text findings "were applied" without the refuted TXT-5; `yard-dynamicmaps.md`'s new section gave the Block raid as "between 23:11 and 23:20" (it ran at 23:13 CET, 22:13:48Z to 22:14:40Z; the instance started at 23:11).
+- The lead read every changed passage. Pins on the final texts: `test_release_zips.py` `Ran 205 tests` `OK` (204 before the new pin class), `test_changelog.py` 12 OK, `test_crowdless_maps.py` 14 OK, `test_new_map_checklist.py` 6 OK, `test_dll_versions.py` 1 OK; `git diff --check` clean. The four progress records gained additions only.
+- A follow-up for CODE-1 is proposed to the user as a separate task; nothing of it is done here.
+- Memory of the incident of 2026-11-21: this time `uibridge_status` and `gpu-run hosts` were read before the deploy (EFT not running, no other session).

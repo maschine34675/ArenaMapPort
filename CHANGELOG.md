@@ -34,10 +34,12 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
   older maps in rain outdoors too. Developer key `Lighting (<key>)/RainUnderRoofCheck` (live, default on, needs `General/DeveloperMode`).
   **The author has not seen the drops.**
 - **Chop Shop has a DynamicMaps overview** (one ground view with both exit markers; two files in the plugin's own `dynamicmaps` folder;
-  tested with DynamicMaps 1.2.1).
+  tested in game on 14 November with DynamicMaps 1.2.1, before the 1.3.0 loader change).
 - **Block has a DynamicMaps overview:** one north-up view of both team pockets and the connected raised routes, with both exit markers.
   Its two files stay in ArenaMapPort's own `dynamicmaps/ArenaMapPort_Yard` folder. Tested on GPU-2 with DynamicMaps 1.3.0 using candidate
   `8a1ec4e`: five marker positions and headings, including a raised route and the western edge; no MapPort or DynamicMaps warning.
+  On 22 November the merged build (`0.7.0+3dcf98d`, development state) opened all seven overviews once each in a raid on the test host with
+  DynamicMaps 1.3.0, Block at two positions, with no MapPort or DynamicMaps warning. The author has not looked at the overview.
 - **DynamicMaps 1.3.0 support:** the owned-map loader recognizes both 1.3.0 and 1.2.1 APIs, registers maps before preferences and retains
   unchanged map instances so scans preserve the current view. The 1.2.1 adapter has offline checks for this update, not a fresh native raid.
 
@@ -47,7 +49,7 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
   untouched start mix moves once; any other saved mix stays (hidden revision key `Audio (arena_yard)/AmbientDefaultsRevision`, now at 4; every
   other map only advances its stamp). The move is covered by unit tests; its in-game check was waived.
 - README, FORGE page and the generated package README name seven maps, grass, rain and the key checks.
-- The ZIP grows to about 7.3 GiB (424 distribution files expected after adding Block's two overview files to the initial 422-file plan;
+- The ZIP grows to about 7.3 GiB (424 distribution files by the plan of 22 November, 422 before Block's overview files were added;
   the final build and cut determine the counts and size; 0.6.0: about 5.9 GiB, 396 files).
 
 ### Changed (internal)
@@ -79,8 +81,10 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
   memory, wind motion (none exists).
 - Rain drops: host-run on Block and Equator only; not checked: the other five maps, light rain, glasses, ripples and wet props by eye, the
   outdoor season footstep layer outside the test host's season, a respawn in ArenaMode.
-- Block's DynamicMaps 1.3.0 acceptance belongs to candidate `8a1ec4e`; the combined 0.7.0 release build still requires its final checks.
-  No fresh native raid was run on the retained 1.2.1 adapter. Block's overview was not tested with ArenaMode or Domination.
+- DynamicMaps 1.3.0 in game: the loader on Iceberg and Factory (`b7fb819`, 20 November), Block at five positions (`8a1ec4e`, 21 November) and
+  all seven overviews once each on the merged build `0.7.0+3dcf98d` (22 November, development state). No native raid was run on DynamicMaps 1.2.1
+  since the loader changed (offline contract check against its DLL only). Not tested: the minimap and peek views on the merged build,
+  ArenaMode and Domination. The publication build needs its own run.
 - Block's key file has one wrap (Arena 0.6.2.0.48473) and was checked on 0.6.2.0.48473 and 0.6.1.0.48206 only; the older maps' key files are
   unchanged by the staging and were checked for 0.6.0 on four Arena builds.
 - Still open from 0.6.0: the roar beds at their louder level, Iceberg's ambient sounds, lamp loops and gate sounds and the gate and door sounds
