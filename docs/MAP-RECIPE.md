@@ -50,7 +50,7 @@ chain, see `AGENTS.md` Layout) or from `uibridge_player` while standing there.
   every walkable cell outside the pockets (Tactical needs five distinct coordinates), 16 to 24 rows in all (the tool's defaults), and
   at least 6 usable positions for the pickups. `tools/validate/spawn_coverage.py` measures that on the built
   NavMesh and proposes rows (`--stem <stem> --package work/extract/<package>`); `--check` verifies the committed
-  layout (`tools/tests/test_spawn_layout_rules.py` runs it for the six maps; add the map to its `LAYOUTS` table).
+  layout (`tools/tests/test_spawn_layout_rules.py` runs it for the seven maps (Yard is listed in `spawn_coverage.PENDING_DONOR_MAPS` until ArenaMode adopts a donor row); add the map to its `LAYOUTS` table).
   Take Arena's own markers first (LastHero markers, AI core and born points, CheckPoint stage markers), mesh fill
   points only where none passes. **Rows are appended, never changed:** an existing row keeps its id, position,
   radius and order, and ArenaMode pins one donor row per map by id and exact floats (AGENTS.md, Traps "Spawn rows

@@ -8,7 +8,7 @@ Two layouts, one classification, one verifier:
 
   --single   (the release form the user chose for 0.3.0, 0.4.0 and 0.5.0, and the form of 0.6.0 and 0.7.0; about 3.4 GiB with the four encrypted maps of
               0.3.0, about 3.6 GiB for 0.4.0 with the spectators, about 5.0 GiB for 0.5.0 with Iceberg and the crowd
-              reactions (359 files), about 5.9 GiB for 0.6.0 with Chop Shop (396 files), about 7.3 GiB planned for 0.7.0 with Block
+              reactions (359 files), about 5.9 GiB for 0.6.0 with Chop Shop (396 files), about 7.3 GiB for 0.7.0 with Block
               and three grass bundles (424 files with Block's overview pair, 422 in the initial plan; the plan's figure, the real size comes at the cut); hosted on
               Pixeldrain, not GitHub)
       maschine-ArenaMapPort-<version>.zip     EVERY dist file, the generated README.txt and
@@ -685,10 +685,10 @@ KEYS_BUILT_FOR = "0.6.1.0.48206"
 # the release notes: encrypted with a key derived from the player's Arena files, not copy protection, art and audio stay
 # plaintext, and the build the keys are built for. 0.7.0 (2026-11-21): seven maps; the grass bundle of Bowl, Iceberg and Block is a
 # fourth file encrypted with the map's own key (no new wrap); the key files of Chop Shop and Block carry a wrap for 0.6.2.0.48473 only;
-# the checks stated are the ones on record on 2026-11-21: all seven maps on 0.6.1.0.48206 and 0.6.2.0.48473, the six older maps (for
-# 0.6.0) also on 0.6.2.0.48598 (2026-11-13) and 0.6.2.0.48767 (2026-11-14), the four maps of 0.4.0 on 0.6.0.0.47752 (identical
-# resource files); Block is not checked on the last two nor on 0.6.0, Iceberg and Chop Shop not on 0.6.0. The lead re-runs verify-keys
-# on every Arena build at hand at the cut and changes this sentence (and its pins) when a check is added.
+# the checks stated are the ones on record on 2026-11-22: all seven maps on 0.6.1.0.48206, 0.6.2.0.48473 and 0.6.2.0.48767 (verify-keys,
+# 21 of 21 on 2026-11-22), the six older maps (for 0.6.0) also on 0.6.2.0.48598 (2026-11-13), the four maps of 0.4.0 on 0.6.0.0.47752
+# (identical resource files); Block is not checked on 0.6.2.0.48598 nor on 0.6.0, Iceberg and Chop Shop not on 0.6.0. A later check is
+# added to this sentence, README.md, FORGE.md, the release note and CHANGELOG.md together, with the pins.
 ENCRYPTION_TEXT = (
     "Encrypted bundles: the map bundles in bundles/ (scenes, materials, textures, NavMesh; Bowl, Iceberg and Block have\n"
     "a fourth one for their grass) are encrypted with a key\n"
@@ -696,8 +696,8 @@ ENCRYPTION_TEXT = (
     "scenes; a fixed sample of a few MB is read when the map is first used and never sent anywhere; keys/<map>.json\n"
     "lists the files by path and size only). They work only next to your own Arena files. The keys in this release\n"
     f"are built for Arena {KEYS_BUILT_FOR} (the key files of Chop Shop and Block for 0.6.2.0.48473) and were checked\n"
-    "for all seven maps on 0.6.1.0.48206 and 0.6.2.0.48473; the six older maps were also checked for 0.6.0 on the newer\n"
-    "hotfixes 0.6.2.0.48598 and 0.6.2.0.48767 (Block was not checked there); the four\n"
+    "for all seven maps on 0.6.1.0.48206, 0.6.2.0.48473 and 0.6.2.0.48767; the six older maps were also checked on the hotfix\n"
+    "0.6.2.0.48598 when release 0.6.0 was made (Block was not checked there); the four\n"
     "maps of 0.4.0 were also checked against 0.6.0.0.47752, whose resource files are identical (Iceberg, Chop Shop\n"
     "and Block were not checked there; your build is in the client log at startup, \"Arena: found ...\"); if an Arena\n"
     "update changes a map's resource files,\n"
@@ -822,9 +822,10 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "collision and makes no footstep or bullet effect; it is pressed flat when walked over and it sways with the weather's\n"
             "wind (the port advances the wind phase that the game's own wind calculator would advance). Measured on the test host\n"
             "(1920x1080, frame limiter lifted, one sample per view, before the sway was added) it costs about 0.13 to 0.27 ms per frame; with the game's\n"
-            "120 fps limiter the frame figures stayed at the baseline. The author has seen the grass, which first stood still in the\n"
-            "wind, and asked for the sway on 22 November 2026; the sway was checked on the test host on Block, Bowl and Iceberg by a\n"
-            "frame comparison at strong wind, and the author has not seen it. Nothing was checked with\n"
+            "120 fps limiter the frame figures stayed at the baseline. The grass first stood still in the\n"
+            "wind; the sway was added at the author's request on 22 November 2026 and checked on the test host on Block, Bowl and Iceberg by a\n"
+            "frame comparison at strong wind, and after it was added the author wrote \"ja das Gras passt jetzt\" (meaning 'yes, the grass\n"
+            "is fine now', 22 November 2026; the sentence names no map, weather or view). Nothing was checked with\n"
             "a missing or damaged grass bundle, in a scope view, with grass shadows off, at low texture quality or without TAA.\n"
             "Extract the whole ZIP: with only the DLLs replaced a map has no grass and the client log warns that the file is\n"
             "missing (that fallback is unit-tested, not tried with a real missing file).\n\n"

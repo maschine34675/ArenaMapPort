@@ -52,13 +52,14 @@ Arena is still required). It has no collision, no footstep or bullet effect, is 
 about 0.13 to 0.27 ms per frame on the test host (1080p, frame limiter lifted; measured before the sway was added). Rain on the screen is new in 0.7.0 on every map: in rain, in
 the open and not under a roof, drops run down the screen (it was missing on every ported map before; under a roof there
 are none; no setting). The author has seen the rain drops and found them fine ("Block passt, Regentropfen auch",
-22 November 2026); they were checked on the test host on Block and Equator only. The author has seen the grass, which first
-stood still in the wind, and asked for the sway; the sway was checked on the test host by a frame comparison on the
-three grass maps and the author has not seen it.
+22 November 2026); they were checked on the test host on Block and Equator only. The grass first
+stood still in the wind; the sway was added at the author's request and checked on the test host by a frame comparison on the
+three grass maps, and after it was added the author wrote "ja das Gras passt jetzt" (meaning 'yes, the grass is fine now',
+22 November 2026; the sentence names no map, weather or view).
 
 Chop Shop is new in 0.6.0 (Arena's `Arena_AutoService`, shown in the game as "Arena: Chop Shop"). Its
-ambient mix is a computed start value; the author listened to the map on 14 November 2026 and asked for no change (he said everything
-fits; the statement names no single item).
+ambient mix is a computed start value; the author listened to the map on 14 November 2026 and asked for no change (the statement was that everything
+fits; it names no single item).
 
 Iceberg joined in 0.5.0. Arena's data holds a few lamps far brighter than on any other map, so at
 raid start the port lowers the strongest of them to a limit of 4.6 and lifts the dimmest to a floor
@@ -109,7 +110,7 @@ runs in full. The map bundles are encrypted with a key derived from the Arena fi
 is built from, so they work only next to your own Arena files: a requirement, not copy
 protection (anyone with Arena can decrypt them; the art and audio shipped beside the bundles
 are not encrypted). The keys are built for Arena 0.6.1.0.48206 (the key files of Chop Shop and Block for 0.6.2.0.48473), and the key files of
-the six older maps were checked on 0.6.1.0.48206, 0.6.2.0.48473 and for 0.6.0 the newer hotfixes 0.6.2.0.48598 and 0.6.2.0.48767, byte-identical to 0.6.0's files (Block's on 0.6.1.0.48206 and 0.6.2.0.48473 only); the four older maps also open on 0.6.0.0.47752; Iceberg, Chop Shop and Block were not checked there;
+the six older maps were checked on 0.6.1.0.48206, 0.6.2.0.48473 and for 0.6.0 the newer hotfixes 0.6.2.0.48598 and 0.6.2.0.48767, byte-identical to 0.6.0's files (Block's on 0.6.1.0.48206, 0.6.2.0.48473 and 0.6.2.0.48767); the four older maps also open on 0.6.0.0.47752; Iceberg, Chop Shop and Block were not checked there;
 after an Arena update that changes a map's resource files, that map waits for an updated
 ArenaMapPort package with the key for that build; the other maps keep working.
 
@@ -130,7 +131,7 @@ Close EFT and the SPT server, then extract the whole release ZIP into your SPT d
 Merge both `BepInEx` and `SPT_Runtime`, then restart the server and game. The release's
 `.sha256` file lists the checksum of the ZIP.
 
-The ZIP is about 7.3 GiB (the planned size; the final figure is in the release notes). Upgrading from 0.6.0: extract the whole ZIP over the
+The ZIP is about <zip-gib> GiB. Upgrading from 0.6.0: extract the whole ZIP over the
 installation the same way (keep `BepInEx/config`); it replaces both DLLs and adds Block's files, the grass files of Bowl, Iceberg and Block and
 the overview files for Chop Shop and Block, so take everything from the ZIP (replacing only the DLLs gives a missing-file warning and no grass).
 Upgrading from 0.5.0: extract the whole ZIP over the installation the same way (keep
@@ -175,8 +176,8 @@ stays unchanged. Equator Day, Bay5, Air Pit, Bowl, Iceberg, Chop Shop and Block 
   wave, a player at one of its invisible border walls, its sun shadows at the lowest shadow quality, and any ArenaMode match
   (no ArenaMode match ran on it).
 - Grass (Bowl, Iceberg, Block) and the rain drops on the screen (all maps) were checked on the test host only, the drops
-  on Block and Equator. The author has seen the rain drops and the still grass, not the sway. Not checked: a missing or damaged grass file, a scope view, the lowest
-  texture quality, DLSS/FSR, Bowl and Iceberg at night and in rain, the sway at calm weather and by the author's eye, and the glasses and wet ground in rain.
+  on Block and Equator. The author has seen the rain drops and the grass with its sway and wrote of them "Block passt, Regentropfen auch" and "ja das Gras passt jetzt" (22 November 2026; neither sentence names a weather or view, the second no map). Not checked: a missing or damaged grass file, a scope view, the lowest
+  texture quality, DLSS/FSR, Bowl and Iceberg at night and in rain, the sway at calm weather by eye, and the glasses and wet ground in rain.
 - The appended spawn rows and the exits in the team start areas ran in plain raids on all six older maps and in two ArenaMode Team
   Deathmatch runs (Bowl, Iceberg); a respawn onto an in-box marker, other ArenaMode modes with the new rows and the flares seen
   from across a map are not checked.

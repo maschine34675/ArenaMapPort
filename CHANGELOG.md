@@ -6,7 +6,7 @@ oldest version that is still downloadable.
 Dates are ISO dates (the newest entry may read "unreleased" while a version is prepared). Each entry links its full release note (download links, checksums, install and upgrade steps),
 and the settings text is in the [README](README.md).
 
-## 0.7.0 - unreleased
+## 0.7.0 - 2026-11-22
 
 Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
 
@@ -28,9 +28,8 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
   (`arena_bowl_grass.bundle`, `arena_iceberg_grass.bundle`, `arena_yard_grass.bundle`) that opens with the map's own key. No collision and no footstep or bullet effect; EFT's own trampling presses it flat when walked over. **It sways
   in the wind** (22 November, after the author saw it standing still): EFT's grass shader has wind code but a ported map has no wind calculator to advance
   its phase, so the port advances it as EFT's `WindCalculator` would (strength and direction follow the weather's wind); developer key `Map (<key>)/GrassWind`
-  (live, default on, needs `General/DeveloperMode`). Checked on the test host on Block, Bowl and Iceberg by a frame comparison at strong wind (development state, build
-  `0.7.0+0ee4442`). No player setting. About 0.13 to 0.27 ms per frame at 1080p with the frame limiter lifted (one sample per view, test host, measured before the sway). The texts that said no grass
-  is ported on Bowl and Iceberg no longer hold. **The author has seen the grass (still, on 22 November) and has not seen the sway.**
+  (live, default on, needs `General/DeveloperMode`). Checked on the test host on Block, Bowl and Iceberg by a frame comparison at strong wind (on an earlier build than the release build). No player setting. About 0.13 to 0.27 ms per frame at 1080p with the frame limiter lifted (one sample per view, test host, measured before the sway). The texts that said no grass
+  is ported on Bowl and Iceberg no longer hold. **The author saw the grass standing still and asked for the sway; after the sway was added the author wrote "ja das Gras passt jetzt"** (meaning 'yes, the grass is fine now', 22 November 2026; the sentence names no map, weather or view).
 - **Rain drops on the screen on every map, on by default.** The game's "camera under rain" flag was false for ever on a ported map; the repair
   answers it from the rain-cover depth photo, so drops run down the screen in rain in the open and not under a roof. The same flag also drives
   the water on glasses, the ripples on wet ground and the rain on wet props (not looked at). Host-run on Block and Equator; it changes the six
@@ -39,9 +38,9 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
 - **Chop Shop has a DynamicMaps overview** (one ground view with both exit markers; two files in the plugin's own `dynamicmaps` folder;
   tested in game on 14 November with DynamicMaps 1.2.1, before the 1.3.0 loader change).
 - **Block has a DynamicMaps overview:** one north-up view of both team pockets and the connected raised routes, with both exit markers.
-  Its two files stay in ArenaMapPort's own `dynamicmaps/ArenaMapPort_Yard` folder. Tested on GPU-2 with DynamicMaps 1.3.0 using candidate
-  `8a1ec4e`: five marker positions and headings, including a raised route and the western edge; no MapPort or DynamicMaps warning.
-  On 22 November the merged build (`0.7.0+3dcf98d`, development state) opened all seven overviews once each in a raid on the test host with
+  Its two files stay in ArenaMapPort's own `dynamicmaps/ArenaMapPort_Yard` folder. Tested on the test host with DynamicMaps 1.3.0 using
+  an earlier candidate: five marker positions and headings, including a raised route and the western edge; no MapPort or DynamicMaps warning.
+  On 22 November a later build, still earlier than the release build, opened all seven overviews once each in a raid on the test host with
   DynamicMaps 1.3.0, Block at two positions, with no MapPort or DynamicMaps warning.
 - **DynamicMaps 1.3.0 support:** the owned-map loader recognizes both 1.3.0 and 1.2.1 APIs, registers maps before preferences and retains
   unchanged map instances so scans preserve the current view. The 1.2.1 adapter has offline checks for this update, not a fresh native raid.
@@ -52,8 +51,7 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
   untouched start mix moves once; any other saved mix stays (hidden revision key `Audio (arena_yard)/AmbientDefaultsRevision`, now at 4; every
   other map only advances its stamp). The move is covered by unit tests; its in-game check was waived.
 - README, FORGE page and the generated package README name seven maps, grass, rain and the key checks.
-- The ZIP grows to about 7.3 GiB (424 distribution files by the plan of 22 November, 422 before Block's overview files were added;
-  the final build and cut determine the counts and size; 0.6.0: about 5.9 GiB, 396 files).
+- The ZIP grows to about <zip-gib> GiB (<file-count> distribution files; 0.6.0: about 5.9 GiB, 396 files).
 
 ### Changed (internal)
 
@@ -81,15 +79,14 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
   label (read back on the test host).
 - Grass: run on the test host on the three maps by day; not checked: a really missing or damaged grass bundle (unit tests only), a scope view,
   grass shadows off, texture quality Low, TAA off or DLSS and FSR, a respawn in ArenaMode, Bowl and Iceberg at night and in rain, the graphics
-  memory, the sway by the author's eye and at calm weather (measured only), in a scope view (it runs faster there, as in EFT) and in the grass
+  memory, the sway at calm weather by eye (measured only; the author's sentence names no weather), in a scope view (it runs faster there, as in EFT) and in the grass
   shadows, and a respawn or camera replacement (the sway phase restarts).
 - Rain drops: host-run on Block and Equator only; not checked: the other five maps, light rain, glasses, ripples and wet props by eye, the
   outdoor season footstep layer outside the test host's season, a respawn in ArenaMode.
-- DynamicMaps 1.3.0 in game: the loader on Iceberg and Factory (`b7fb819`, 20 November), Block at five positions (`8a1ec4e`, 21 November) and
-  all seven overviews once each on the merged build `0.7.0+3dcf98d` (22 November, development state). No native raid was run on DynamicMaps 1.2.1
-  since the loader changed (offline contract check against its DLL only). Not tested: the minimap and peek views on the merged build,
-  ArenaMode and Domination. The publication build needs its own run.
-- Block's key file has one wrap (Arena 0.6.2.0.48473) and was checked on 0.6.2.0.48473 and 0.6.1.0.48206 only; the older maps' key files are
+- DynamicMaps 1.3.0 in game: the loader on Iceberg and Factory (20 November), Block at five positions (21 November) and
+  all seven overviews once each on a later build (22 November). No native raid was run on DynamicMaps 1.2.1
+  since the loader changed (offline contract check against its DLL only). Not tested: the minimap and peek views, ArenaMode and Domination.
+- Block's key file has one wrap (Arena 0.6.2.0.48473) and was checked on 0.6.1.0.48206, 0.6.2.0.48473 and 0.6.2.0.48767; the older maps' key files are
   unchanged by the staging and were checked for 0.6.0 on four Arena builds.
 - Still open from 0.6.0: the roar beds at their louder level, Iceberg's ambient sounds, lamp loops and gate sounds and the gate and door sounds
   of every map were not listened to; Chop Shop's tribune decks, rain-depth readback and equator shutter collider, the unchecked spawn-row and exit
@@ -122,8 +119,8 @@ Full release note: [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md).
   plugin), the ScoreMonitors rows (4 of 4 TV holders with a face), Arena's own spectator crowd (30 fans with calls, murmur and reactions),
   loading screens, a menu banner, an official description and a selection marker on the region map. Time of day and weather follow the
   server, as on Bay5. No loot and no scav raids. **Chop Shop has no DynamicMaps overview, no native water and no winter or snow look.**
-  The sound mix of its ambience is a computed start value; the author listened to the map on 14 November 2026 and asked for no change ("passt alles"; his
-  statement covers the map as he played it and names no single item).
+  The sound mix of its ambience is a computed start value; the author listened to the map on 14 November 2026 and asked for no change ("passt alles"; the
+  statement covers the map as it was played and names no single item).
 - **More Bot spawn rows on all six maps** (Chop Shop 16, Equator 16, Bay5 16, Iceberg 17, Air Pit 20, Bowl 21; 39 rows appended, the
   Player rows stay at 4 per map). Existing rows are byte for byte unchanged (ArenaMode compiles six of them in by id and coordinates). The
   rows widen the pool a mode plugin can place bots and pickups from; ArenaMode's Team Deathmatch and Domination use their own points.

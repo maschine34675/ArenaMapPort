@@ -30,7 +30,8 @@ water, and Iceberg its sea. Bowl, Iceberg and Block show Arena's own grass (belo
 Block is new in 0.7.0 (Arena's `Arena_Yard`). The author looked at the map and listened to
 it on 21 November 2026, night included, and approved it ("sieht gut aus, auch nachts, ist dann
 halt wie die anderen maps im außenbereich recht dunkel. hört sich gut an, ambient sounds können
-etwas lauter sein (gain auf 5, range auf 3)"): the statement covers the look and the sound as a
+etwas lauter sein (gain auf 5, range auf 3)", meaning: looks good, also at night, though dark outdoors like the other
+maps; sounds good, the ambient sounds can be a little louder): the statement covers the look and the sound as a
 whole and names no single item, and the ambient sound mix of Block (gain 5 dB, range 3) is the
 author's own by ear. Like the other maps outdoors, it is rather dark at night. Block's gate sounds, crowd calls and
 reactions were not listened to one by one. The map was raided on the test host with and without
@@ -46,9 +47,10 @@ it is pressed flat when a player walks over it, and it sways with the weather's 
 advances the wind phase that EFT's own wind calculator would advance, and strength and direction
 follow the weather. On the test host (1920 x 1080, the game's frame limiter lifted)
 it cost about 0.13 to 0.27 ms per frame (measured before the sway was added); with the 120 fps limiter the frame rate stayed at the baseline.
-The author has seen the grass; the first version stood still in the wind, and the sway was added at the
-author's request on 22 November 2026. It was checked on the test host by a frame comparison on Block,
-Bowl and Iceberg at strong wind, and the author has not seen the sway. If you replace only the DLLs
+The first version stood still in the wind; the sway was added at the author's request on 22 November
+2026. It was checked on the test host by a frame comparison on Block, Bowl and Iceberg at strong wind,
+and after it was added the author wrote "ja das Gras passt jetzt" (meaning 'yes, the grass is fine now',
+22 November 2026; the sentence names no map, weather or view). If you replace only the DLLs
 of an older installation, the log warns about the missing grass file and no grass appears:
 extract the whole ZIP.
 
@@ -64,8 +66,8 @@ sentence names no map).
 
 Chop Shop is new in 0.6.0 (Arena's `Arena_AutoService`, shown in the game as "Arena: Chop Shop").
 Its ambient sound mix is a computed start value; the author listened to the map on
-14 November 2026 and asked for no change ("passt alles"; his statement covers the map
-as he played it and names no single item). It has no native water and no
+14 November 2026 and asked for no change ("passt alles"; the statement covers the map
+as it was played and names no single item). It has no native water and no
 winter set.
 
 Iceberg joined in 0.5.0. Its brightest lamps (the lobby crystal lamps and the
@@ -73,7 +75,7 @@ chandeliers, among others) are far brighter in Arena's data than on any other ma
 at raid start the port lowers the strongest of them and lifts the dimmest to a floor,
 and restores the originals when the raid ends. The two limits (4.6 and 1.8 since
 0.6.0; 4.8 and 1.9 in 0.5.0, a saved pair of those moves once) were
-chosen by the author by eye on his own PC and can be changed with DeveloperMode.
+chosen by the author by eye on the author's own PC and can be changed with DeveloperMode.
 The ambient sound mix of Iceberg is a first choice that has not been listened through
 yet.
 
@@ -96,7 +98,7 @@ stands is the port's choice. The crowds can also answer match events: through th
 start or finish, and one to three voices answer with original fan clips (70 in
 all) while the stands add one of Arena's louder cheering or angry crowd recordings.
 ArenaMode 0.4.0 and later uses the contract and drives the reactions from its match events; a plain raid without a mode sends no such event, so nothing reacts there. The author listened to the developer demo on
-7 November 2026 and found it good (he did not report on the angry recordings
+7 November 2026 and found it good (the author did not report on the angry recordings
 separately; the demo and the 70 clips ran on the four older crowd maps on 2 November, the roar layer only on Equator and Bowl, not on Bay5 and Air Pit; Iceberg has no crowd,
 and no single reaction on Chop Shop or Block is recorded as heard apart from the author's statements about those maps as a whole). The roar beds are exported 6 dB louder than in 0.5.0 (since 0.6.0; the developer
 volume key stays at 1.0); that level has not been listened to. The idle and cheering animations run independently
@@ -148,8 +150,8 @@ the gondola overshoots its open pose a little, as Arena's does.
   with Arena can decrypt them), and the art and audio files shipped beside the bundles are not
   encrypted). The keys in this release are built for Arena 0.6.1.0.48206 (the key files of Chop Shop and Block for
   0.6.2.0.48473), and the key files of the six older maps were checked on 0.6.1.0.48206, 0.6.2.0.48473 and, for 0.6.0, the
-  newer hotfixes 0.6.2.0.48598 and 0.6.2.0.48767 (these files are byte-identical to 0.6.0's); Block's key file was checked on 0.6.1.0.48206 and
-  0.6.2.0.48473 only; the four maps of 0.4.0 also open on
+  newer hotfixes 0.6.2.0.48598 and 0.6.2.0.48767 (these files are byte-identical to 0.6.0's); Block's key file was checked on 0.6.1.0.48206,
+  0.6.2.0.48473 and 0.6.2.0.48767; the four maps of 0.4.0 also open on
   0.6.0.0.47752, whose resource files are the same; Iceberg, Chop Shop and Block were not checked
   there (your build is in the client log at startup, `Arena: found ...`); if an Arena update changes a map's resource files, that map
   will not load (the client log names the cause) until an updated ArenaMapPort package
@@ -161,8 +163,7 @@ the gondola overshoots its open pose a little, as Arena's does.
 - Fika compatibility has not been verified.
 
 The release ZIP contains the built maps. Players do not need to run the export
-tools or install Unity. It is larger than before, about 7.3 GiB (the planned size; the final
-figure is in the release notes), and nothing needs to be installed by hand besides it.
+tools or install Unity. It is larger than before, about <zip-gib> GiB, and nothing needs to be installed by hand besides it.
 
 ## Installation
 
@@ -300,7 +301,7 @@ listened to them in play on 30 October 2026 and approved them.
 Iceberg has had raids on the test host (with and without bots, the hideout opened
 afterwards) with no ArenaMapPort warning, but fewer than the older four maps. Its
 ambient sound mix, its gate sounds and the lamp limits of 4.6 and 1.8 are first
-choices (the lamp limits were set by the author by eye on his PC; the 0.6.0 values ran in an
+choices (the lamp limits were set by the author by eye on the author's PC; the 0.6.0 values ran in an
 Iceberg raid on the test host on 14 November 2026, the log line of the one-time move
 from 4.8 and 1.9 was not captured). It has no spectators
 and no per-light flares, and it is a server-time map
@@ -327,11 +328,11 @@ calls, the murmur, the reactions and the room acoustics. Not checked: the north 
 from the north pocket, a long raid with every wave, a player touching one of the invisible border walls
 or a bullet against one, the area south of the south pocket, the look of its two tree stand-ins, the sun shadows of its houses at the lowest
 shadow quality and at hours other than 08:00, the banner, description and loading images on the test host, and the
-ambient mix's one-time move for a saved start value (unit-tested only). Nobody has played an ArenaMode match on it, and (no ArenaMode Team Deathmatch, Domination, Deathmatch, Tactical or Zombies match
+ambient mix's one-time move for a saved start value (unit-tested only). Nobody has played an ArenaMode match on it (no ArenaMode Team Deathmatch, Domination, Deathmatch, Tactical or Zombies match
 ran with its spawn rows). The grass of Bowl, Iceberg and Block was checked on the test host by day (about 0.13 to 0.27 ms
 per frame at 1080p with the frame limiter lifted, one sample per view); not checked: a missing or damaged grass file, a scope view, grass
 shadows off, the lowest texture quality, TAA off or DLSS/FSR, a respawn in ArenaMode, Bowl and Iceberg at night and
-in rain, GPU memory, the sway by the author's eye or at calm weather (by the code it runs faster in a scope view, as the game's own grass wind does; not looked at), and the sway of the grass shadows.
+in rain, GPU memory, the sway at calm weather by eye (by the code it runs faster in a scope view, as the game's own grass wind does; not looked at), and the sway of the grass shadows.
 The rain drops ran on Block and Equator only; not checked: glasses,
 ripples and wet props by eye, light rain, and the other maps in rain.
 

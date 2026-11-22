@@ -32,7 +32,7 @@ namespace ArenaMapPort.Client
     /// 0.25 players 0.45, the five interior players 0.24 to 0.52 and the hums 0.17 and 0.14, which keeps the hums below the median (0.71 and 0.59 of it against the authored 0.5
     /// and 0.3). Range 2 (Iceberg's, not Bowl's 3) carries the hums to 14 and 20 m instead of 21 and 30 m: a refrigerator and a power hum should not reach across the yard,
     /// while the exterior sources (7 to 300 m) already outlast the 80 x 150 m map at range 2. Its keys were new, so revisions 1 to 3 never touch them.
-    /// 2026-11-21 (PLAN-YARD item 24, the author's pass on the built map): the author looked and listened on his own PC and wrote "sieht gut aus, auch nachts, ist dann halt wie die anderen
+    /// 2026-11-21 (PLAN-YARD item 24, the author's pass on the built map): the author looked and listened on the author's own PC and wrote "sieht gut aus, auch nachts, ist dann halt wie die anderen
     /// maps im außenbereich recht dunkel. hört sich gut an, ambient sounds können etwas lauter sein (gain auf 5, range auf 3)". Yard's default is therefore gain 5 dB, offset 0.1
     /// (unchanged, the author named none) and range 3: the author's values by ear, replacing the computed start mix. By the formula above (gain 5 dB = x1.778, 3 dB = x1.413) the 0.10 majority
     /// goes from 0.24 to 0.28, the 0.25 players from 0.45 to 0.54, the fridge (0.05) from 0.17 to 0.19 and the electricity hum (0.03) from 0.14 to 0.15, so the hums stay below the median

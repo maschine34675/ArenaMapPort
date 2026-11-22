@@ -250,3 +250,47 @@ Digests: `work/tmp/merge-070/handoff/{adapter-code,tests-pipeline,release-texts,
 - **Pins on the final texts:** `test_release_zips.py` `Ran 205 tests` `OK`, `test_changelog.py` 12 OK, `test_crowdless_maps.py` 14 OK, `test_new_map_checklist.py` 6 OK, `test_dll_versions.py` 1 OK; `git diff --check` clean.
 - **Host state at the end of the wind run:** GPU-2 at the main menu, client `0.7.0+0ee4442` loaded (16/16 identical), no control lease, no other session; every weather value was set through the test hook and ended with its raid; no config value was written.
 - The full Python suite on the committed tree of this pass: recorded in the next section.
+
+## 2026-11-22 (3) - The user's word for publication, the final Python run, the key files on three Arena builds, the pre-publication audit
+
+**The user's word (2026-11-22, verbatim):** "ja das Gras passt jetzt. dann falls nötig aufräumen, alle branches/worktrees mergen, löschen, pushen. schauen das docs aktuell sind und release als 0.7.0 auf github erstellen".
+
+What it covers:
+- The grass: after the sway was added the author looked at the grass again and wrote "ja das Gras passt jetzt". The sentence names no map, no weather, no view and no single aspect (look, sway, cost, shadows); the texts quote it and claim nothing beyond it. The earlier "has not seen the sway" sentences are false from here on and go from the player texts.
+- The number: 0.7.0 is the user's ("release als 0.7.0"); the "lead's pick" and "can still change it" wording goes.
+- The go for publication: clean up where needed, merge every branch and worktree into `main`, delete them, push, bring the documents up to date, create the GitHub release as 0.7.0. Release form as 0.6.0: ONE ZIP on Pixeldrain; the GitHub release carries the note (`docs/releases/v0.7.0.md` without its title line) as its body and the `.sha256` as its only asset. Release date 2026-11-22.
+- The earlier statements stay as quoted: 2026-11-21 (Block's look, the night included, and its sound, as a whole; the ambient mix by ear) and 2026-11-22 "Block passt, Regentropfen auch, mir fiel aber gerade auf dass das Gras sich nicht im Wind bewegt, bekommen wir das auch noch hin? beim drüberlaufen wird es zumindest platt gedrückt" (Block as a whole, no single item; the rain drops seen and fine; the grass seen standing still).
+
+**The full Python suite on the committed tree `6b0f7e7`:** HEAD was `6b0f7e7` at the start (11:27:35) and at the end (12:10:31) of the run, the tree clean. `Ran 3673 tests in 2550.074s`, `OK (skipped=72)`. The .NET suite (3,845 tests) was run on the code of `0ee4442`; no code has changed since.
+
+**`verify-keys`, 2026-11-22 11:58 to 12:00, read-only:** the seven staged key files against three Arena installations, 21 of 21 `unlocks the store's content key`: Arena 0.6.2.0.48473 (this build machine), 0.6.1.0.48206 (the test host's share) and 0.6.2.0.48767 (a third machine). The six older key files read `wrap 0 (built for 0.6.1.0.48206)` (Chop Shop's `built for 0.6.2.0.48473`); Block's reads `wrap 0 (built for 0.6.2.0.48473)`. Block's key file is therefore checked on three builds (0.6.1.0.48206, 0.6.2.0.48473, 0.6.2.0.48767), where the texts said two; README, FORGE, the release note's "Requirements", `ENCRYPTION_TEXT` of the packer (with its pins) and the CHANGELOG move together. The sentences about 0.6.0.0.47752 (the four older maps, checked for 0.3.0; not run for Iceberg, Chop Shop and Block) stay as they are.
+
+**The pre-publication audit** (workflow `release-070-audit`: four read-only auditors, each finding read by a skeptic; the auditors edited nothing). The blocker and should-fix findings per lens, by the skeptic's verdict:
+
+| Lens | Confirmed | Partly (applied with the corrected fix) | Refuted | Notes |
+|---|---|---|---|---|
+| Release note against the records | 5 | 4 | 0 | 2 |
+| Player texts (README, FORGE, CHANGELOG, packer, dist manifest) | 9 | 4 | 1 | 2 |
+| State documents (AGENTS, HANDOFF, INDEX, plans, manuals) | 11 | 4 | 0 | 4 |
+| Repository hygiene | 4 | 5 | 0 | 3 |
+
+No blocker was found in tracked content; the blockers are sentences that the user's word and the publication itself make false. The kinds of text finding:
+- "the author has not seen the sway" and "the sway by the author's eye" listed as unchecked, in the README, FORGE, CHANGELOG, the release note, the packer's README.txt with its pin, the state documents and the plan;
+- "unreleased", "prepared, NOT published", "the lead's pick", "nothing is cut" and the HTML publication checklist at the head of the release note, which would ship in the GitHub release body;
+- the "development state" labels and the stale test counts (3,808, 3,827, 3,583) in the release note and the CHANGELOG, and a plan figure one step behind;
+- sentences that name a developer key where the manifest says no player text does (decided: the CHANGELOG's keys stay, the manifest and AGENTS.md are corrected);
+- the cost figures, which predate the sway and say so in the README and the CHANGELOG but not in the release note;
+- the DynamicMaps loader's `1c5feef` (an overview 1.3.0 cannot load stays out), which never ran on a host and is not named in the note;
+- gendered pronouns for the author in README, FORGE and CHANGELOG, an unbalanced parenthesis in the README, and an untranslated German quote;
+- map counts and file lists that the seven-map registry made stale (five, six or eight maps, four packs, eight files, eight mutants), missing Layout rows, a HANDOFF heading that still reads "Phase A", INDEX entries that still read "Catalog-only so far".
+
+**Repository hygiene, verdict in full.** Audited from git (`origin/main..HEAD`: 36 commits, 81 added files, 22,624 inserted lines) plus branch and worktree state; the Python suite, dotnet and a deep comparison of the DynamicMaps test doubles beyond a marker-string probe were not part of it. No hygiene blocker in tracked content.
+- All 36 commits: author and committer `maschine34675` with the noreply address; the trailers are Claude co-author lines only.
+- Hex strings added since `origin/main`, all attributed: `0ee4442363e4`, `3dcf98d8d870` and `8a1ec4e91bf7` are git commits; the 64-hex `0b16212c...` in `NativeGrassPackModelTests.cs` and `tools/tests/test_grass_pack.py` is the synthetic pack test vector pinned on both sides; the four 64-hex values in `docs/progress/dynamicmaps-130.md` are SHA-256 of DLLs (the project's client DLL, ArenaMode's client DLL and the DynamicMaps 1.3.0 release). No Arena file hash and no unattributed string.
+- No BSG-derived data added: the added files are .cs, .py, .ps1, .md, the `tools/maps/yard.*.json` sidecars (names, coordinates, derived numbers, no locale or voice text), four stand-in shaders with .meta and one .targets; no svg, jsonc, png, wav, bundle, pcl or dll, and no tracked `keys/`, `dist/` or `work/` path.
+- No key material, credential, e-mail address or new IP address in added lines; the "secret" strings in the grass tests are fake paths of an error-leak test. No TODO, FIXME or HACK added; no stage-1 NativeGrass probe key or class left in the client.
+- `THIRD-PARTY-NOTICES.md` unchanged: DynamicMaps is bound by reflection only, the test double is an independent fixture, no upstream text was found in it, no notice is required.
+- Branches: `claude/cool-mclean-d3f849`, `claude/heuristic-torvalds-934d8f`, `claude/wonderful-hawking-613f6e`, `feature/block-dynamicmaps`, `fix/dynamicmaps-130` and `fix/spawngate-floor-probe` are all 0 commits ahead of `feature/yard`; none exists on origin. `main` = `origin/main` = `6a5c8c4`, so the merge of `feature/yard` is a fast-forward. Three worktrees (`.claude/worktrees/cool-mclean-d3f849`, `work/dynamicmaps-yard/repo`, `work/dynamicmaps130-impl/MapPort`) are clean and hold ignored `bin/`, `obj/` and `dist/` only; there is no stash.
+- The tag `v0.7.0` exists neither locally nor on origin (origin has `v0.5.0` and `v0.6.0`). Versions read 0.7.0 in both csproj files, `Plugin.PluginVersion` and `ModMetadata`.
+
+**What follows, in this order:** the text stage with the audit's findings applied, the build commit, the release build WITHOUT DllOnly and the server build, the gates, the host run of all seven maps and the hideout on the release build, the cut (`make_release_zips.py --single --extract-check`, `--verify-only`), the VirusTotal scan of both DLLs, the Pixeldrain upload, the publication commit, the merge into `main`, the tag `v0.7.0`, the push and the GitHub release. The lead records each of these in the following sections of this file. None of the steps after the text stage is done at the time of this section.

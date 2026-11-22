@@ -202,12 +202,11 @@ Source, counts and limits: [Bowl overview](../../docs/progress/bowl-dynamicmaps.
 ## Release staging and migration (2026-10-11)
 
 Accepted packs are stored under ignored
-`work/dynamicmaps/release/ArenaMapPort_Equator/` and `ArenaMapPort_Bay5/`, plus `ArenaMapPort_AirPit/` and
-`ArenaMapPort_Bowl/` (item 17).
+`work/dynamicmaps/release/ArenaMapPort_Equator/` and `ArenaMapPort_Bay5/`, plus `ArenaMapPort_AirPit/`, `ArenaMapPort_Bowl/`, `ArenaMapPort_Iceberg/`, `ArenaMapPort_AutoService/` and `ArenaMapPort_Yard/`.
 Copy the approved files from each accepted `pack/` there after visual validation.
 The 2026-10-24 gate refresh supersedes the earlier compass-only Equator/Bay5 packs and the October AirPit/Bowl packs;
 see [the regeneration record](../../docs/progress/dynamicmaps-gate-refresh-20261024.md).
-Every client Release build stages these eight explicit files under
+Every client Release build stages these fourteen explicit files (seven packs, two files each) under
 `dist/BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/`, including DLL-only builds.
 Preview PNGs and generation receipts are not shipped.
 
