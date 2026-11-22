@@ -32,6 +32,8 @@ then [docs/progress/INDEX.md](docs/progress/INDEX.md) to find the progress log f
 [docs/SPEC.md](docs/SPEC.md) is the original spike specification; its "Decisions 2026-09-20" section at
 the end overrides the spike framing. `README.md` is the user-facing summary.
 
+**Block overview (2026-11-21):** `feature/block-dynamicmaps` adds Yard's seventh owned DynamicMaps pack, on top of the verified 1.3 loader. Native GPU-2 acceptance on code commit `8a1ec4e` covered 18 catalogue entries, five positions/headings and 26,771 SVG vertices. Source and native evidence: [docs/progress/yard-dynamicmaps.md](docs/progress/yard-dynamicmaps.md). Accepted data is retained under ignored `work/dynamicmaps/release/ArenaMapPort_Yard`; no game-derived map data is in Git. The isolated branch incorporates the committed 0.7.0 preparation while leaving the active Yard release checkout and publication untouched.
+
 ## Decisions that shape every task (user, 2026-09-20)
 
 Current source (2026-10-03) is Arena 0.6.0.47752 / Unity 6000.3.6f1. Export tools
@@ -76,7 +78,7 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
   `pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm` (quote the path: an
   unquoted backslash in bash once created a stray folder). Without `-Confirm` the script is a dry run.
   The optional DynamicMaps packs use the same script with `-DynamicMapsPackage <pack-folder>`
-  and `-DynamicMapsMap Equator|Bay5|AirPit|Bowl|Iceberg|AutoService` (default Equator; AutoService = Chop Shop);
+  and `-DynamicMapsMap Equator|Bay5|AirPit|Bowl|Iceberg|AutoService|Yard` (default Equator; AutoService = Chop Shop, Yard = Block);
   that separate mode copies only its two owned map-data files into maschine-ArenaMapPort/dynamicmaps.
   The user-authorized `-RemoveLegacyDynamicMaps` migration removes only the old Equator/Bay5
   packages from DynamicMaps/Maps, after both replacements and the adapter DLL match dist.

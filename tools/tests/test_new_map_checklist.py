@@ -50,7 +50,7 @@ import validate_map_descriptors as VD  # noqa: E402
 NO_FLARES = frozenset({"arena_airpit", "arena_iceberg", "arena_yard"})              # no active flare lamps in the play space (CROWDLESS-style decision list)
 NO_WATER = frozenset({"arena_equator", "arena_airpit", "arena_bowl", "arena_autoservice", "arena_yard"})   # no sea mesh (NATIVE_WATER_MAP_KEYS is the has-list)
 NO_GRASS = frozenset({"arena_equator", "arena_bay5", "arena_airpit", "arena_autoservice"})   # no Arena grass (NATIVE_GRASS_MAP_KEYS is the has-list; Bowl, Iceberg and Yard ship the additional grass bundle since 2026-11-21)
-NO_OVERVIEW = frozenset({"arena_yard"})                                  # Yard has no DynamicMaps overview (plan: none); the other six ship one
+NO_OVERVIEW = frozenset()                                              # all seven maps have a DynamicMaps overview, including Yard/Block
 NO_OFFICIAL_DESCRIPTION = frozenset({"arena_iceberg"})                  # Arena's locales carry none; the port's own LocaleDescription is used
 # Maps that take an older path than the table the checklist asks about (their rows predate the table, listed so that the exemption is visible).
 LEGACY_AMBIENT_EXPORT = frozenset({"arena_equator", "arena_bay5"})      # native_features.AUDIO_EXPORTERS: ambient audio through Equator's / Bay5's own driver

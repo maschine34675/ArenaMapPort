@@ -20,7 +20,7 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
   walls, two exits (one in each team pocket), 4 Player rows and 18 Bot rows, Arena's gate and door sounds (released by a mode plugin), the
   ScoreMonitors rows (8 of 8 TV holders with a face), Arena's own spectator crowd (27 fans with calls, murmur and reactions), five loading screens,
   a menu banner, an official description and a selection marker on the region map. Time of day and weather follow the server, as on Bay5. No loot
-  and no scav raids. **Block has no per-light flares, no DynamicMaps overview, no native water, no winter or snow look and no ArenaMode entry from
+  and no scav raids. **Block has no per-light flares, no native water, no winter or snow look and no ArenaMode entry from
   this project** (whether and when ArenaMode offers it is ArenaMode's decision; no ArenaMode match was run on it). The author looked at and
   listened to the map on 21 November 2026 and approved it as a whole ("sieht gut aus, auch nachts, ist dann halt wie die anderen maps im außenbereich recht dunkel. hört sich gut an, ambient sounds können etwas lauter sein (gain auf 5, range auf 3)"; the statement names no
   single item), and chose its ambient mix by ear: 5 dB, offset 0.1, range 3.
@@ -34,7 +34,12 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
   older maps in rain outdoors too. Developer key `Lighting (<key>)/RainUnderRoofCheck` (live, default on, needs `General/DeveloperMode`).
   **The author has not seen the drops.**
 - **Chop Shop has a DynamicMaps overview** (one ground view with both exit markers; two files in the plugin's own `dynamicmaps` folder;
-  tested with DynamicMaps 1.2.1). Block has none.
+  tested with DynamicMaps 1.2.1).
+- **Block has a DynamicMaps overview:** one north-up view of both team pockets and the connected raised routes, with both exit markers.
+  Its two files stay in ArenaMapPort's own `dynamicmaps/ArenaMapPort_Yard` folder. Tested on GPU-2 with DynamicMaps 1.3.0 using candidate
+  `8a1ec4e`: five marker positions and headings, including a raised route and the western edge; no MapPort or DynamicMaps warning.
+- **DynamicMaps 1.3.0 support:** the owned-map loader recognizes both 1.3.0 and 1.2.1 APIs, registers maps before preferences and retains
+  unchanged map instances so scans preserve the current view. The 1.2.1 adapter has offline checks for this update, not a fresh native raid.
 
 ### Changed
 
@@ -42,7 +47,8 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
   untouched start mix moves once; any other saved mix stays (hidden revision key `Audio (arena_yard)/AmbientDefaultsRevision`, now at 4; every
   other map only advances its stamp). The move is covered by unit tests; its in-game check was waived.
 - README, FORGE page and the generated package README name seven maps, grass, rain and the key checks.
-- The ZIP grows to about 7.3 GiB (422 files by the plan, the cut's count is in the release note; 0.6.0: about 5.9 GiB, 396 files).
+- The ZIP grows to about 7.3 GiB (424 distribution files expected after adding Block's two overview files to the initial 422-file plan;
+  the final build and cut determine the counts and size; 0.6.0: about 5.9 GiB, 396 files).
 
 ### Changed (internal)
 
@@ -73,15 +79,15 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
   memory, wind motion (none exists).
 - Rain drops: host-run on Block and Equator only; not checked: the other five maps, light rain, glasses, ripples and wet props by eye, the
   outdoor season footstep layer outside the test host's season, a respawn in ArenaMode.
-- DynamicMaps 1.3 is not tested: on the test host, which runs 1.3, ArenaMapPort logs that the API differs from the verified 1.2.1 and skips its
-  optional overview integration. The overviews were tested with 1.2.1.
+- Block's DynamicMaps 1.3.0 acceptance belongs to candidate `8a1ec4e`; the combined 0.7.0 release build still requires its final checks.
+  No fresh native raid was run on the retained 1.2.1 adapter. Block's overview was not tested with ArenaMode or Domination.
 - Block's key file has one wrap (Arena 0.6.2.0.48473) and was checked on 0.6.2.0.48473 and 0.6.1.0.48206 only; the older maps' key files are
   unchanged by the staging and were checked for 0.6.0 on four Arena builds.
 - Still open from 0.6.0: the roar beds at their louder level, Iceberg's ambient sounds, lamp loops and gate sounds and the gate and door sounds
   of every map were not listened to; Chop Shop's tribune decks, rain-depth readback and equator shutter collider, the unchecked spawn-row and exit
   items, Iceberg's sun shadows at Medium and High and in the evening, Equator's puddle cache, the missing Books and CardBoard impact sounds and
   Fika compatibility are unchanged.
-- Spectator crowds exist on six of the seven maps (not Iceberg); lamp flares on Equator, Bay5, Bowl and Chop Shop; overviews on all but Block;
+- Spectator crowds exist on six of the seven maps (not Iceberg); lamp flares on Equator, Bay5, Bowl and Chop Shop; overviews on all seven;
   native grass on Bowl, Iceberg and Block. No loot and no scav raids.
 
 ### Compatibility
@@ -90,7 +96,7 @@ Full release note: [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
 - One ZIP on Pixeldrain, as for 0.3.0 to 0.6.0 (too large for a GitHub release asset; the GitHub release carries the notes, the links and the
   checksum file). Close EFT and the SPT server and extract the whole ZIP over the installation; keep `BepInEx/config`. There is no DLL-only
   package. From 0.6.0 the ZIP replaces both DLLs and the official map text pack, and adds Block's files, the grass bundles of Bowl and Iceberg and
-  Chop Shop's overview files; nothing has to be deleted. No configuration changes and no new player settings.
+  the overview files for Chop Shop and Block; nothing has to be deleted. No manual configuration changes and no new player settings.
 - Requires an installed Escape from Tarkov: Arena (the check is a requirement, not copy protection). Both client and server must be
   updated together: the 0.6.0 server does not know Block. The ArenaMode contracts (`SpectatorCrowd`, `ScoreMonitors`, the gate done signal) are
   unchanged.

@@ -1,0 +1,19 @@
+<Project>
+  <!-- Offline adapter checks/builds need no game-derived exports and never stage a release package. -->
+  <Target Name="ParkUnreleased" />
+  <Target Name="DeployToDist" />
+  <Target Name="ArenaMapPortDistCopy" />
+  <Target Name="ArenaMapPortParkUnreleased" />
+  <Target Name="ArenaMapPortStageSpectator" />
+  <Target Name="ArenaMapPortStageSpectatorAudio" />
+  <Target Name="ArenaMapPortStageSelectionMap" />
+  <Target Name="ArenaMapPortStageMonitors" />
+  <Target Name="ArenaMapPortStageDynamicMaps" />
+  <Target Name="ArenaMapPortStageAiSidecars" />
+  <Target Name="ArenaMapPortStageAcoustics" />
+  <Target Name="ArenaMapPortStageGateSounds" />
+  <Target Name="ArenaMapPortStageMultiFlare" />
+  <Target Name="ArenaMapPortStageWater" />
+  <Target Name="ArenaMapPortBuildBundleCrypt" />
+  <Target Name="ArenaMapPortStageWpOutputs" />
+</Project>

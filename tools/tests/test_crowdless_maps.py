@@ -127,12 +127,12 @@ class PackerTests(unittest.TestCase):
 
 
 class NotYetRulesTests(unittest.TestCase):
-    """Pin explicit feature lists: Iceberg has overview/water, Chop Shop overview/flares."""
+    """Pin explicit feature lists: Iceberg has overview/water, Chop Shop overview/flares, Block an overview."""
 
     def test_iceberg_has_an_overview_but_no_flares_yet(self):
         self.assertIn("Iceberg", VDIST.OVERVIEW_MAP_NAMES)
         self.assertNotIn("arena_iceberg", VDIST.FLARE_MAP_KEYS)
-        self.assertEqual(VDIST.OVERVIEW_MAP_NAMES, ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService"))
+        self.assertEqual(VDIST.OVERVIEW_MAP_NAMES, ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg", "AutoService", "Yard"))
         # Autoservice (PLAN-AUTOSERVICE item 11/12) has a flare package: the eight gas-lamp flares of work/extract/multiflare/arena_autoservice
         self.assertEqual(VDIST.FLARE_MAP_KEYS, ("arena_equator", "arena_bay5", "arena_bowl", "arena_autoservice"))
 
@@ -151,6 +151,21 @@ class NotYetRulesTests(unittest.TestCase):
         required = release.required_files(release.load_spec(REPO, "9.9.9", maps=PROD_MAPS))["autoservice"]
         self.assertFalse([name for name in required if any(f"/{folder}/" in name for folder in ("flares", "dynamicmaps", "water"))])
         self.assertIn(f"{PLUGIN}/spectators/arena_autoservice/spectator.json.gz", required)      # its crowd is a required file since phase C (2026-11-11)
+
+    def test_yard_overview_is_classified_into_block_without_water_or_flares(self):
+        self.assertIn("Yard", VDIST.OVERVIEW_MAP_NAMES)
+        self.assertNotIn("arena_yard", VDIST.FLARE_MAP_KEYS)
+        self.assertNotIn("arena_yard", VDIST.WATER_MAP_KEYS)
+        text = (REPO / "ArenaMapPort.Client" / "ArenaMapPort.Client.csproj").read_text(encoding="utf-8")
+        start = text.index('<Target Name="ArenaMapPortStageDynamicMaps"')
+        body = text[start:text.index("</Target>", start)]
+        self.assertIn("ArenaMapPort_Yard\\ArenaMapPort_Yard.jsonc", body)
+        self.assertIn("ArenaMapPort_Yard\\Layers\\Ground.svg", body)
+        rules = release.build_rules(release.load_spec(REPO, "9.9.9", maps=PROD_MAPS))
+        for leaf in ("ArenaMapPort_Yard.jsonc", "Layers/Ground.svg"):
+            rule = release.classify(f"{PLUGIN}/dynamicmaps/ArenaMapPort_Yard/{leaf}", rules)
+            self.assertEqual((rule.part, rule.label), ("yard", "dynamicmaps"))
+        self.assertEqual(release.prose_name("Yard"), "Block")
 
     def test_iceberg_has_native_water_since_2026_10_31(self):
         self.assertIn("arena_iceberg", VDIST.WATER_MAP_KEYS)

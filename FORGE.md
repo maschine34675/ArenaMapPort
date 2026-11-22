@@ -29,7 +29,7 @@ Bring **Equator, Bay5, Air Pit, Bowl, Iceberg, Chop Shop and Block from Escape f
   facade gondola and one behind two swinging gate leaves, and one capture point, with Arena's own spectator
   crowd on its balconies. It uses the server's time of day and weather, as on Bay5 (summer set only, no winter
   look), and the two gates as extractions. Arena's grass grows on the lawns of the courtyard. It has
-  no overview map, no lamp flare and no native water.
+  a DynamicMaps overview including both team pockets and raised routes; it has no lamp flare or native water.
 
 All seven maps include bot navigation, original environmental audio, material
 sounds, room acoustics and decals; Equator and Bay5 also have restored dust, and
@@ -114,9 +114,12 @@ Designed for **ArenaMode**, installed separately. ArenaMapPort provides the
 maps; ArenaMode provides its match rules and respawns. No loot or scav raids
 are included. Fika compatibility has not been verified.
 
-**DynamicMaps is optional:** overview maps for six of the seven maps (not Block) are included
-and load automatically when it is installed; tested with DynamicMaps 1.2.1, newer versions are not promised. Air Pit and Bowl show their ground floors;
-their upper spectator areas are omitted.
+**DynamicMaps is optional:** overview maps for all seven maps are included and load automatically
+from ArenaMapPort's own `dynamicmaps` folder; DynamicMaps' installation stays untouched.
+Block's overview was tested in game with DynamicMaps 1.3.0. The retained 1.2.1 adapter was checked
+offline for this update; its earlier in-game checks predate Block. Air Pit and Bowl show their
+ground floors; their upper spectator areas are omitted. Block combines its connected raised routes
+and both team pockets in one overview.
 
 ## Installation
 
@@ -126,7 +129,7 @@ Merge both `BepInEx` and `SPT_Runtime`, then restart the server and game. The re
 
 The ZIP is about 7.3 GiB (the planned size; the final figure is in the release notes). Upgrading from 0.6.0: extract the whole ZIP over the
 installation the same way (keep `BepInEx/config`); it replaces both DLLs and adds Block's files, the grass files of Bowl, Iceberg and Block and
-Chop Shop's overview, so take everything from the ZIP (replacing only the DLLs gives a missing-file warning and no grass).
+the overview files for Chop Shop and Block, so take everything from the ZIP (replacing only the DLLs gives a missing-file warning and no grass).
 Upgrading from 0.5.0: extract the whole ZIP over the installation the same way (keep
 `BepInEx/config`). It replaces both DLLs and adds Chop Shop's files; it also replaces the other maps' server data, the crowd
 graphs together with the shared texture manifest, Air Pit's changed bundles and the roar recordings, so take everything from the ZIP.

@@ -760,6 +760,7 @@ class BuildTests(FakeRepoCase):
         self.assertEqual(release.prose_name("AutoService"), "Chop Shop")
         # Yard (PLAN-YARD item 15): the registry display is "Yard", the in-game name is "Block"
         self.assertEqual(release.prose_name("Yard"), "Block")
+        self.assertIn("Chop Shop and Block live in this plugin's own dynamicmaps folder", readme)
         self.assertEqual(release.MapRelease("arena_airpit", "airpit", "AirPit").display, "AirPit")
 
     def test_the_multi_part_readme_tells_a_0_3_0_player_to_delete_the_old_single_zip_manifest(self):
@@ -809,7 +810,15 @@ class BuildTests(FakeRepoCase):
                 self.assertIn("(that fallback is unit-tested, not tried with a real missing file)", readme)
                 self.assertIn("Rain on the screen: in rain, in the open and not under a roof, drops now run down the screen on every map", readme)
                 self.assertIn("nobody has looked at those. Checked on the test host on Block and Equator only; the author has not seen it", readme)
-                self.assertIn("Block has no overview. Tested with DynamicMaps 1.2.1; with DynamicMaps 1.3 the client logs that its API differs from the verified 1.2.1 and skips the integration", readme)
+                overview = readme.split("Optional DynamicMaps integration:", 1)[1].split("Settings: F12", 1)[0]
+                self.assertIn("all seven maps", overview)
+                self.assertIn("Chop Shop and Block", overview)
+                self.assertIn("own dynamicmaps folder", overview)
+                self.assertIn("DynamicMaps 1.3.0", overview)
+                self.assertIn("1.2.1 adapter was checked offline", overview)
+                self.assertIn("No DynamicMaps files need changing", overview)
+                self.assertNotIn("Block has no overview", readme)
+                self.assertNotIn("skips the integration", overview)
                 # the player text names no developer key and no setting for grass or rain
                 for word in ("GrassDrawing", "GrassArt", "GrassUpload", "RainUnderRoofCheck", "NativeGrass", "LevelBorderWalls"):
                     self.assertNotIn(word, readme)

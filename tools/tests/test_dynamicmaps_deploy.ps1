@@ -23,7 +23,7 @@ function Move-FixtureItem([string]$Source, [string]$Destination) {
     Move-Item -LiteralPath $sourceFull -Destination $destinationFull
 }
 
-function New-Fixture([ValidateSet('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService')][string]$MapName = 'Equator') {
+function New-Fixture([ValidateSet('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService', 'Yard')][string]$MapName = 'Equator') {
     $caseRoot = Join-Path $fixtureRoot ([guid]::NewGuid().ToString('N'))
     $package = Join-Path $caseRoot 'package'
     $spt = Join-Path $caseRoot 'spt'
@@ -102,7 +102,7 @@ function Pass-Case([string]$Name) {
 }
 
 function Test-Rejected([string]$Name, [scriptblock]$Mutate, [string]$Expected, [switch]$DryRunOnly,
-    [ValidateSet('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService')][string]$MapName = 'Equator') {
+    [ValidateSet('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService', 'Yard')][string]$MapName = 'Equator') {
     $fixture = New-Fixture -MapName $MapName
     & $Mutate $fixture
     $before = Get-TreeState $fixture.Root
@@ -116,7 +116,7 @@ function Test-Rejected([string]$Name, [scriptblock]$Mutate, [string]$Expected, [
 function Save-Map($Fixture) { Write-FixtureFile $Fixture.Json ($Fixture.Map | ConvertTo-Json -Depth 20) }
 
 try {
-    foreach ($mapName in @('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService')) {
+    foreach ($mapName in @('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg', 'AutoService', 'Yard')) {
         $fixture = New-Fixture -MapName $mapName
         $before = Get-TreeState $fixture.Root
         $result = Invoke-Deploy $fixture
@@ -164,7 +164,7 @@ try {
 
     # Install both fixed profiles into the same fixture in each order. The second install must
     # preserve the entire first map, DLL/config sentinels and every other existing file/directory.
-    foreach ($order in @(@('Equator', 'Bay5'), @('Bay5', 'Equator'), @('AirPit', 'Bowl'), @('Bowl', 'AirPit'), @('Iceberg', 'Bowl'), @('Bowl', 'Iceberg'), @('AutoService', 'Iceberg'), @('Iceberg', 'AutoService'))) {
+    foreach ($order in @(@('Equator', 'Bay5'), @('Bay5', 'Equator'), @('AirPit', 'Bowl'), @('Bowl', 'AirPit'), @('Iceberg', 'Bowl'), @('Bowl', 'Iceberg'), @('AutoService', 'Iceberg'), @('Iceberg', 'AutoService'), @('Yard', 'AutoService'), @('AutoService', 'Yard'))) {
         $firstName, $secondName = $order
         $first = New-Fixture -MapName $firstName
         $second = New-Fixture -MapName $secondName
@@ -311,6 +311,21 @@ try {
     $names = @(Get-ChildItem -LiteralPath (Join-Path $fixture.Spt 'BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps') -Directory | ForEach-Object Name)
     Assert-That ($names.Count -eq 1 -and $names[0] -ceq 'ArenaMapPort_AutoService') "Lowercase AutoService selection created a non-canonical directory: $($names -join ',')"
     Pass-Case 'AutoService lowercase selection deploys to the canonical directory'
+
+    # Block is the player-facing name; the location and package retain Yard identity.
+    Test-Rejected 'Yard filename with Block ID' { param($f) $f.Map.MapInternalNames = @('arena_block'); Save-Map $f } 'MapInternalNames' -MapName 'Yard'
+    Test-Rejected 'Yard ID with Block image' { param($f) $f.Map.Layers['Ground Floor'].ImagePath = 'Maps/ArenaMapPort_Block/Layers/Ground.svg'; Save-Map $f } 'ground ImagePath' -MapName 'Yard'
+    Test-Rejected 'Yard multiple map IDs' { param($f) $f.Map.MapInternalNames += 'arena_autoservice'; Save-Map $f } 'MapInternalNames' -MapName 'Yard'
+    Test-Rejected 'Yard package rejects additional map file' { param($f) Write-FixtureFile (Join-Path $f.Package 'ArenaMapPort_AutoService.jsonc') '{}' } 'Package must contain only' -MapName 'Yard'
+    Test-Rejected 'Yard missing SVG' { param($f) Remove-Item -LiteralPath $f.Svg } 'Layers must contain only' -MapName 'Yard'
+    Test-Rejected 'Yard target junction' { param($f) $p = Join-Path $f.Root 'outside-map'; [IO.Directory]::CreateDirectory($p) | Out-Null; New-Item -ItemType Junction -Path $f.Target -Target $p | Out-Null } 'Linked/reparse' -MapName 'Yard'
+    $fixture = New-Fixture 'Yard'
+    $result = Invoke-Deploy $fixture -Confirm -SelectedMap 'yard'
+    Assert-That ($result.Code -eq 0 -and $result.Output -match 'DynamicMaps Yard data only') "Lowercase Yard selection failed: $($result.Output)"
+    Assert-That (@(Get-ChildItem -LiteralPath $fixture.Target -File -Recurse).Count -eq 2) 'Lowercase Yard selection did not deploy exactly two files to the canonical directory'
+    $names = @(Get-ChildItem -LiteralPath (Join-Path $fixture.Spt 'BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps') -Directory | ForEach-Object Name)
+    Assert-That ($names.Count -eq 1 -and $names[0] -ceq 'ArenaMapPort_Yard') "Lowercase Yard selection created a non-canonical directory: $($names -join ',')"
+    Pass-Case 'Yard lowercase selection deploys to the canonical directory'
 
     Test-Rejected 'malformed JSON' { param($f) Write-FixtureFile $f.Json '{ broken' } 'FATAL'
     Test-Rejected 'duplicate JSON key' { param($f) $j = Get-Content -LiteralPath $f.Json -Raw; Write-FixtureFile $f.Json ($j -replace '^\{', '{ "CoordinateRotation": 0,') } 'Duplicate JSON property'

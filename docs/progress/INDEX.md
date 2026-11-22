@@ -1,5 +1,7 @@
 # Progress log index
 
+- [dynamicmaps-130.md](dynamicmaps-130.md) — DynamicMaps 1.3.0 owned-folder loader, retained 1.2.1 path, actual-release contract checks and catalogue/path regression controls; native acceptance is recorded separately after integration.
+
 This folder is the project's append-only build/fix/validate history: one file per milestone, audit,
 fix or validation round, each with host-test or command-output evidence. Files are **appended to, never
 rewritten** — a later pass that changes something adds a new dated section or a new file rather than
@@ -7,6 +9,8 @@ editing an old conclusion out. [HANDOFF.md](../../HANDOFF.md) is the one place t
 dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
+
+- [yard-dynamicmaps.md](yard-dynamicmaps.md) — Block/Yard overview from the accepted connected routes, both start pockets, raised paths and owned DynamicMaps package (2026-11-21).
 
 - [native-grass.md](native-grass.md) — **2026-11-21, stage 2**: the grass ships by default (user: "regentropfen ausliefern, standardmäßig an. das gras als zusätzliches bundle ausliefern, standardmäßig an. auf alle maps anwenden") as an additional encrypted bundle `<map_key>_grass.bundle` on Bowl, Iceberg and Yard: the project's grass pack (format AMGP v1, built from Arena's files by `tools/extract/extract_grass.py`), the keys `Map (<key>)/Grass` (default on), `GrassDrawing`, `GrassArt`, `GrassUpload`, the descriptor flag `HasNativeGrass`, the failure policy and reason codes, every pipeline place, tests, review outcome; unit-tested; **staged, validated (`DISTRIBUTION_OK 7 maps 21 bundles 3 grass bundles`, 422 files) and host-run on GPU-2 the same evening**: Bowl (113,643 clumps), Iceberg and Yard draw from their bundles by default at about 0.16 to 0.27 ms per frame, Equator and the hideout stay clean; the author has not seen it, release texts wait for the user's word; and see the stage-1 entry below.
 - [native-grass.md](native-grass.md) — **2026-11-21**: Yard's native grass, stage 1 (PLAN-YARD items 22 and 23): a developer-gated probe (`Map (arena_yard)/NativeGrass`, default Off) that builds Arena's grass through EFT's own GPUInstancer runtime at raid start, the art read from the player's verified Arena files into memory only (shape E); build order, lifecycle contract, keys, log lines, review outcome, the limiter-bound baseline. Unit-tested; **host-run on GPU-2 the same day**: it draws with Arena's art, costs about 0.11 to 0.14 ms per frame at the densest view with the limiter lifted, and leaves the hideout, a second raid, another map and a vanilla Ground Zero raid clean; one raid-end rebuild corrected. The author has not seen it; shipping is the user's decision.

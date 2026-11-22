@@ -150,9 +150,7 @@ the gondola overshoots its open pose a little, as Arena's does.
   carries the key for your build; the other maps keep working.
 - **ArenaMode** is the intended gameplay companion and is installed separately.
   It is not required to load the maps.
-- **DynamicMaps** is optional; integration was tested with version **1.2.1**. Newer versions
-  are not promised: with DynamicMaps 1.3 the client logs that the optional overview integration
-  is skipped, and the overview maps then do not appear.
+- **DynamicMaps** is optional; the loader supports **1.2.1 and 1.3.0**. See the [compatibility verification record](docs/progress/dynamicmaps-130.md) for tested scope.
 - **SAIN** is optional; location compatibility is handled when it is installed.
 - Fika compatibility has not been verified.
 
@@ -267,14 +265,15 @@ raid" (reinstall the complete client folder).
 
 ## DynamicMaps
 
-Overview maps for six of the seven maps, Chop Shop's included (since 0.7.0), are included; Block has none. If DynamicMaps is
+Overview maps for Equator, Bay5, Air Pit, Bowl, Iceberg, Chop Shop and Block are included. If DynamicMaps is
 installed, open inventory → **MAP** during a raid.
 
 ArenaMapPort loads these maps from its own directory; you do not need to copy
 anything into DynamicMaps. The overviews are simplified ground-floor plans; the upper
 spectator areas of Air Pit and Bowl are deliberately omitted. Iceberg's is one
 overview of the connected combat routes across their different ground heights, not
-a separate upper-floor map.
+a separate upper-floor map. Block similarly combines its yard, both start pockets
+and connected raised routes; its west alley remains visible beyond the bot bake.
 
 ## Scope
 
