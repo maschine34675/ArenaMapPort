@@ -660,3 +660,20 @@ Error before anything is staged. First stage of Iceberg: `-p:ArenaMapPortCreateR
 `test_bundle_crypt_tool.BuildWiringTests.test_staging_creates_a_content_key_only_on_request` pins the five properties, their exact conditions, that each
 command names only its own and the Error. Checked with a scratch project that carries the csproj's own lines: no flag, flag alone and a typo give
 nothing or the Error, the flag with `arena_iceberg` gives `--create-key` for Iceberg only.
+
+## The throughput benchmark runs alone (2026-11-22)
+
+`CryptoThroughputTests.Cng_ReachesAtLeast300MiBPerSecond_EncryptingAndDecrypting64MiB` (`ArenaMapPort.Server.Tests/BundleCryptoTests.cs`) failed
+again and again in full `dotnet test` runs while passing alone: 293 MiB/s (autoservice-release.md), 236 MiB/s (HANDOFF.md), 231 MiB/s with a Python
+suite beside it (yard-release.md), "five review agents running beside it" (release-preparation-20261121.md) and 294 MiB/s encrypting on 2026-11-22
+(dynamicmaps-130.md). Cause: xunit runs the test classes in parallel, so the benchmark shared the CPU and the garbage collector with about 3,800
+other tests. Alone, three runs on the VM gave CNG encrypt 578 / 769 / 578 and decrypt 869 / 1083 / 841 MiB/s, about twice the floor.
+
+Change (test only, the floor of 300 MiB/s for encrypting and for decrypting stays): the class is in the collection `Crypto throughput (runs alone)`
+(`[CollectionDefinition(..., DisableParallelization = true)]`), which xunit runs after every parallel collection has finished, and a CNG pair below
+the floor is measured again, three attempts in all, before the test fails (each attempt prints its own `THROUGHPUT CNG #n` line), against a process
+outside the suite that loads the machine for a few seconds. Two full runs of the suite on the worktree (`-c Release`, no dist staging, real-data
+tests reading `D:\ArenaMapPort\work`): 3,831 of 3,831 both times; the benchmark finished 4.1 s and 4.0 s after the last other test (about its own run time; the trx holds
+one timestamp for it) and measured CNG
+encrypt 503 / 625 and decrypt 934 / 1,395 MiB/s, one attempt each. A machine under sustained outside load for the whole benchmark (half a minute)
+can still fail it: that is the floor doing its job, not a flake.

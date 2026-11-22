@@ -2447,13 +2447,29 @@ public sealed class CryptoRealDataTests
 }
 
 /// <summary>
+/// The throughput benchmark runs alone: xunit runs a collection with parallelization disabled after every parallel collection has
+/// finished, so the other test classes no longer share the CPU and the garbage collector with it (2026-11-22; inside the parallel
+/// suite it fell to 231-294 MiB/s against 578-769 MiB/s alone, see docs/progress/bundle-encryption.md "2026-11-22").
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class CryptoThroughputCollection
+{
+    public const string Name = "Crypto throughput (runs alone)";
+}
+
+/// <summary>
 /// Throughput of both providers on 64 MiB (this VM; the numbers are printed so the progress log can quote them). The CNG path must reach 300 MiB/s
 /// for encrypting and for decrypting, or the loading budget of docs/PLAN-ENCRYPTION.md 2.4 cannot hold. The managed provider on .NET 10 is itself
-/// OS-backed, so its numbers here say nothing about Mono's managed crypto in EFT. Other test classes run in parallel, so each figure is the best of five.
+/// OS-backed, so its numbers here say nothing about Mono's managed crypto in EFT. Each figure is the best of five; the class runs alone (see
+/// <see cref="CryptoThroughputCollection"/>), and a CNG figure below the floor is measured again up to <see cref="Attempts"/> times in all before the
+/// test fails, because a process outside the suite (another build, a Python run) can still load the machine for a few seconds. The floor is not lowered.
 /// </summary>
+[Collection(CryptoThroughputCollection.Name)]
 public sealed class CryptoThroughputTests
 {
     const int Size = 64 << 20;
+    const int Attempts = 3;
+    const double Floor = 300;
     readonly ITestOutputHelper _out;
 
     public CryptoThroughputTests(ITestOutputHelper output) => _out = output;
@@ -2470,52 +2486,56 @@ public sealed class CryptoThroughputTests
         return Size / (1 << 20) / best;
     }
 
+    (double Encrypt, double Decrypt) Measure(ICryptoProvider p, byte[] plain, string label)
+    {
+        byte[] container = Crypt.Encrypt(plain, p, 1 << 20);
+        double encrypt = Best(5, () =>
+        {
+            using var dest = new MemoryStream(Size + (2 << 20));
+            Ampb.Encrypt(new MemoryStream(plain, false), dest, Crypt.Map, Crypt.KMap, p);
+        });
+        double decrypt = Best(5, () => Ampb.Decrypt(new MemoryStream(container, false), Stream.Null, Crypt.KMap, p));
+
+        byte[] scratch = new byte[1 << 20];
+        byte[] key = Crypt.Random(32, 3);
+        byte[] nonce = new byte[8];
+        double ctr = Best(5, () =>
+        {
+            using IAesKey aes = p.NewAes(key);
+            for (int off = 0; off < Size; off += 1 << 20)
+                AesCtr.Transform(aes, nonce, (ulong)off / 16, plain, off, scratch, 0, 1 << 20);
+        });
+        double sha = Best(5, () =>
+        {
+            for (int off = 0; off < Size; off += 1 << 20)
+                p.Sha256(plain, off, 1 << 20);
+        });
+        double hmac = Best(5, () =>
+        {
+            using IHashStream h = p.NewHmacSha256(key);
+            for (int off = 0; off < Size; off += 1 << 20)
+                h.Update(plain, off, 1 << 20);
+            h.Finish();
+        });
+        _out.WriteLine($"THROUGHPUT {label,-8} 64 MiB: encrypt {encrypt,7:F0} MiB/s, decrypt {decrypt,7:F0} MiB/s | AES-CTR {ctr,7:F0}, SHA-256 {sha,7:F0}, HMAC stream {hmac,7:F0} MiB/s");
+        return (encrypt, decrypt);
+    }
+
     [Fact]
     public void Cng_ReachesAtLeast300MiBPerSecond_EncryptingAndDecrypting64MiB()
     {
         if (!OperatingSystem.IsWindows())
             return;
         byte[] plain = Crypt.Random(Size, 1);
-        double cngEncrypt = 0, cngDecrypt = 0;
-        foreach (ICryptoProvider p in new[] { CryptoProviders.Managed, CryptoProviders.Cng! })
+        Measure(CryptoProviders.Managed, plain, CryptoProviders.Managed.Name);
+        (double Encrypt, double Decrypt) cng = default;
+        for (int attempt = 1; attempt <= Attempts; attempt++)
         {
-            byte[] container = Crypt.Encrypt(plain, p, 1 << 20);
-            double encrypt = Best(5, () =>
-            {
-                using var dest = new MemoryStream(Size + (2 << 20));
-                Ampb.Encrypt(new MemoryStream(plain, false), dest, Crypt.Map, Crypt.KMap, p);
-            });
-            double decrypt = Best(5, () => Ampb.Decrypt(new MemoryStream(container, false), Stream.Null, Crypt.KMap, p));
-
-            byte[] scratch = new byte[1 << 20];
-            byte[] key = Crypt.Random(32, 3);
-            byte[] nonce = new byte[8];
-            double ctr = Best(5, () =>
-            {
-                using IAesKey aes = p.NewAes(key);
-                for (int off = 0; off < Size; off += 1 << 20)
-                    AesCtr.Transform(aes, nonce, (ulong)off / 16, plain, off, scratch, 0, 1 << 20);
-            });
-            double sha = Best(5, () =>
-            {
-                for (int off = 0; off < Size; off += 1 << 20)
-                    p.Sha256(plain, off, 1 << 20);
-            });
-            double hmac = Best(5, () =>
-            {
-                using IHashStream h = p.NewHmacSha256(key);
-                for (int off = 0; off < Size; off += 1 << 20)
-                    h.Update(plain, off, 1 << 20);
-                h.Finish();
-            });
-            _out.WriteLine($"THROUGHPUT {p.Name,-8} 64 MiB: encrypt {encrypt,7:F0} MiB/s, decrypt {decrypt,7:F0} MiB/s | AES-CTR {ctr,7:F0}, SHA-256 {sha,7:F0}, HMAC stream {hmac,7:F0} MiB/s");
-            if (p.Name == "CNG")
-            {
-                cngEncrypt = encrypt;
-                cngDecrypt = decrypt;
-            }
+            cng = Measure(CryptoProviders.Cng!, plain, attempt == 1 ? "CNG" : $"CNG #{attempt}");
+            if (cng.Encrypt >= Floor && cng.Decrypt >= Floor)
+                return;
         }
-        Assert.True(cngDecrypt >= 300, $"CNG decrypts at {cngDecrypt:F0} MiB/s, below 300");
-        Assert.True(cngEncrypt >= 300, $"CNG encrypts at {cngEncrypt:F0} MiB/s, below 300");
+        Assert.True(cng.Decrypt >= Floor, $"CNG decrypts at {cng.Decrypt:F0} MiB/s, below {Floor:F0} in all {Attempts} attempts");
+        Assert.True(cng.Encrypt >= Floor, $"CNG encrypts at {cng.Encrypt:F0} MiB/s, below {Floor:F0} in all {Attempts} attempts");
     }
 }
